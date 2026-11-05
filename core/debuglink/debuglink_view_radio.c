@@ -346,7 +346,7 @@ uint8_t debuglink_radio_feature_op(uint8_t op, const uint8_t *a, uint16_t len)
 			return DL_ST_OK;
 		}
 		uint32_t ty, ps, list, count;
-		uint8_t data[231];		// the probe's accumulated stream (7 x 264-bit blocks)
+		uint8_t data[252];		// the probe's accumulated stream (7 x 288-bit slots)
 		uint8_t n = board.p25_probe->read(&ty, &ps, &list, &count, data, sizeof data);
 		dlog("p25p ty %08x st %08x si %05x n %u b %u", (unsigned)ty, (unsigned)ps, (unsigned)list,
 		     (unsigned)n, (unsigned)count);

@@ -160,7 +160,7 @@ APP_SRC += core/crash/crash_trace.c
 endif
 # The P25 NID BCH decoder, for the physical-layer receive probe (docs/spec/p25.md)
 ifeq ($(CONFIG_P25_PROBE),y)
-APP_SRC += core/p25/p25_bch.c
+APP_SRC += core/p25/p25_bch.c core/p25/p25_tsbk.c core/p25/p25_tsbk_parse.c
 endif
 # Zone sharing over DMR data: the record, the sender and the offers (its codeplug side is core/codeplug/zone_import.c)
 ifeq ($(CONFIG_ZONE_SHARE),y)

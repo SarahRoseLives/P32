@@ -16,6 +16,8 @@
 #include "dmr_glue.h"
 #include "debuglink/dlog.h"
 #include "p25/p25_bch.h"
+#include "p25/p25_tsbk.h"
+#include "p25/p25_tsbk_parse.h"
 
 #define C7_PHY_RECEIVE_STATE	0x1C0u
 #define RX_INFO_OFF		0x30u	// RECV_INFO in the RX RAM (datasheet table 47)
@@ -32,15 +34,13 @@ static struct {
 	bool dmr;
 } saved;
 static uint32_t type_info, phy_state, last_list, blocks;
-// Consecutive PHY_RX blocks are contiguous 264-bit chunks of the demodulated stream; the P25 frame sync and NID
-// straddle block boundaries, so keep several (docs/spec/p25.md). 7 blocks = 231 bytes fits the read's uint8_t length
-#define P25_BLOCK_BYTES		33u	// the 264 deframed bits
+// One PHY_RX block is a 30 ms slot: CACH/slot type at 0x30, the 264 deframed bits at 0x33. Keep 7 slots (252 bytes)
+// and undo the chip's DMR storage order to get the on-air P25 stream (docs/spec/p25.md 7.2).
+#define P25_BLOCK_BYTES		36u	// one 288-bit slot
 #define P25_STREAM_BLOCKS	7u
 #define P25_STREAM_BYTES	(P25_BLOCK_BYTES * P25_STREAM_BLOCKS)
-#define P25_NID_REL		88u	// first-block NID start, 88 bits after the 48-bit sync (bench 2026-11-04)
 static uint8_t stream[P25_STREAM_BYTES];
 static uint16_t stream_len;
-static bool cont_mode;
 
 // Only PHY_RX (project bit 11) writes a block. PHY_RDY (bit 12) is the slot clock and PHY_RECV_ABNORMAL (bit 16)
 // fires on its own; taking their stale RX RAM was the "block that never changes" (bench 2026-11-04)
@@ -54,8 +54,7 @@ static void probe_isr(uint32_t list)
 	type_info = hrc7000_rd(modem, C7_RX_TYPE_INFO);
 	phy_state = hrc7000_rd(modem, C7_PHY_RECEIVE_STATE);
 	if (stream_len + P25_BLOCK_BYTES <= sizeof stream) {
-		// Continuous mode: CACH at 0x30..0x32, the 264 bits at 0x33. Timeslot mode: the 264 bits at 0x30
-		uint16_t off = (uint16_t)(C7_RX_RAM + (cont_mode ? 0x33u : RX_INFO_OFF));
+		uint16_t off = (uint16_t)(C7_RX_RAM + RX_INFO_OFF);
 		for (uint8_t i = 0; i < P25_BLOCK_BYTES; i++) {
 			stream[stream_len + i] = modem->buf[off + i];
 		}
@@ -105,7 +104,6 @@ static bool start_cfg(uint8_t variant)
 
 	blocks = 0;
 	stream_len = 0;
-	cont_mode = continuous;
 	type_info = phy_state = last_list = 0;
 	on = false;						// no capture until the set-up is complete
 
@@ -185,23 +183,47 @@ static uint8_t stream_bit(uint16_t bit)
 	return (uint8_t)((stream[bit >> 3] >> (7u - (bit & 7u))) & 1u);
 }
 
-// The continuous-mode stream is a sliding window of the demodulated P25 symbols. Find the frame sync, then the NID:
-// after the sync the chip inserts a DMR-shaped gap, so the NID starts at a variable offset (88 bits on the bench,
-// p25.md 5.2); try a range and keep the codeword with the fewest corrected bits. Bench 2026-11-04: every capture
-// decoded NAC 0x293 DUID 0x7 with 3-4 corrected bits.
-static bool p25_nid_scan(uint16_t *nac, uint8_t *duid, uint8_t *errs)
+// The chip stores a slot as A (CACH/slot type), B (pre-sync data), F (sync or embedded signalling), then P
+// (post-sync data); the on-air order is A B F P. Undo the DMR storage order so the P25 frame is contiguous.
+static uint16_t onair_source(uint16_t bit)
+{
+	uint16_t slot = (uint16_t)(bit / 288u);
+	uint16_t k = (uint16_t)(bit % 288u);
+	uint16_t src;
+
+	if (k < 44u) {
+		src = k;
+	} else if (k < 132u) {
+		src = (uint16_t)(92u + (k - 44u));
+	} else if (k < 180u) {
+		src = (uint16_t)(44u + (k - 132u));
+	} else {
+		src = (uint16_t)(180u + (k - 180u));
+	}
+	return (uint16_t)(slot * 288u + src);
+}
+
+static uint8_t onair_bit(uint16_t bit)
+{
+	return stream_bit(onair_source(bit));
+}
+
+// Find the P25 frame sync in the un-reordered stream, read the NID at the on-air +48 and then the TSBK after it. The
+// A and F fields carry the chip's DMR decoding, so the TSBK may still need those positions treated as erasures
+// (p25.md 7.2); the CRC decides.
+static bool p25_decode(uint16_t *nac, uint8_t *duid, bool *have_tsbk, p25_cc_t *cc)
 {
 	static const uint8_t fsw[24] = {
 		1, 1, 1, 1, 1, 3, 1, 1, 3, 3, 1, 1, 3, 3, 3, 3, 1, 3, 1, 3, 3, 3, 3, 3,
 	};
-	uint16_t nbits = (uint16_t)(P25_STREAM_BYTES * 8u);
+	uint16_t nbits = (uint16_t)((stream_len / P25_BLOCK_BYTES) * 288u);
 
-	for (uint16_t s = 0; (uint16_t)(s + 48u + P25_NID_REL + 66u) <= nbits; s++) {
+	for (uint16_t s = 0; (uint16_t)(s + 48u + 66u) <= nbits; s++) {
 		int m0 = 0, m2 = 0;
 
 		for (uint8_t i = 0; i < 24u; i++) {
-			uint8_t d = (uint8_t)((stream_bit((uint16_t)(s + 2u * i)) << 1) |
-					      stream_bit((uint16_t)(s + 2u * i + 1u)));
+			uint8_t d = (uint8_t)((onair_bit((uint16_t)(s + 2u * i)) << 1) |
+					      onair_bit((uint16_t)(s + 2u * i + 1u)));
 			if (d != fsw[i]) {
 				m0++;
 			}
@@ -212,19 +234,15 @@ static bool p25_nid_scan(uint16_t *nac, uint8_t *duid, uint8_t *errs)
 		if (m0 > 4 && m2 > 4) {
 			continue;
 		}
-		// The first sync in the stream is the one the chip aligned its block to: the NID's post-sync info starts
-		// P25_NID_REL bits after the sync. A wide offset search would also land on a false codeword inside the
-		// DMR-shaped gap the chip leaves between the sync and the P25 info (bench 2026-11-04)
 		uint8_t rot = m0 <= m2 ? 0u : 2u;
-		uint16_t n0 = (uint16_t)(s + 48u + P25_NID_REL);
 		uint64_t nid = 0;
 
 		for (uint8_t i = 0; i < 33u; i++) {
-			if (i == 11u) {		// the P25 status symbol at NID dibit 11
+			if (i == 11u) {		// the status symbol at NID dibit 11
 				continue;
 			}
-			uint8_t d = (uint8_t)((stream_bit((uint16_t)(n0 + 2u * i)) << 1) |
-					      stream_bit((uint16_t)(n0 + 2u * i + 1u)));
+			uint8_t d = (uint8_t)((onair_bit((uint16_t)(s + 48u + 2u * i)) << 1) |
+					      onair_bit((uint16_t)(s + 48u + 2u * i + 1u)));
 			d = (uint8_t)((d + rot) & 3u);
 			nid = (nid << 2) | d;
 		}
@@ -232,18 +250,44 @@ static bool p25_nid_scan(uint16_t *nac, uint8_t *duid, uint8_t *errs)
 		int e = p25_bch_decode(nid >> 1, &info);
 
 		if (e < 0) {
-			return false;
+			continue;
 		}
 		uint8_t du = (uint8_t)(info & 0xFu);
-		uint8_t flag = (uint8_t)(nid & 1u);
 		uint8_t exp = (du == 5u || du == 0xAu) ? 1u : 0u;
 
-		if (flag != exp) {
-			return false;
+		if ((uint8_t)(nid & 1u) != exp) {
+			continue;
 		}
 		*nac = (uint16_t)(info >> 4);
 		*duid = du;
-		*errs = (uint8_t)e;
+		*have_tsbk = false;
+
+		// The TSBK starts after the NID's 33 on-air dibits and its data dibits skip the status symbol every 36
+		uint8_t tb[196];
+		uint16_t n = 0, g = 57;		// dibits from the sync: 24 (sync) + 33 (NID)
+
+		while (n < 196u && (uint16_t)(s + 2u * g + 1u) < nbits) {
+			if (!(g >= 35u && ((g - 35u) % 36u) == 0u)) {
+				uint8_t d = (uint8_t)((onair_bit((uint16_t)(s + 2u * g)) << 1) |
+						      onair_bit((uint16_t)(s + 2u * g + 1u)));
+				d = (uint8_t)((d + rot) & 3u);
+				tb[n++] = (uint8_t)((d >> 1) & 1u);
+				tb[n++] = (uint8_t)(d & 1u);
+			}
+			g++;
+		}
+		if (n == 196u) {
+			uint8_t out[12];
+
+			if (p25_tsbk_decode(tb, out) >= 0) {
+				p25_cc_t tmp;
+				memset(&tmp, 0, sizeof tmp);
+				tmp.nac = *nac;
+				(void)p25_tsbk_parse(out, &tmp);	// opcode always set; fields when known
+				*cc = tmp;
+				*have_tsbk = true;
+			}
+		}
 		return true;
 	}
 	return false;
@@ -262,12 +306,21 @@ static uint8_t read_block(uint32_t *ty, uint32_t *ps, uint32_t *list, uint32_t *
 	memcpy(out, stream, n);
 	hrc_irq_restore(irq);
 
-	if (full && on) {	// the stream only settles at a block boundary; decode from the stable buffer
+	if (full && on) {
 		uint16_t nac = 0;
-		uint8_t duid = 0, errs = 0;
+		uint8_t duid = 0;
+		bool have = false;
+		p25_cc_t cc;
 
-		if (p25_nid_scan(&nac, &duid, &errs)) {
-			dlog("p25p nid nac %03x duid %x err %u", (unsigned)nac, (unsigned)duid, (unsigned)errs);
+		memset(&cc, 0, sizeof cc);
+		if (p25_decode(&nac, &duid, &have, &cc)) {
+			dlog("p25p nid nac %03x duid %x", (unsigned)nac, (unsigned)duid);
+			if (have) {
+				dlog("p25p cc op %02x nac %03x wacn %05x sys %03x rfss %u site %u tg %u vch %u f %u",
+				     (unsigned)cc.opcode, (unsigned)cc.nac, (unsigned)cc.wacn, (unsigned)cc.sys,
+				     (unsigned)cc.rfss, (unsigned)cc.site, (unsigned)cc.tg, (unsigned)cc.vch,
+				     (unsigned)cc.freq_hz);
+			}
 		}
 	}
 	return n;
