@@ -343,7 +343,7 @@ uint8_t debuglink_radio_feature_op(uint8_t op, const uint8_t *a, uint16_t len)
 		default: {
 			p25_voice_stats_t st;
 			p25_voice_stats(&st);
-			dlog("p25v s %u st %u acq %u n %u v %u corr %u under %u over %u", (unsigned)st.samples, (unsigned)st.sync_tests, (unsigned)st.acquisitions, (unsigned)st.units, (unsigned)st.voices,
+			dlog("p25v s %u st %u acq %u n %u v %u a %u r %u m %u pk %u corr %u under %u over %u", (unsigned)st.samples, (unsigned)st.sync_tests, (unsigned)st.acquisitions, (unsigned)st.units, (unsigned)st.voices, (unsigned)st.accepted, (unsigned)st.repeated, (unsigned)st.muted, (unsigned)st.peak,
 			     (unsigned)st.corrected, (unsigned)st.underruns, (unsigned)st.overflows);
 			return DL_ST_OK;
 		}

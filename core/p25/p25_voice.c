@@ -33,7 +33,8 @@ static struct {
 	int16_t last[P25_IMBE_SAMPLES];
 	volatile bool running;
 	TaskHandle_t task;
-	uint32_t samples, units, voices, corrected, underruns, overflows;
+	uint32_t samples, units, voices, corrected, underruns, overflows, accepted, repeated, muted;
+	uint16_t peak;
 } v;
 
 static void pcm_push(const int16_t pcm[P25_IMBE_SAMPLES])
@@ -96,10 +97,19 @@ static void on_frame(const p25_rx *f, void *ctx)
 		if (action == P25_VOICE_ACCEPT) {
 			p25_imbe_decode(bits, pcm);
 			memcpy(v.last, pcm, sizeof v.last);
+			v.accepted++;
+			for (unsigned j = 0; j < P25_IMBE_SAMPLES; j++) {
+				int16_t a = pcm[j] < 0 ? (int16_t)-pcm[j] : pcm[j];
+				if (a > (int16_t)v.peak) {
+					v.peak = (uint16_t)a;
+				}
+			}
 		} else if (action == P25_VOICE_REPEAT) {
 			memcpy(pcm, v.last, sizeof pcm);
+			v.repeated++;
 		} else {
 			memset(pcm, 0, sizeof pcm);
+			v.muted++;
 		}
 		pcm_push(pcm);
 		v.voices++;
@@ -197,6 +207,10 @@ void p25_voice_stats(p25_voice_stats_t *out)
 	out->samples = v.samples;
 	out->sync_tests = v.demod.sync_tests;
 	out->acquisitions = v.demod.acquisitions;
+	out->accepted = v.accepted;
+	out->repeated = v.repeated;
+	out->muted = v.muted;
+	out->peak = v.peak;
 	out->units = v.units;
 	out->voices = v.voices;
 	out->corrected = v.corrected;

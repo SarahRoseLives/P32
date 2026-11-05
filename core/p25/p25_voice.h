@@ -23,6 +23,8 @@ typedef struct {
 	uint32_t samples;	// 8 kHz discriminator samples pushed through the demodulator
 	uint32_t sync_tests;	// demodulator sync correlations tried
 	uint32_t acquisitions;	// synced preambles
+	uint32_t accepted, repeated, muted;	// voice-policy actions
+	uint16_t peak;		// largest |sample| of an accepted frame
 	uint32_t units;		// complete validated frames
 	uint32_t voices;	// decoded voice payloads
 	uint32_t corrected;	// Golay/Hamming corrections summed

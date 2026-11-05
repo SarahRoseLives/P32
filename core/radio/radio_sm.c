@@ -5769,6 +5769,9 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_DMR
 	shared = ambeVoiceStreaming();
 #endif
+#if CONFIG_P25_VOICE
+	shared = shared || p25_voice_running();	// P25 owns the PCM stream: a beep must not stop it on its way out
+#endif
 	beep_service(shared);
 #endif
 #if CONFIG_VIBRATE
