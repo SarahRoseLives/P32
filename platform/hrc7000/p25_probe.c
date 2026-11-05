@@ -300,11 +300,20 @@ static bool audio_start(void)
 		return false;
 	}
 	p25_audio_len = p25_audio_rd = 0;
-	// The board sets the FD6818's FM mode and RX state (0x47=0x0140, 0x30=0xBFF1) and routes its audio into the
-	// modem (PTB15 low); the radio core left the C7000 in FM (WORK_MODE 0x80) on its frequency
-	board.radio->audio_to_modem(true);
+	// The board routes the RF chip's discriminator into the modem (PTB15 low); the radio core left the C7000 in FM
+	// (WORK_MODE 0x80) on its frequency. Prefer the data (DMR) receive table: its discriminator filter is wide enough
+	// for the 4FSK, where the FM voice table is not
+	if (board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(true);
+	} else {
+		board.radio->audio_to_modem(true);
+	}
 	if (!hrc_dmr_fm_rx_hook(audio_half)) {
-		board.radio->audio_to_modem(false);
+		if (board.radio->audio_to_modem_data != NULL) {
+			board.radio->audio_to_modem_data(false);
+		} else {
+			board.radio->audio_to_modem(false);
+		}
 		return false;
 	}
 	hrc7000_fm_rx_audio_irq(modem, true);
@@ -318,7 +327,9 @@ static void audio_stop(void)
 	}
 	hrc7000_fm_rx_audio_irq(modem, false);
 	hrc_dmr_fm_rx_hook(NULL);
-	if (board.radio != NULL && board.radio->audio_to_modem != NULL) {
+	if (board.radio != NULL && board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(false);
+	} else if (board.radio != NULL && board.radio->audio_to_modem != NULL) {
 		board.radio->audio_to_modem(false);
 	}
 }

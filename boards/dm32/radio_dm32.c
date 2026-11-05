@@ -500,6 +500,28 @@ static bool audio_to_modem(bool on)
 	return true;
 }
 
+// As audio_to_modem, but keep the RF chip's data (DMR) receive table: its discriminator filter is wider than the FM
+// voice one, which is what a software P25 demodulator needs (bench)
+static bool audio_to_modem_data(bool on)
+{
+	uint32_t s = hrc_irq_save();
+	if (on) {
+		fd6818_set_mode(&fd, FD6818_MODE_DMR);
+		fd6818_set_state(&fd, FD6818_STATE_RX);
+		fd6818_set_bandwidth(&fd, FD6818_BW_DMR);
+	}
+	p25_listen = on;
+	if (rx_audio) {
+		amp(AMP_RADIO, false);
+	}
+	speaker_source();
+	if (rx_audio) {
+		amp(AMP_RADIO, true);
+	}
+	hrc_irq_restore(s);
+	return true;
+}
+
 static void amp(uint8_t who, bool on)
 {
 	static uint8_t users;
@@ -622,6 +644,7 @@ const hal_radio_t dm32_radio = {
 	.status = status,
 	.audio = audio,
 	.audio_to_modem = audio_to_modem,
+	.audio_to_modem_data = audio_to_modem_data,
 	.volume = NULL,
 #if CONFIG_REF_TRIM
 	.ref_trim = ref_trim,
