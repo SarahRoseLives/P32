@@ -13,3 +13,6 @@
 [submodule "third_party/tinyusb"]
 	path = third_party/tinyusb
 	url = https://github.com/hathach/tinyusb.git
+[submodule "third_party/mbelib"]
+	path = third_party/mbelib
+	url = https://github.com/szechyjs/mbelib.git
