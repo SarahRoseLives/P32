@@ -53,7 +53,7 @@ int main(void)
 		int metric;
 
 		hex_to_bits(vectors[v].bits, bits);
-		metric = p25_tsbk_decode(bits, out);
+		metric = p25_tsbk_decode(bits, NULL, out);
 		CHECK(metric >= 0);
 		CHECK(memcmp(out, vectors[v].out, P25_TSBK_BYTES) == 0);
 		if (memcmp(out, vectors[v].out, P25_TSBK_BYTES) != 0) {
@@ -67,7 +67,35 @@ int main(void)
 
 	// A block of zeros must not pass the CRC
 	memset(bits, 0, sizeof bits);
-	CHECK(p25_tsbk_decode(bits, out) < 0);
+	CHECK(p25_tsbk_decode(bits, NULL, out) < 0);
+
+	// Erasure decoding: the chip's DMR deframer replaces the A (CACH/slot type) and F (embedded signalling) fields of
+	// a slot; those on-air dibits of the TSBK must be erased and still decode. Vector 3 (the RFSS status) with its
+	// A/F dibits (0, 1 and 45..67, the same positions the bench sees) zeroed and marked erased
+	{
+		uint8_t er[P25_TSBK_DIBITS] = { 0 };
+		static const uint8_t af[25] = { 0, 1, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+						59, 60, 61, 62, 63, 64, 65, 66, 67 };
+		uint8_t bits[P25_TSBK_BITS];
+		int metric;
+
+		hex_to_bits(vectors[3].bits, bits);
+		for (unsigned i = 0; i < 25; i++) {
+			er[af[i]] = 1;
+			bits[2 * af[i]] = 0;
+			bits[2 * af[i] + 1] = 0;
+		}
+		metric = p25_tsbk_decode(bits, er, out);
+		CHECK(metric >= 0);
+		CHECK(memcmp(out, vectors[3].out, P25_TSBK_BYTES) == 0);
+		if (memcmp(out, vectors[3].out, P25_TSBK_BYTES) != 0) {
+			printf("erasure vector got");
+			for (int i = 0; i < P25_TSBK_BYTES; i++) {
+				printf(" %02X", out[i]);
+			}
+			printf(" metric %d\n", metric);
+		}
+	}
 
 	if (failures == 0) {
 		printf("p25TsbkTest: all checks passed\n");

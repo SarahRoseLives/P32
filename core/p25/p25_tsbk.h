@@ -10,10 +10,13 @@
 #include <stdint.h>
 
 #define P25_TSBK_BITS	196	// 98 dibits, the 196 bits after the NID with the status symbols removed
+#define P25_TSBK_DIBITS	98
 #define P25_TSBK_BYTES	12	// 10 message bytes and the CRC-16
 
-// Decode one 196-bit TSBK block into its 12 bytes. Returns the Viterbi metric (the corrected bits, 0 on a clean
+// Decode one 196-bit TSBK block into its 12 bytes. erasures[98] marks the dibits the caller cannot trust (1 = erased:
+// the trellis does not score them); pass NULL for none. Returns the Viterbi metric (the corrected bits, 0 on a clean
 // block) or -1 when the CRC-16 does not check.
-int p25_tsbk_decode(const uint8_t bits[P25_TSBK_BITS], uint8_t out[P25_TSBK_BYTES]);
+int p25_tsbk_decode(const uint8_t bits[P25_TSBK_BITS], const uint8_t erasures[P25_TSBK_DIBITS],
+		    uint8_t out[P25_TSBK_BYTES]);
 
 #endif

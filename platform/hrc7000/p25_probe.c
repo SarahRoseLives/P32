@@ -217,7 +217,13 @@ static bool p25_decode(uint16_t *nac, uint8_t *duid, bool *have_tsbk, p25_cc_t *
 		1, 1, 1, 1, 1, 3, 1, 1, 3, 3, 1, 1, 3, 3, 3, 3, 1, 3, 1, 3, 3, 3, 3, 3,
 	};
 	uint16_t nbits = (uint16_t)((stream_len / P25_BLOCK_BYTES) * 288u);
+	bool got_nid = false;
 
+	*have_tsbk = false;
+
+	// The P25 frame (37.5 ms) is longer than the chip's 30 ms slot, so each frame sync lands at a different place in
+	// the slot; the A/F fields (the chip's DMR decoding) overlap the TSBK by a different amount at each. Try every
+	// sync, not just the first, and take the TSBK from whichever one the erasure trellis can finish.
 	for (uint16_t s = 0; (uint16_t)(s + 48u + 66u) <= nbits; s++) {
 		int m0 = 0, m2 = 0;
 
@@ -258,19 +264,32 @@ static bool p25_decode(uint16_t *nac, uint8_t *duid, bool *have_tsbk, p25_cc_t *
 		if ((uint8_t)(nid & 1u) != exp) {
 			continue;
 		}
-		*nac = (uint16_t)(info >> 4);
-		*duid = du;
-		*have_tsbk = false;
+		if (!got_nid) {
+			*nac = (uint16_t)(info >> 4);
+			*duid = du;
+			got_nid = true;
+		}
+		if (*have_tsbk) {
+			continue;
+		}
 
-		// The TSBK starts after the NID's 33 on-air dibits and its data dibits skip the status symbol every 36
+		// The TSBK starts after the NID's 33 on-air dibits and its data dibits skip the status symbol every 36. The
+		// chip's DMR deframer rewrites a slot's A (CACH/slot type) and F (embedded signalling) fields, so the TSBK
+		// dibits that land there are unknown; mark them erased for the trellis (p25.md 7.2)
 		uint8_t tb[196];
+		uint8_t er[P25_TSBK_DIBITS] = { 0 };
 		uint16_t n = 0, g = 57;		// dibits from the sync: 24 (sync) + 33 (NID)
 
 		while (n < 196u && (uint16_t)(s + 2u * g + 1u) < nbits) {
 			if (!(g >= 35u && ((g - 35u) % 36u) == 0u)) {
 				uint8_t d = (uint8_t)((onair_bit((uint16_t)(s + 2u * g)) << 1) |
 						      onair_bit((uint16_t)(s + 2u * g + 1u)));
+				uint16_t pos = (uint16_t)((s + 2u * g) % 288u);
+
 				d = (uint8_t)((d + rot) & 3u);
+				if (pos < 44u || (pos >= 132u && pos < 180u)) {
+					er[n / 2u] = 1u;
+				}
 				tb[n++] = (uint8_t)((d >> 1) & 1u);
 				tb[n++] = (uint8_t)(d & 1u);
 			}
@@ -279,8 +298,9 @@ static bool p25_decode(uint16_t *nac, uint8_t *duid, bool *have_tsbk, p25_cc_t *
 		if (n == 196u) {
 			uint8_t out[12];
 
-			if (p25_tsbk_decode(tb, out) >= 0) {
+			if (p25_tsbk_decode(tb, er, out) >= 0) {
 				p25_cc_t tmp;
+
 				memset(&tmp, 0, sizeof tmp);
 				tmp.nac = *nac;
 				(void)p25_tsbk_parse(out, &tmp);	// opcode always set; fields when known
@@ -288,9 +308,8 @@ static bool p25_decode(uint16_t *nac, uint8_t *duid, bool *have_tsbk, p25_cc_t *
 				*have_tsbk = true;
 			}
 		}
-		return true;
 	}
-	return false;
+	return got_nid;
 }
 
 static uint8_t read_block(uint32_t *ty, uint32_t *ps, uint32_t *list, uint32_t *count, uint8_t *out, uint8_t max)

@@ -57,31 +57,40 @@ static uint16_t crc16_ccitt(const uint8_t *bits, int n)
 	return (uint16_t)(crc ^ 0xFFFFu);
 }
 
-int p25_tsbk_decode(const uint8_t bits[P25_TSBK_BITS], uint8_t out[P25_TSBK_BYTES])
+int p25_tsbk_decode(const uint8_t bits[P25_TSBK_BITS], const uint8_t erasures[P25_TSBK_DIBITS],
+		    uint8_t out[P25_TSBK_BYTES])
 {
 	uint8_t dei[196];
+	uint8_t era[196];
 	uint8_t states[49];
 	uint8_t back[49][4];
 	uint32_t prev[4] = { 0, 256, 256, 256 }, cur[4];
 
-	// Undo the interleave: dibit i arrives at position interleave98(i)
+	// Undo the interleave: dibit i arrives at position interleave98(i), and carry its erasure flag to both bits
 	for (uint8_t i = 0; i < 98u; i++) {
 		uint8_t p = interleave98(i);
+		uint8_t e = erasures != NULL ? erasures[i] : 0u;
 
 		dei[2u * p] = bits[2u * i];
 		dei[2u * p + 1u] = bits[2u * i + 1u];
+		era[2u * p] = e;
+		era[2u * p + 1u] = e;
 	}
 
 	for (uint8_t s = 0; s < 49u; s++) {
 		uint8_t nib = (uint8_t)((dei[4u * s] << 3) | (dei[4u * s + 1u] << 2) |
 					(dei[4u * s + 2u] << 1) | dei[4u * s + 3u]);
+		uint8_t em = (uint8_t)((era[4u * s] << 3) | (era[4u * s + 1u] << 2) |
+				       (era[4u * s + 2u] << 1) | era[4u * s + 3u]);
 
 		for (uint8_t nx = 0; nx < 4u; nx++) {
 			uint32_t best = 0xFFFFFFFFu;
 			uint8_t bp = 0;
 
 			for (uint8_t pv = 0; pv < 4u; pv++) {
-				uint32_t c = prev[pv] + hamming4(nib, dtm[(pv << 2) | nx]);
+				// Score only the un-erased bits of the nibble
+				uint8_t diff = (uint8_t)((nib ^ dtm[(pv << 2) | nx]) & (uint8_t)~em & 0xFu);
+				uint32_t c = prev[pv] + hamming4(diff, 0u);
 
 				if (c < best) {
 					best = c;
