@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: ISC
+// Copyright (c) 2026 The RadioFoundry Authors
+// P25 Phase 1 TSBK fields for a control-channel display (docs/spec/p25.md). The opcode and every field is read from
+// the decoded 12-byte block; nothing depends on a particular system.
+#ifndef RFOUNDRY_P25_TSBK_PARSE_H
+#define RFOUNDRY_P25_TSBK_PARSE_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+// The control-channel values a TSBK can carry; a field stays untouched when the block's opcode does not set it
+typedef struct {
+	uint8_t opcode;		// the TSBK opcode (the protected bit is not part of it)
+	uint16_t nac;		// from the NID, not the TSBK
+	uint32_t wacn;
+	uint16_t sys;
+	uint8_t rfss;
+	uint8_t site;
+	uint16_t tg;
+	uint16_t vch;
+	uint32_t freq_hz;	// from an IdenUp
+} p25_cc_t;
+
+// Decode one CRC-checked 12-byte TSBK into cc. Returns false for an opcode this parser does not know (cc->opcode is
+// still set). Network Status, RFSS Status, IdenUp and Group Voice Grant are understood.
+bool p25_tsbk_parse(const uint8_t tsbk[12], p25_cc_t *cc);
+
+#endif

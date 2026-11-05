@@ -1285,17 +1285,21 @@ run-boards::
 -include $(wildcard $(ROOT)/boards/*/tests/host.mk)
 
 # P25 Phase 1 physical layer: the NID BCH(63,16,11), frame sync, status symbols and NAC/DUID (docs/spec/p25.md)
-TESTS   += p25PhyTest p25TsbkTest
+TESTS   += p25PhyTest p25TsbkTest p25TsbkParseTest
 p25PhyTest: p25PhyTest.c $(CORE)/p25/p25_phy.c $(CORE)/p25/p25_phy.h $(CORE)/p25/p25_bch.c $(CORE)/p25/p25_bch.h
 	$(CC) $(CFLAGS) -o $@ p25PhyTest.c $(CORE)/p25/p25_phy.c $(CORE)/p25/p25_bch.c
 
 p25TsbkTest: p25TsbkTest.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_tsbk.h
 	$(CC) $(CFLAGS) -o $@ p25TsbkTest.c $(CORE)/p25/p25_tsbk.c
 
+p25TsbkParseTest: p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_tsbk_parse.h
+	$(CC) $(CFLAGS) -o $@ p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c
+
 run: run-p25
-run-p25: p25PhyTest p25TsbkTest
+run-p25: p25PhyTest p25TsbkTest p25TsbkParseTest
 	./p25PhyTest
 	./p25TsbkTest
+	./p25TsbkParseTest
 
 .PHONY: run-p25
 
