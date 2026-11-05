@@ -238,6 +238,7 @@ typedef struct {
 	uint8_t call_state;	// voice: p25_receive_class (0 wait, 1 clear, 2 encrypted, 3 unsupported, 4 bad)
 	uint16_t call_nac, call_group;
 	uint32_t units, voices;	// voice: validated frames and decoded voice payloads
+	uint32_t underruns, overflows;	// voice: audio blocks without a frame, frames dropped from a full PCM ring
 } radio_p25_view_t;
 #endif
 

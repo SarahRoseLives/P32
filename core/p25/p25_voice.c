@@ -21,7 +21,8 @@
 #include "p25/p25_voice_policy.h"
 #include "p25/p25_imbe.h"
 
-#define P25_VOICE_PCM_FRAMES	10u	// 200 ms: one LDU (9 frames) plus the audio task draining it
+#define P25_VOICE_PCM_FRAMES	32u	// 640 ms: two LDUs plus jitter
+#define P25_VOICE_PREFILL	16u	// start after ~320 ms so a late LDU never gaps the speaker
 #define P25_VOICE_STACK		1024	// words: the demodulator and the codec run in this task
 
 static struct {
@@ -32,10 +33,61 @@ static struct {
 	uint16_t head, tail;		// frame counters: the decode task writes head, the audio task tail
 	int16_t last[P25_IMBE_SAMPLES];
 	volatile bool running;
+	volatile bool playing;		// the prefilled ring is feeding the speaker
+	uint8_t starved;		// consecutive empty blocks since the last frame
+	int32_t env;			// smoothed peak for the AGC
+	int32_t hp_x1, hp_y1;		// DC blocker state
+	int32_t agc_q8;			// Q8 gain, 256 = unity
 	TaskHandle_t task;
 	uint32_t samples, units, voices, corrected, underruns, overflows, accepted, repeated, muted;
 	uint16_t peak;
 } v;
+
+// DC blocker and AGC/limiter: the fixed-point decoder's output is quiet (peak a few hundred for speech), so boost
+// it to a steady level and saturate instead of clipping. The gate keeps codec idle noise from being amplified.
+#define P25_AGC_TARGET		12000
+#define P25_AGC_GATE		24
+#define P25_AGC_MAX_Q8		8192	// 32x
+static void audio_process(int16_t pcm[P25_IMBE_SAMPLES])
+{
+	int32_t tmp[P25_IMBE_SAMPLES];
+	int32_t peak = 0;
+
+	for (unsigned i = 0; i < P25_IMBE_SAMPLES; i++) {
+		int32_t y = (int32_t)pcm[i] - v.hp_x1 + v.hp_y1 - (v.hp_y1 >> 5);	// ~40 Hz high-pass
+		v.hp_x1 = pcm[i];
+		if (y > 32767) y = 32767;
+		if (y < -32768) y = -32768;
+		v.hp_y1 = y;
+		tmp[i] = y;
+		int32_t a = y < 0 ? -y : y;
+		if (a > peak) peak = a;
+	}
+	// Track the long-term level, not per-frame peaks, so syllables do not pump the gain
+	if (peak > v.env) {
+		v.env += (peak - v.env) >> 1;
+	} else {
+		v.env -= v.env >> 6;
+	}
+	if (v.env >= P25_AGC_GATE) {
+		int32_t desired = (P25_AGC_TARGET << 8) / v.env;
+		if (desired < 256) desired = 256;
+		if (desired > P25_AGC_MAX_Q8) desired = P25_AGC_MAX_Q8;
+		v.agc_q8 += (desired - v.agc_q8) >> 4;	// ~320 ms in either direction
+	} else {
+		v.agc_q8 += (256 - v.agc_q8) >> 6;
+	}
+	if (peak < 16) {
+		memset(pcm, 0, P25_IMBE_SAMPLES * sizeof(int16_t));	// idle: never amplify codec noise
+		return;
+	}
+	for (unsigned i = 0; i < P25_IMBE_SAMPLES; i++) {
+		int32_t s = (tmp[i] * v.agc_q8) >> 8;
+		if (s > 30000) s = 30000;
+		if (s < -30000) s = -30000;
+		pcm[i] = (int16_t)s;
+	}
+}
 
 static void pcm_push(const int16_t pcm[P25_IMBE_SAMPLES])
 {
@@ -53,13 +105,26 @@ static void audio_block(const int16_t *mic, int16_t *spk, void *ctx)
 {
 	(void)mic;
 	(void)ctx;
-	if (v.tail != v.head) {
+	uint16_t n = (uint16_t)(v.head - v.tail);
+
+	if (!v.playing && n >= P25_VOICE_PREFILL) {
+		v.playing = true;
+	}
+	if (v.playing && n != 0) {
 		memcpy(spk, v.pcm[v.tail % P25_VOICE_PCM_FRAMES], AUDIO_BLOCK_SAMPLES * sizeof(int16_t));
 		memcpy(v.last, spk, sizeof v.last);
 		v.tail = (uint16_t)(v.tail + 1);
-	} else {
-		memcpy(spk, v.last, AUDIO_BLOCK_SAMPLES * sizeof(int16_t));	// brief concealment: repeat the last frame
+		v.starved = 0;
+	} else if (v.playing && v.starved < 3u) {
+		memcpy(spk, v.last, AUDIO_BLOCK_SAMPLES * sizeof(int16_t));	// conceal a short gap, then silence
+		v.starved++;
 		v.underruns++;
+	} else {
+		memset(spk, 0, AUDIO_BLOCK_SAMPLES * sizeof(int16_t));
+		if (v.playing) {
+			v.playing = false;
+			v.underruns++;	// only a real gap; the prefill is silence, not an underrun
+		}
 	}
 }
 
@@ -75,9 +140,16 @@ static void on_frame(const p25_rx *f, void *ctx)
 	if (event.reset) {
 		p25_imbe_reset();
 		p25_voice_policy_init(&v.quality);
+		v.hp_x1 = v.hp_y1 = 0;
+		v.agc_q8 = 256;
+		v.env = 0;
+		v.playing = false;
+		v.starved = 0;
 	}
 	if (event.discard) {
 		v.head = v.tail;	// a new/encrypted/unknown call never keeps old speech queued
+		v.playing = false;
+		v.starved = 0;
 	}
 	if (f->duid == 3 || f->duid == 15) {
 		return;
@@ -96,6 +168,7 @@ static void on_frame(const p25_rx *f, void *ctx)
 		p25_voice_action action = p25_voice_policy_frame(&v.quality, bits, quality.e0, quality.et);
 		if (action == P25_VOICE_ACCEPT) {
 			p25_imbe_decode(bits, pcm);
+			audio_process(pcm);
 			memcpy(v.last, pcm, sizeof v.last);
 			v.accepted++;
 			for (unsigned j = 0; j < P25_IMBE_SAMPLES; j++) {

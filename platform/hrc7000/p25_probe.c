@@ -358,7 +358,7 @@ static uint8_t read_block(uint32_t *ty, uint32_t *ps, uint32_t *list, uint32_t *
 // the system interrupt bit 14 says a half is ready. A ring of four halves (128 ms) so a software demodulator can keep
 // up; the p25audio command drains it too. The caller tunes the radio and leaves it idle, then the board's
 // audio_to_modem routes the RF chip's discriminator into the modem.
-#define P25_AUDIO_HALVES	4u
+#define P25_AUDIO_HALVES	8u
 #define P25_AUDIO_SAMPLES	(P25_AUDIO_HALVES * HRC7000_FM_RX_SAMPLES)
 
 static int16_t p25_audio[P25_AUDIO_SAMPLES];

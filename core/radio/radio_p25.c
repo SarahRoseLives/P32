@@ -65,6 +65,8 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.call_group = st.group;
 	n.units = st.units;
 	n.voices = st.voices;
+	n.underruns = st.underruns;
+	n.overflows = st.overflows;
 	if (memcmp(&n, v, sizeof n) != 0) {
 		*v = n;
 		return true;

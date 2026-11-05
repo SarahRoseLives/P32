@@ -3094,6 +3094,13 @@ void ui_draw_p25(const radio_view_t *v, const ui_state_t *s)
 		sb_str(&b, "  voice ");
 		sb_u32(&b, p->voices, 1);
 		gfx_text(f, 0, y, buf, ui_col.fg);
+		y += f->h;
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, "und ");
+		sb_u32(&b, p->underruns, 1);
+		sb_str(&b, "  over ");
+		sb_u32(&b, p->overflows, 1);
+		gfx_text(f, 0, y, buf, ui_col.dim);
 		ui_draw_bottom(s, "Back");
 		return;
 	}
