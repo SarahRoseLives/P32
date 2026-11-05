@@ -8,7 +8,7 @@
 // assemble the on-air stream. Two callers: the debug link's bench probe (raw block, the 8 kHz discriminator capture)
 // and the control-channel monitor, which reads the decoded CC through last_cc.
 #include "config.h"
-#if CONFIG_P25 || CONFIG_P25_PROBE
+#if CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
 
 #include <string.h>
 #include "platform.h"
@@ -353,25 +353,29 @@ static uint8_t read_block(uint32_t *ty, uint32_t *ps, uint32_t *list, uint32_t *
 	return n;
 }
 
-#if CONFIG_P25_PROBE
+#if CONFIG_P25_PROBE || CONFIG_P25_VOICE
 // The 8 kHz FM discriminator (modem-hrc7000.md 8.5): the modem writes 256-sample halves of its FM receive audio, and
-// the system interrupt bit 14 says a half is ready. Keep one 0.5 s capture: the caller tunes the radio in FM and
-// leaves it idle, then the board's audio_to_modem routes the RF chip's discriminator into the modem.
-#define P25_AUDIO_SAMPLES	4096u
+// the system interrupt bit 14 says a half is ready. A ring of four halves (128 ms) so a software demodulator can keep
+// up; the p25audio command drains it too. The caller tunes the radio and leaves it idle, then the board's
+// audio_to_modem routes the RF chip's discriminator into the modem.
+#define P25_AUDIO_HALVES	4u
+#define P25_AUDIO_SAMPLES	(P25_AUDIO_HALVES * HRC7000_FM_RX_SAMPLES)
 
 static int16_t p25_audio[P25_AUDIO_SAMPLES];
-static volatile uint16_t p25_audio_len, p25_audio_rd;
+static volatile uint16_t p25_audio_head, p25_audio_tail, p25_audio_dropped;
+static uint32_t p25_saved_fm_bw, p25_saved_fm_dev;
+static bool p25_saved_valid;
 
 static void audio_half(void)
 {
-	uint16_t len = p25_audio_len;
+	uint16_t head = p25_audio_head;
 
-	if (len + HRC7000_FM_RX_SAMPLES > P25_AUDIO_SAMPLES) {
-		hrc7000_fm_rx_audio_irq(modem, false);	// full: never leave the source running
+	if ((uint16_t)(head - p25_audio_tail) > P25_AUDIO_SAMPLES - HRC7000_FM_RX_SAMPLES) {
+		p25_audio_dropped++;	// the reader is behind: keep what is there, lose this half
 		return;
 	}
-	if (hrc7000_fm_rx_audio(modem, &p25_audio[len]) != 0) {
-		p25_audio_len = (uint16_t)(len + HRC7000_FM_RX_SAMPLES);
+	if (hrc7000_fm_rx_audio(modem, &p25_audio[head & (P25_AUDIO_SAMPLES - 1u)]) != 0) {
+		p25_audio_head = (uint16_t)(head + HRC7000_FM_RX_SAMPLES);
 	}
 }
 
@@ -380,7 +384,7 @@ static bool audio_start(void)
 	if (modem == NULL || board.radio == NULL || board.radio->audio_to_modem == NULL || hrc_dmr_tx_active()) {
 		return false;
 	}
-	p25_audio_len = p25_audio_rd = 0;
+	p25_audio_head = p25_audio_tail = p25_audio_dropped = 0;
 	// The board routes the RF chip's discriminator into the modem (PTB15 low); the radio core left the C7000 in FM
 	// (WORK_MODE 0x80) on its frequency. Prefer the data (DMR) receive table: its discriminator filter is wide enough
 	// for the 4FSK, where the FM voice table is not
@@ -389,6 +393,14 @@ static bool audio_start(void)
 	} else {
 		board.radio->audio_to_modem(true);
 	}
+	// The C7000's FM receive path for voice low-passes the discriminator (C7_FM_BANDWIDTH bit 6), which smears
+	// 4FSK. The software demodulator needs the raw discriminator: FM receive, analog speaker off, bit 6 clear
+	p25_saved_fm_bw = hrc7000_rd(modem, C7_FM_BANDWIDTH);
+	p25_saved_fm_dev = hrc7000_rd(modem, C7_FM_DEV_COEF);
+	p25_saved_valid = true;
+	hrc7000_fm_rx(modem, false);
+	hrc7000_audio_bits(modem, 0, C7_AUDIO_FM_PLAY);
+	hrc7000_wr(modem, C7_FM_BANDWIDTH, hrc7000_rd(modem, C7_FM_BANDWIDTH) & ~(1u << 6));
 	if (!hrc_dmr_fm_rx_hook(audio_half)) {
 		if (board.radio->audio_to_modem_data != NULL) {
 			board.radio->audio_to_modem_data(false);
@@ -408,6 +420,11 @@ static void audio_stop(void)
 	}
 	hrc7000_fm_rx_audio_irq(modem, false);
 	hrc_dmr_fm_rx_hook(NULL);
+	if (p25_saved_valid) {
+		hrc7000_wr(modem, C7_FM_BANDWIDTH, p25_saved_fm_bw);
+		hrc7000_wr(modem, C7_FM_DEV_COEF, p25_saved_fm_dev);
+		p25_saved_valid = false;
+	}
 	if (board.radio != NULL && board.radio->audio_to_modem_data != NULL) {
 		board.radio->audio_to_modem_data(false);
 	} else if (board.radio != NULL && board.radio->audio_to_modem != NULL) {
@@ -417,15 +434,15 @@ static void audio_stop(void)
 
 static uint16_t audio_read(int16_t *buf, uint16_t max)
 {
-	uint16_t n = (uint16_t)(p25_audio_len - p25_audio_rd);
+	uint16_t tail = p25_audio_tail, n = (uint16_t)(p25_audio_head - tail);
 
 	if (n > max) {
 		n = max;
 	}
-	if (n != 0) {
-		memcpy(buf, &p25_audio[p25_audio_rd], (size_t)n * 2u);
-		p25_audio_rd = (uint16_t)(p25_audio_rd + n);
+	for (uint16_t i = 0; i < n; i++) {
+		buf[i] = p25_audio[(uint16_t)(tail + i) & (P25_AUDIO_SAMPLES - 1u)];
 	}
+	p25_audio_tail = (uint16_t)(tail + n);
 	return n;
 }
 
@@ -498,7 +515,7 @@ const hal_p25_probe_t hrc_p25_probe = {
 	.start_ex = start_cfg,
 	.stop = stop,
 	.read = read_block,
-#if CONFIG_P25_PROBE
+#if CONFIG_P25_PROBE || CONFIG_P25_VOICE
 	.audio_start = audio_start,
 	.audio_stop = audio_stop,
 	.audio_read = audio_read,

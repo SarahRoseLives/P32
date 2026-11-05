@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Narrow shim for pinned codec sources, which use only global C names.
+#pragma once
+#include <stdlib.h>

@@ -77,6 +77,8 @@ enum {
 	DL_OP_VOICE_TEST = 33,
 	DL_OP_DTMF = 34,
 	DL_OP_P25_PROBE = 35,	// u8: 0 stop, 1 start, 2 log the last block (the P25 PHY receive probe, docs/spec/p25.md 5.1)
+	DL_OP_P25_VOICE_BENCH = 36,	// run the IMBE decode timing bench, logged (CONFIG_P25_VOICE, docs/spec/p25.md 9)
+	DL_OP_P25_VOICE = 37,	// u8: 0 stop, 1 start, 2 log stats (conventional P25 voice, CONFIG_P25_VOICE)
 };
 uint8_t debuglink_radio_feature_op(uint8_t op, const uint8_t *args, uint16_t len);
 // RADIO ops the dispatcher hands to debuglink_radio_feature_op: a new DL_OP_* goes here too
@@ -84,7 +86,7 @@ static inline bool debuglink_is_feature_op(uint8_t op)
 {
 	return (op >= DL_OP_SCAN && op <= DL_OP_SETTING) || op == DL_OP_ROAM || op == DL_OP_VIBRATE || op == DL_OP_VOLUME ||
 	       op == DL_OP_DMR_FIELDS || op == DL_OP_VFO_COPY || op == DL_OP_VOICE_TEST || op == DL_OP_DTMF ||
-	       op == DL_OP_P25_PROBE;
+	       op == DL_OP_P25_PROBE || op == DL_OP_P25_VOICE_BENCH || op == DL_OP_P25_VOICE;
 }
 // VERSION's codec= (hal_vocoder_id; the name the host tests use)
 static inline const char *debuglink_codec_id(const hal_vocoder_t *v)

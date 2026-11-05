@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The RadioFoundry Authors
-# Builds a csky-elf cross toolchain for the hrc7000 platform (C-SKY CK803S): binutils, GCC (C only) and newlib, into
+# Builds a csky-elf cross toolchain for the hrc7000 platform (C-SKY CK803S): binutils, GCC (C and C++) and newlib, into
 # ~/toolchains/csky-elf. Tested on Ubuntu 22.04 arm64 (4 cores, about 45 minutes):
 #   sudo apt install build-essential libgmp-dev libmpfr-dev libmpc-dev libisl-dev texinfo bison flex
 # newlib is built for -mcpu=ck803s only (no multilib): GCC 14 runs away (gigabytes of memory, no end) on the
@@ -38,7 +38,7 @@ done_stage binutils-$BV b-binutils
 
 [ -f $PREFIX/bin/csky-elf-gcc ] || [ -d gcc-$GV ] || tar xf gcc-$GV.tar.xz
 mkdir -p $SRC/b-gcc && cd $SRC/b-gcc
-[ -f $PREFIX/bin/csky-elf-gcc ] || { ../gcc-$GV/configure --target=csky-elf --prefix=$PREFIX --enable-languages=c \
+[ -f $PREFIX/bin/csky-elf-gcc ] || { ../gcc-$GV/configure --target=csky-elf --prefix=$PREFIX --enable-languages=c,c++ \
 	--without-headers --with-newlib --disable-nls --disable-shared --disable-threads --disable-libssp \
 	--disable-libquadmath --disable-libgomp --disable-libatomic; make -j$J all-gcc all-target-libgcc; \
 	make install-strip-gcc install-target-libgcc; }

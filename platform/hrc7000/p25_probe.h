@@ -10,7 +10,7 @@
 #include "hal_p25.h"
 #include "modem/hrc7000/hrc7000.h"
 
-#if CONFIG_P25 || CONFIG_P25_PROBE
+#if CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
 void hrc_p25_probe_attach(hrc7000_t *modem);
 extern const hal_p25_probe_t hrc_p25_probe;
 #else

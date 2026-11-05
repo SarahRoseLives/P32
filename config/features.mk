@@ -226,6 +226,10 @@ CONFIG_P25_PROBE ?= n
 # p25_probe runs the demodulator's PHY receive mode). The bench probe above (P25_PROBE) is separate and needs the debug
 # link. A radio without the probe keeps the switch off and the screen does not appear.
 CONFIG_P25 ?= n
+# P25 Phase 1 IMBE voice: the fixed-point/float vocoder and the LDU voice decode (docs/spec/p25.md 6, 9). Off by
+# default: the decode cost is the open question on the CK803S (soft-float). This bench builds the decoder and a
+# timing command so the cost can be measured on the radio before the RX path is written.
+CONFIG_P25_VOICE ?= n
 # runtime RAM-monitor entry: command 0x1A on the host port loads the host's flash-access stub into free RAM and jumps
 # to it without a power cycle, so updates need no key combo at power-on (the web flasher, stub/stubtool.py, rfoundry;
 # core/stubentry, docs/spec/stub-entry.md). Its own feature: with the debug link off it answers on its own small
@@ -273,7 +277,7 @@ CONFIG_GPS_SKY ?= $(if $(and $(filter y,$(CONFIG_GPS)),$(filter y,$(CONFIG_APRS)
 
 FEATURES := FM SUBTONE DMR DMR_PRIVACY DMR_TALKER_ALIAS DMR_GPS DMR_SMS DMR_TMS DMR_ARS DMR_LRRP DMR_SIGNALING DMR_EMERGENCY DMR_ROAMING DMR_IP_GATEWAY ZONE_SHARE DMR_UDP_COMPRESS DMR_CONFIRMED NET_TCP NET_KISS NET_HTTP NET_HTTP_GZIP NET_WEBCTL NET_RIGCTL NET_APRSIS NET_USRP MDNS TFTP TFTP_IDDB IDDB_COMPACT DMR_CONTROL_STATION SNMP SFR SFR_DUALPATH_RX SFR_CWID TASK_STACKS \
 	USB HOSTLINK USB_NETWORK NET_PPP HOTSPOT HOTSPOT_SPLIT DEBUGLINK CPS_OPENFW CPS_FAST VFO VFO_FM VFO_DMR DIAG FONT_XL FONT_AA FONT_BIG LANG_ES LANG_IT LANG_DEFAULT_ES LANG_DEFAULT_IT UI_COLOR UI_SETTINGS SCAN DUAL_WATCH BEEP FM_TX_TONES DTMF \
-	VOX REF_TRIM BATTERY_SAVE VIBRATE GPS AUDIO_PROBE P25_PROBE P25 STUB_ENTRY NAND_STORAGE CRASH_LOG CRASH_SCREEN CRASH_REPORT WATCHDOG FAULT_TRACE AM_RX BCAST_FM APRS APRS_RX APRS_IGATE GPS_SKY KEY_ASSIGN CHANNEL_LIST CHANNEL_EDIT ZONE_EDIT CONTACT_EDIT
+	VOX REF_TRIM BATTERY_SAVE VIBRATE GPS AUDIO_PROBE P25_PROBE P25 P25_VOICE STUB_ENTRY NAND_STORAGE CRASH_LOG CRASH_SCREEN CRASH_REPORT WATCHDOG FAULT_TRACE AM_RX BCAST_FM APRS APRS_RX APRS_IGATE GPS_SKY KEY_ASSIGN CHANNEL_LIST CHANNEL_EDIT ZONE_EDIT CONTACT_EDIT
 
 # Dependencies
 feature_on = $(filter y,$(CONFIG_$(1)))

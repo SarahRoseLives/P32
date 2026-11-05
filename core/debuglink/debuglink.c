@@ -395,7 +395,7 @@ static size_t cmd_ptt(const uint8_t *req, uint16_t len, uint8_t *out)
 
 // --- P25 bench probe: the 8 kHz FM discriminator (docs/spec/p25.md 5.1) ---
 
-#if CONFIG_P25_PROBE
+#if CONFIG_P25_PROBE || CONFIG_P25_VOICE
 static int16_t p25_audio[512];
 
 static size_t cmd_p25(const uint8_t *req, uint16_t len, uint8_t *out, size_t cap)
@@ -891,7 +891,7 @@ static size_t handle(uint8_t cmd, const uint8_t *req, uint16_t len, uint8_t *out
 	case DL_CMD_IDDB:
 		return debuglink_cmd_iddb(req, len, out, cap);
 	case DL_CMD_P25:
-#if CONFIG_P25_PROBE
+#if CONFIG_P25_PROBE || CONFIG_P25_VOICE
 		return cmd_p25(req, len, out, cap);
 #else
 		return status_only(out, DL_ST_UNAVAILABLE);

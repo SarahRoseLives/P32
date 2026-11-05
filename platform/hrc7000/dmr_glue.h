@@ -30,7 +30,7 @@ void hrc_dmr_leave(void);
 void hrc_dmr_rx_restart(void);
 bool hrc_dmr_tx_active(void);
 void hrc_dmr_tx_drop(void);
-#if CONFIG_P25_PROBE || CONFIG_P25
+#if CONFIG_P25_PROBE || CONFIG_P25 || CONFIG_P25_VOICE
 // A hook on every system interrupt's bit list (the P25 probe, docs/spec/p25.md 5.1). Interrupt context
 void hrc_dmr_sys_hook(void (*fn)(uint32_t list));
 // Whether the DMR engine is running (the probe stops it before taking the modem)

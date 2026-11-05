@@ -159,8 +159,16 @@ ifeq ($(CONFIG_FAULT_TRACE),y)
 APP_SRC += core/crash/crash_trace.c
 endif
 # The P25 NID BCH decoder, for the physical-layer receive probe and the control-channel monitor (docs/spec/p25.md)
-ifneq ($(filter y,$(CONFIG_P25_PROBE) $(CONFIG_P25)),)
+ifneq ($(filter y,$(CONFIG_P25_PROBE) $(CONFIG_P25) $(CONFIG_P25_VOICE)),)
  APP_SRC += core/p25/p25_bch.c core/p25/p25_tsbk.c core/p25/p25_tsbk_parse.c
+endif
+# P25 IMBE voice: the fixed-point vocoder (Pavel Yazev, GPL-3.0-or-later) and the C wrapper/bench. The codec is
+# freestanding C++, built by the same csky-elf toolchain's C++ front end and kept out of LTO (docs/spec/p25.md 6, 9)
+IMBE_DIR := core/p25/imbe
+IMBE_SRC := $(filter-out $(IMBE_DIR)/imbe_vocoder.cc,$(sort $(wildcard $(IMBE_DIR)/*.cc))) core/p25/p25_imbe_codec.cpp
+ifeq ($(CONFIG_P25_VOICE),y)
+ APP_SRC += core/p25/p25_imbe.c core/p25/p25_voice.c core/p25/p25_demod.c core/p25/p25_rx.c \
+	core/p25/p25_call.c
 endif
 # Zone sharing over DMR data: the record, the sender and the offers (its codeplug side is core/codeplug/zone_import.c)
 ifeq ($(CONFIG_ZONE_SHARE),y)
@@ -279,6 +287,9 @@ BIN_SECTIONS ?= .isr_vector .text .rodata .ARM.extab .ARM .preinit_array .init_a
 APP_OBJ := $(APP_SRC:%.c=$(BUILD)/%.o) $(APP_ASM:%.S=$(BUILD)/%.o)
 TP_OBJ := $(patsubst %.c,$(BUILD)/%.o,$(filter %.c,$(PLATFORM_3P_SRC))) $(patsubst %.s,$(BUILD)/%.o,$(filter %.s,$(PLATFORM_3P_SRC)))
 OBJ := $(APP_OBJ) $(TP_OBJ)
+ifeq ($(CONFIG_P25_VOICE),y)
+OBJ += $(patsubst %.cc,$(BUILD)/%.o,$(patsubst %.cpp,$(BUILD)/%.o,$(IMBE_SRC)))
+endif
 
 # No built-in suffix rules (the .S -> .s rule deletes sources on case-insensitive file systems, gotchas 13.3)
 .SUFFIXES:
@@ -377,6 +388,18 @@ $(BUILD)/third_party/%.o: third_party/%.s
 $(BUILD)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(CPUFLAGS) $(DEFS) $(INCLUDES) -MMD -MP -c $< -o $@
+
+# P25 IMBE codec: freestanding C++ (newlib headers only, via the narrow cstdint/cstring shims), no exceptions, RTTI,
+# static guards or LTO. The reference keeps the codec at -O3 while the rest of the app is -Os (docs/spec/p25.md 9)
+IMBE_CXXFLAGS := $(CPUFLAGS) -O3 -g3 -fno-lto -std=gnu++17 -fwrapv -fno-exceptions -fno-rtti -fno-threadsafe-statics \
+	-fno-use-cxa-atexit -nostdinc++ -I$(IMBE_DIR)/freestanding -I$(IMBE_DIR) -fno-common -MMD -MP $(STACK_INFO) \
+	$(DEFS) $(INCLUDES)
+$(BUILD)/$(IMBE_DIR)/%.o: $(IMBE_DIR)/%.cc
+	@mkdir -p $(dir $@)
+	$(CROSS)g++ $(IMBE_CXXFLAGS) -c $< -o $@
+$(BUILD)/core/p25/p25_imbe_codec.o: core/p25/p25_imbe_codec.cpp
+	@mkdir -p $(dir $@)
+	$(CROSS)g++ $(IMBE_CXXFLAGS) -c $< -o $@
 
 size: $(TARGET).elf
 	$(SIZE) -A $< | grep -E '^\.(isr_vector|text|rodata|data|bss|ccmram)'

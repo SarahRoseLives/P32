@@ -8,7 +8,7 @@
 #include "platform.h"
 #include "hrc_afsk.h"
 #include "hrc_bcast.h"
-#if CONFIG_P25 || CONFIG_P25_PROBE
+#if CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
 #include "p25_probe.h"
 #endif
 #if CONFIG_BCAST_FM
@@ -96,7 +96,7 @@ const board_t board = {
 	.audio = &hrc_audio_pcm,
 	.vocoder = &hrc_vocoder,
 #endif
-#if CONFIG_P25 || CONFIG_P25_PROBE
+#if CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
 	.p25_probe = &hrc_p25_probe,
 #endif
 #if CONFIG_APRS

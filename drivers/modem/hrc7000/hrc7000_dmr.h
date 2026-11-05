@@ -126,7 +126,7 @@ typedef struct {
 	// FM receive audio half ready (SYS_INTERP bit 14, modem-hrc7000.md 8.5): called from the system interrupt whether
 	// or not the engine runs, NULL for none. Set it after hrc7000_dmr_init
 	void (*fm_rx)(void);
-#if CONFIG_P25_PROBE || CONFIG_P25
+#if CONFIG_P25_PROBE || CONFIG_P25 || CONFIG_P25_VOICE
 	// Every system interrupt, with the bit list just read and cleared (docs/spec/p25.md 5.1): the P25 PHY receive
 	// probe uses it. Called in interrupt context whether or not the engine runs, NULL for none
 	void (*sys_hook)(uint32_t list);

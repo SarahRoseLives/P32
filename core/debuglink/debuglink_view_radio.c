@@ -13,6 +13,8 @@
 #include "radio/mic_gain.h"
 #include "radio/ref_trim.h"
 #include "radio/radio_cwid.h"
+#include "p25/p25_imbe.h"
+#include "p25/p25_voice.h"
 #include "hal_time.h"
 #include "hal_dtmf.h"
 #include "settings/settings.h"
@@ -323,6 +325,32 @@ uint8_t debuglink_radio_feature_op(uint8_t op, const uint8_t *a, uint16_t len)
 		}
 		radio_req_dtmf((char)a[0], a[1] != 0);
 		return DL_ST_OK;
+	case DL_OP_P25_VOICE_BENCH:
+#if CONFIG_P25_VOICE
+		p25_imbe_bench();
+		return DL_ST_OK;
+#else
+		return DL_ST_UNAVAILABLE;
+#endif
+	case DL_OP_P25_VOICE:
+#if CONFIG_P25_VOICE
+		switch (len ? a[0] : 2u) {
+		case 0:
+			p25_voice_stop();
+			return DL_ST_OK;
+		case 1:
+			return p25_voice_start() ? DL_ST_OK : DL_ST_REFUSED;
+		default: {
+			p25_voice_stats_t st;
+			p25_voice_stats(&st);
+			dlog("p25v s %u st %u acq %u n %u v %u corr %u under %u over %u", (unsigned)st.samples, (unsigned)st.sync_tests, (unsigned)st.acquisitions, (unsigned)st.units, (unsigned)st.voices,
+			     (unsigned)st.corrected, (unsigned)st.underruns, (unsigned)st.overflows);
+			return DL_ST_OK;
+		}
+		}
+#else
+		return DL_ST_UNAVAILABLE;
+#endif
 	case DL_OP_P25_PROBE:
 #if CONFIG_P25_PROBE
 	{
