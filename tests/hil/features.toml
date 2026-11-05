@@ -445,3 +445,14 @@ source = ["tools/rfoundry/rfoundry"]
 [feature.audio_probe]
 switch = "AUDIO_PROBE"
 spec = "docs/spec/usb-audio.md"
+
+[feature.p25]
+switch = "P25"
+spec = "docs/spec/p25.md"
+source = ["core/p25", "core/radio/radio_p25.c", "core/radio/radio_sm.c", "platform/hrc7000/p25_probe.c",
+          "hal/hal_p25.h", "core/ui/ui_screens.c"]
+
+[feature.p25_probe]
+switch = "P25_PROBE"
+spec = "docs/spec/p25.md"
+source = ["core/p25", "platform/hrc7000/p25_probe.c", "hal/hal_p25.h"]

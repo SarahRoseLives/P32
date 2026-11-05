@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The RadioFoundry Authors
+// The P25 control-channel monitor's view, read from the demodulator's PHY receive probe (docs/spec/p25.md 8). The
+// probe does the decode (it owns the chip's slot order and the A/F erasures); this only copies it into the radio view.
+#include "config.h"
+#if CONFIG_P25
+
+#include <string.h>
+#include "board.h"
+#include "hal_p25.h"
+#include "radio/radio_p25.h"
+
+bool radio_p25_publish(radio_p25_view_t *v)
+{
+	hal_p25_cc_t cc;
+
+	if (board.p25_probe == NULL || board.p25_probe->last_cc == NULL) {
+		return false;
+	}
+	bool valid = board.p25_probe->last_cc(&cc);
+	if (valid) {
+		radio_p25_view_t n;
+
+		memset(&n, 0, sizeof n);	// a fresh struct so a padding byte never reads as a change
+		n.on = v->on;
+		n.valid = true;
+		n.opcode = cc.opcode;
+		n.nac = cc.nac;
+		n.duid = cc.duid;
+		n.wacn = cc.wacn;
+		n.sys = cc.sys;
+		n.rfss = cc.rfss;
+		n.site = cc.site;
+		n.tg = cc.tg;
+		n.vch = cc.vch;
+		n.freq_hz = cc.freq_hz;
+		n.frames = cc.blocks;
+		if (memcmp(&n, v, sizeof n) != 0) {
+			*v = n;
+			return true;
+		}
+	}
+	return false;
+}
+
+#endif

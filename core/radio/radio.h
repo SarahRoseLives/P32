@@ -217,6 +217,25 @@ typedef struct {
 } radio_roam_view_t;
 #endif
 
+#if CONFIG_P25
+// P25 Phase 1 control-channel monitor (docs/spec/p25.md 8): the decoded control channel while its screen is listening.
+// on: the monitor has the receiver; valid: a control channel has been decoded since it started. A field keeps its last
+// value until a later TSBK sets it.
+typedef struct {
+	bool on;
+	bool valid;
+	uint8_t opcode;		// the last TSBK's opcode
+	uint16_t nac;
+	uint8_t duid;
+	uint32_t wacn;
+	uint16_t sys;
+	uint8_t rfss, site;
+	uint16_t tg, vch;
+	uint32_t freq_hz;
+	uint32_t frames;	// control-channel bursts decoded since it started
+} radio_p25_view_t;
+#endif
+
 #define RADIO_LED_GREEN		0x01u	// radio_view_t.leds
 #define RADIO_LED_RED		0x02u
 
@@ -300,6 +319,9 @@ typedef struct {
 #if CONFIG_DMR_ROAMING
 	radio_roam_view_t roam;
 #endif
+#if CONFIG_P25
+	radio_p25_view_t p25;
+#endif
 } radio_view_t;
 
 // view.temp bits
@@ -365,6 +387,9 @@ void radio_req_power(int8_t dir);		// temporary change of power level, wraps
 void radio_req_squelch(int8_t dir);
 void radio_req_clear_temporary(void);		// BACK on Home: revert temporary changes
 void radio_req_retune(void);			// tune again now, or after the transmission (the reference trim changed)
+#if CONFIG_P25
+void radio_req_p25(bool on);			// the control-channel monitor: 1 enter (from idle), 0 leave
+#endif
 void radio_req_reload(void);			// the settings' preferences changed (squelch, master power, DMR ID)
 // FM bandwidth and sub-audio. On a channel these are temporary changes (P7); in the VFO they change the VFO itself.
 // Refused on DMR channels, while transmitting, and for tones tones_valid() rejects

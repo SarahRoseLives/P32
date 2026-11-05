@@ -19,7 +19,7 @@
 
 #if CONFIG_DMR	// the whole file: DMR only
 #include "platform.h"
-#if CONFIG_P25_PROBE
+#if CONFIG_P25_PROBE || CONFIG_P25
 #include "p25_probe.h"
 #endif
 #include "modem/hrc7000/hrc7000_dmr.h"
@@ -157,7 +157,7 @@ void hrc_dmr_board_init(hrc7000_t *modem, const hrc_dmr_board_t *hooks)
 {
 	brd = hooks;
 	hrc7000_dmr_init(&eng, modem, &ops);
-#if CONFIG_P25_PROBE
+#if CONFIG_P25_PROBE || CONFIG_P25
 	hrc_p25_probe_attach(modem);
 #endif
 	hrc_irq_register(IRQ_MODEM_SYS, isr_sys);
@@ -200,7 +200,7 @@ void hrc_dmr_rx_restart(void)
 	hrc7000_dmr_rx_restart(&eng);
 }
 
-#if CONFIG_P25_PROBE
+#if CONFIG_P25_PROBE || CONFIG_P25
 bool hrc_dmr_active(void)
 {
 	return active;

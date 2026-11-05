@@ -148,6 +148,7 @@ typedef enum {
 	RREQ_DUAL,		// dual watch (CONFIG_DUAL_WATCH): arg channel A, arg2 channel B, radio_dual_arg()
 	RREQ_RETUNE,		// tune the current frequency again (the reference trim changed: radio/ref_trim.h)
 	RREQ_VFO_TX,		// arg: the VFO's TX Hz, 0 = simplex (its RX frequency)
+	RREQ_P25,		// P25 control-channel monitor (CONFIG_P25): arg 1 enter, 0 leave
 } radio_req_type_t;
 
 // RREQ_TONE's argument: which (RADIO_TONE_*) in bits 25:24, the tone type in 23:16, the value in 15:0
@@ -265,6 +266,7 @@ typedef struct {
 	int8_t green_out;
 	int8_t red_out;
 	bool hotspot;			// hotspot mode: the host link owns the modem
+	bool p25;			// the P25 monitor has the receiver (CONFIG_P25)
 
 	radio_settings_t set;		// the settings in effect
 	uint32_t activity_ms;		// last request, reception or transmission (battery save)

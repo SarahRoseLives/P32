@@ -181,6 +181,10 @@ static void cp_question_gone(uint8_t from)
 void ui_pop(void)
 {
 	cp_question_gone(sp);
+#if CONFIG_P25
+	if (stack[sp].scr == SCR_P25)
+		radio_req_p25(false);	// leaving the monitor screen: the receiver goes back to the channel
+#endif
 	if (sp > 0)
 		sp--;
 	if (ui_scr[stack[sp].scr]->flags & SF_FILTER)
@@ -196,6 +200,10 @@ void ui_pop(void)
 void ui_go_home(void)
 {
 	cp_question_gone(1);
+#if CONFIG_P25
+	if (stack[sp].scr == SCR_P25)
+		radio_req_p25(false);
+#endif
 	sp = 0;
 	ui_st.quick_edit = false;
 	entry_cancel();
@@ -1606,6 +1614,25 @@ bool ui_emergency_key(const input_event_t *ev)
 	}
 	return false;
 }
+
+// --- P25 control-channel monitor (CONFIG_P25; the screen starts the radio core's monitor on enter, stops it on pop) ---
+#if CONFIG_P25
+void ui_p25_draw(void)
+{
+	ui_draw_p25(view, &ui_st);
+}
+
+// Only BACK: it pops (ui_pop stops the monitor). Every other key is consumed: nothing may retune the receiver under it
+bool ui_p25_key(const input_event_t *ev)
+{
+	return ev->action != ACT_BACK;
+}
+
+void ui_p25_enter(void)
+{
+	radio_req_p25(true);
+}
+#endif
 
 // --- hotspot mode (the host link drives the radio; a screen of its own replaces the others) ---
 #if CONFIG_HOTSPOT

@@ -3038,3 +3038,101 @@ void ui_draw_diag(const radio_view_t *v, uint32_t keys, int32_t enc_total, uint8
 	gfx_text(f, 0, gfx_height() - f->h, TR("* more  Back"), ui_col.idle);
 }
 #endif
+
+#if CONFIG_P25
+// A hexadecimal field (NAC, WACN, SYS, the TSBK opcode) into the line being built
+static void p25_hex(sbuf_t *b, uint32_t v, int digits)
+{
+	for (int i = digits - 1; i >= 0; i--) {
+		sb_chr(b, "0123456789ABCDEF"[(v >> (4 * i)) & 0xF]);
+	}
+}
+
+void ui_draw_p25(const radio_view_t *v, const ui_state_t *s)
+{
+	const ui_layout_t *L = &ui_layout;
+	const font_t *f = L->tiny != NULL ? L->tiny : L->small;	// small print: as many lines as fit
+	const radio_p25_view_t *p = &v->p25;
+	char buf[44];
+	sbuf_t b;
+	int y;
+
+	gfx_clear(ui_col.bg);
+	y = ui_draw_top(v, s, NULL, "P25") + 2;
+
+	if (!p->on) {
+		gfx_text(f, 0, y, "monitor off", ui_col.dim);
+		ui_draw_bottom(s, "Back");
+		return;
+	}
+	if (!p->valid) {
+		gfx_text(f, 0, y, "listening...", ui_col.dim);
+		gfx_text(f, 0, y + f->h, "no control channel", ui_col.dim);
+		ui_draw_bottom(s, "Back");
+		return;
+	}
+
+	sb_init(&b, buf, sizeof buf);
+	sb_str(&b, "NAC ");
+	p25_hex(&b, p->nac, 3);
+	sb_str(&b, "  DUID ");
+	p25_hex(&b, p->duid, 1);
+	gfx_text(f, 0, y, buf, ui_col.fg);
+	y += f->h;
+
+	sb_init(&b, buf, sizeof buf);
+	sb_str(&b, "WACN ");
+	p25_hex(&b, p->wacn, 5);
+	sb_str(&b, "  SYS ");
+	p25_hex(&b, p->sys, 3);
+	gfx_text(f, 0, y, buf, ui_col.fg);
+	y += f->h;
+
+	sb_init(&b, buf, sizeof buf);
+	sb_str(&b, "RFSS ");
+	sb_u32(&b, p->rfss, 1);
+	sb_str(&b, "  SITE ");
+	if (p->site != 0) {
+		sb_u32(&b, p->site, 1);
+	} else {
+		sb_chr(&b, '-');
+	}
+	sb_str(&b, "  TG ");
+	if (p->tg != 0) {
+		sb_u32(&b, p->tg, 1);
+	} else {
+		sb_chr(&b, '-');
+	}
+	gfx_text(f, 0, y, buf, ui_col.fg);
+	y += f->h;
+
+	sb_init(&b, buf, sizeof buf);
+	sb_str(&b, "VCH ");
+	if (p->vch != 0) {
+		sb_u32(&b, p->vch, 1);
+	} else {
+		sb_chr(&b, '-');
+	}
+	gfx_text(f, 0, y, buf, ui_col.fg);
+	y += f->h;
+
+	sb_init(&b, buf, sizeof buf);
+	sb_str(&b, "FREQ ");
+	if (p->freq_hz != 0) {
+		sb_freq(&b, p->freq_hz);
+	} else {
+		sb_chr(&b, '-');
+	}
+	gfx_text(f, 0, y, buf, ui_col.fg);
+	y += f->h;
+
+	sb_init(&b, buf, sizeof buf);
+	sb_str(&b, "frames ");
+	sb_u32(&b, p->frames, 1);
+	sb_str(&b, "  op ");
+	p25_hex(&b, p->opcode, 2);
+	gfx_text(f, 0, y, buf, ui_col.dim);
+
+	ui_draw_bottom(s, "Back");
+}
+#endif

@@ -250,6 +250,10 @@ void ui_draw_volume(const radio_view_t *v, const ui_state_t *s);
 void ui_draw_diag(const radio_view_t *v, uint32_t keys, int32_t enc_total, uint8_t first_line);
 // The first board line of the page after the one starting at first_line (wraps to 0)
 uint8_t ui_diag_next_page(uint8_t first_line);
+#if CONFIG_P25
+// P25 control-channel monitor: the decoded NAC/WACN/SYS/RFSS/SITE/TG/VCH and the IdenUp frequency (docs/spec/p25.md 8)
+void ui_draw_p25(const radio_view_t *v, const ui_state_t *s);
+#endif
 
 // Quick settings tile at position 0..8: false if it can't be used here. label and value get short texts
 bool ui_quick_tile(int tile, const radio_view_t *v, const ui_state_t *s, char *label, size_t label_len,

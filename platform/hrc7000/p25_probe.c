@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The RadioFoundry Authors
-// HR_C7000 P25 physical-layer receive bench probe (docs/spec/p25.md 5.1, modem-hrc7000.md 9.6). The chip's PHY receive
-// test mode is documented for DMR bit-error tests: WORK_MODE 0x02 (continuous), RF_MODE 0xA0000060 (bit 31 and 29 set,
+// HR_C7000 P25 physical-layer receive (docs/spec/p25.md 5.1, 8; modem-hrc7000.md 9.6). The chip's PHY receive test
+// mode is documented for DMR bit-error tests: WORK_MODE 0x02 (continuous), RF_MODE 0xA0000060 (bit 31 and 29 set,
 // two-point transmit, IF receive), LAYER2_CONTROL 0x40, LAYER2_TXRX_CTRL 0x41, then the deframed information in the RX
 // RAM at +0x30 after the chip finds a sync. The P25 frame sync is 48 bits, the same width as DMR's, so the probe puts
-// it in the receive-sync registers (and three byte-order variants in the others) and lets the user see whether the
-// chip's deframer accepts it. The block the chip leaves is what we need to know before writing a P25 receiver.
+// it in the receive-sync registers (and three byte-order variants in the others) and undoes the chip's slot order to
+// assemble the on-air stream. Two callers: the debug link's bench probe (raw block, the 8 kHz discriminator capture)
+// and the control-channel monitor, which reads the decoded CC through last_cc.
 #include "config.h"
-#if CONFIG_P25_PROBE
+#if CONFIG_P25 || CONFIG_P25_PROBE
 
 #include <string.h>
 #include "platform.h"
@@ -41,6 +42,10 @@ static uint32_t type_info, phy_state, last_list, blocks;
 #define P25_STREAM_BYTES	(P25_BLOCK_BYTES * P25_STREAM_BLOCKS)
 static uint8_t stream[P25_STREAM_BYTES];
 static uint16_t stream_len;
+// The monitor screen's last decoded control channel; last_cc() runs the decode in task context (the trellis is too
+// heavy for the interrupt) and then clears the capture so the next burst fills it again
+static hal_p25_cc_t last;
+static uint32_t decoded_blocks, frames;
 
 // Only PHY_RX (project bit 11) writes a block. PHY_RDY (bit 12) is the slot clock and PHY_RECV_ABNORMAL (bit 16)
 // fires on its own; taking their stale RX RAM was the "block that never changes" (bench 2026-11-04)
@@ -105,6 +110,9 @@ static bool start_cfg(uint8_t variant)
 	blocks = 0;
 	stream_len = 0;
 	type_info = phy_state = last_list = 0;
+	memset(&last, 0, sizeof last);
+	decoded_blocks = 0;
+	frames = 0;
 	on = false;						// no capture until the set-up is complete
 
 	hrc7000_wr(modem, C7_WORK_MODE, C7_WORK_MODE_FM);	// reset the state machine, then PHY receive
@@ -345,6 +353,7 @@ static uint8_t read_block(uint32_t *ty, uint32_t *ps, uint32_t *list, uint32_t *
 	return n;
 }
 
+#if CONFIG_P25_PROBE
 // The 8 kHz FM discriminator (modem-hrc7000.md 8.5): the modem writes 256-sample halves of its FM receive audio, and
 // the system interrupt bit 14 says a half is ready. Keep one 0.5 s capture: the caller tunes the radio in FM and
 // leaves it idle, then the board's audio_to_modem routes the RF chip's discriminator into the modem.
@@ -420,14 +429,81 @@ static uint16_t audio_read(int16_t *buf, uint16_t max)
 	return n;
 }
 
+#endif
+
+// The monitor's last decoded control channel. Task context only: p25_decode scans the capture and runs the trellis,
+// too heavy for the interrupt. A full capture is decoded once, then cleared so the next burst fills it; the 32-block
+// cap (probe_isr) is re-armed. Fields a burst does not set keep their last value.
+static bool last_cc(hal_p25_cc_t *out)
+{
+	uint32_t irq = hrc_irq_save();
+	bool full = on && stream_len >= P25_STREAM_BYTES;
+	uint32_t b = blocks;
+
+	hrc_irq_restore(irq);
+
+	if (full && b != decoded_blocks) {
+		uint16_t nac = 0;
+		uint8_t duid = 0;
+		bool have = false;
+		p25_cc_t cc;
+
+		memset(&cc, 0, sizeof cc);
+		if (p25_decode(&nac, &duid, &have, &cc)) {
+			last.valid = true;
+			last.nac = nac;
+			last.duid = duid;
+			if (have) {
+				last.opcode = cc.opcode;
+				if (cc.wacn != 0) {
+					last.wacn = cc.wacn;
+				}
+				if (cc.sys != 0) {
+					last.sys = cc.sys;
+				}
+				if (cc.rfss != 0) {
+					last.rfss = cc.rfss;
+				}
+				if (cc.site != 0) {
+					last.site = cc.site;
+				}
+				if (cc.tg != 0) {
+					last.tg = cc.tg;
+				}
+				if (cc.vch != 0) {
+					last.vch = cc.vch;
+				}
+				if (cc.freq_hz != 0) {
+					last.freq_hz = cc.freq_hz;
+				}
+			}
+			frames++;
+		}
+		irq = hrc_irq_save();
+		stream_len = 0;
+		blocks = 0;
+		decoded_blocks = 0;
+		if (modem != NULL) {
+			hrc7000_wr(modem, C7_SYS_INTERP_MASK, saved.sys_mask | PHY_BITS);
+		}
+		hrc_irq_restore(irq);
+	}
+	*out = last;
+	out->blocks = frames;
+	return last.valid;
+}
+
 const hal_p25_probe_t hrc_p25_probe = {
 	.start = start,
 	.start_ex = start_cfg,
 	.stop = stop,
 	.read = read_block,
+#if CONFIG_P25_PROBE
 	.audio_start = audio_start,
 	.audio_stop = audio_stop,
 	.audio_read = audio_read,
+#endif
+	.last_cc = last_cc,
 };
 
 #endif

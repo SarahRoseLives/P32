@@ -221,6 +221,11 @@ CONFIG_AUDIO_PROBE ?= n
 # sync and logs the raw receive RAM, for the P25 bring-up on the bench (docs/spec/p25.md 5.1; needs DEBUGLINK and DMR,
 # whose modem and system interrupt it borrows). A diagnostic, never for a release
 CONFIG_P25_PROBE ?= n
+# P25 control-channel monitor: a screen that shows a P25 Phase 1 control channel's decoded NAC, WACN, SYS, RFSS, SITE,
+# TG, VCH and the IdenUp frequency, receive only (docs/spec/p25.md 8; needs DMR for the modem and a board whose
+# p25_probe runs the demodulator's PHY receive mode). The bench probe above (P25_PROBE) is separate and needs the debug
+# link. A radio without the probe keeps the switch off and the screen does not appear.
+CONFIG_P25 ?= n
 # runtime RAM-monitor entry: command 0x1A on the host port loads the host's flash-access stub into free RAM and jumps
 # to it without a power cycle, so updates need no key combo at power-on (the web flasher, stub/stubtool.py, rfoundry;
 # core/stubentry, docs/spec/stub-entry.md). Its own feature: with the debug link off it answers on its own small
@@ -268,7 +273,7 @@ CONFIG_GPS_SKY ?= $(if $(and $(filter y,$(CONFIG_GPS)),$(filter y,$(CONFIG_APRS)
 
 FEATURES := FM SUBTONE DMR DMR_PRIVACY DMR_TALKER_ALIAS DMR_GPS DMR_SMS DMR_TMS DMR_ARS DMR_LRRP DMR_SIGNALING DMR_EMERGENCY DMR_ROAMING DMR_IP_GATEWAY ZONE_SHARE DMR_UDP_COMPRESS DMR_CONFIRMED NET_TCP NET_KISS NET_HTTP NET_HTTP_GZIP NET_WEBCTL NET_RIGCTL NET_APRSIS NET_USRP MDNS TFTP TFTP_IDDB IDDB_COMPACT DMR_CONTROL_STATION SNMP SFR SFR_DUALPATH_RX SFR_CWID TASK_STACKS \
 	USB HOSTLINK USB_NETWORK NET_PPP HOTSPOT HOTSPOT_SPLIT DEBUGLINK CPS_OPENFW CPS_FAST VFO VFO_FM VFO_DMR DIAG FONT_XL FONT_AA FONT_BIG LANG_ES LANG_IT LANG_DEFAULT_ES LANG_DEFAULT_IT UI_COLOR UI_SETTINGS SCAN DUAL_WATCH BEEP FM_TX_TONES DTMF \
-	VOX REF_TRIM BATTERY_SAVE VIBRATE GPS AUDIO_PROBE P25_PROBE STUB_ENTRY NAND_STORAGE CRASH_LOG CRASH_SCREEN CRASH_REPORT WATCHDOG FAULT_TRACE AM_RX BCAST_FM APRS APRS_RX APRS_IGATE GPS_SKY KEY_ASSIGN CHANNEL_LIST CHANNEL_EDIT ZONE_EDIT CONTACT_EDIT
+	VOX REF_TRIM BATTERY_SAVE VIBRATE GPS AUDIO_PROBE P25_PROBE P25 STUB_ENTRY NAND_STORAGE CRASH_LOG CRASH_SCREEN CRASH_REPORT WATCHDOG FAULT_TRACE AM_RX BCAST_FM APRS APRS_RX APRS_IGATE GPS_SKY KEY_ASSIGN CHANNEL_LIST CHANNEL_EDIT ZONE_EDIT CONTACT_EDIT
 
 # Dependencies
 feature_on = $(filter y,$(CONFIG_$(1)))
@@ -408,6 +413,11 @@ ifneq ($(call feature_on,P25_PROBE),)
   ifeq ($(call feature_on,DEBUGLINK)$(call feature_on,DMR),yy)
   else
     $(error CONFIG_P25_PROBE=y needs CONFIG_DEBUGLINK=y and CONFIG_DMR=y)
+  endif
+endif
+ifneq ($(call feature_on,P25),)
+  ifeq ($(call feature_on,DMR),)
+    $(error CONFIG_P25=y needs CONFIG_DMR=y)
   endif
 endif
 ifneq ($(call feature_on,STUB_ENTRY),)

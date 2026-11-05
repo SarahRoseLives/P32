@@ -231,6 +231,9 @@
 #ifndef CONFIG_P25_PROBE
 #define CONFIG_P25_PROBE		0
 #endif
+#ifndef CONFIG_P25
+#define CONFIG_P25			0
+#endif
 #ifndef CONFIG_STUB_ENTRY
 #define CONFIG_STUB_ENTRY		CONFIG_HOSTLINK
 #endif

@@ -35,6 +35,7 @@ typedef enum {
 	SCR_CONTACT_EDIT,		// the contact editor (CONFIG_CONTACT_EDIT): a new contact, from ui_target
 	SCR_LANGUAGE,			// Settings > Display > Language: every language, those not built dimmed
 	SCR_CP_FOREIGN,			// another firmware's codeplug: what the first edit does with it (ui_svc_codeplug_answer)
+	SCR_P25,			// the P25 control-channel monitor (CONFIG_P25)
 	SCR_COUNT
 } ui_scr_t;
 
@@ -185,6 +186,11 @@ void ui_emergency_draw(void);
 bool ui_emergency_key(const input_event_t *ev);
 void ui_diag_draw(void);
 bool ui_diag_key(const input_event_t *ev);
+#if CONFIG_P25
+void ui_p25_draw(void);
+bool ui_p25_key(const input_event_t *ev);
+void ui_p25_enter(void);
+#endif
 void ui_home_draw(void);
 bool ui_home_key(const input_event_t *ev);
 void ui_quick_draw(void);

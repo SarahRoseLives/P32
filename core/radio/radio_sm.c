@@ -45,6 +45,9 @@
 #if CONFIG_HOTSPOT
 #include "radio/radio_hotspot.h"	// the CW ID handover
 #endif
+#if CONFIG_P25
+#include "radio/radio_p25.h"		// the control-channel monitor view
+#endif
 #if CONFIG_SFR_CWID
 static void cw_cancel(radio_sm_t *sm);
 #endif
@@ -4108,6 +4111,67 @@ static void hotspot_leave(radio_sm_t *sm, uint32_t now_ms)
 }
 #endif
 
+#if CONFIG_P25
+// --- P25 control-channel monitor (docs/spec/p25.md 8): the RF chip's discriminator into the modem's PHY receive, the
+// decoded control channel shown on its screen. Entered only from idle: it takes the receiver from the channel ---
+static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (sm->p25 || board.p25_probe == NULL || board.p25_probe->last_cc == NULL) {
+		return;
+	}
+	if (sm->ptt || sm->hotspot || sm->view.state == RS_TX || sm->view.state == RS_TX_DENIED) {
+		return;
+	}
+#if CONFIG_APRS
+	if (sm->aprs_phase != APRS_RF_OFF) {
+		return;
+	}
+#endif
+	scan_stop(sm, false, now_ms);
+	end_reception(sm, now_ms);
+	// The RF chip's discriminator to the modem (the board's data receive table, wide enough for the 4FSK)
+	if (board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(true);
+	} else if (board.radio->audio_to_modem != NULL) {
+		board.radio->audio_to_modem(true);
+	} else {
+		return;
+	}
+	if (!board.p25_probe->start()) {
+		if (board.radio->audio_to_modem_data != NULL) {
+			board.radio->audio_to_modem_data(false);
+		} else {
+			board.radio->audio_to_modem(false);
+		}
+		return;
+	}
+	memset(&sm->view.p25, 0, sizeof sm->view.p25);
+	sm->p25 = true;
+	sm->view.p25.on = true;
+	sm->view.state = RS_IDLE;
+	outputs(sm);
+	changed(sm);
+}
+
+static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (!sm->p25) {
+		return;
+	}
+	board.p25_probe->stop();
+	if (board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(false);
+	} else if (board.radio->audio_to_modem != NULL) {
+		board.radio->audio_to_modem(false);
+	}
+	sm->p25 = false;
+	sm->view.p25.on = false;
+	sm->view.p25.valid = false;
+	tune(sm, now_ms);	// the channel again (restores the RF chip's mode too)
+	changed(sm);
+}
+#endif
+
 // --- Settings: what the radio was set to, back at power-on (core/settings), and saved when it changes ---
 
 // The preferences the radio core uses: base squelch, master power, VFO step. The own DMR ID is the codeplug's
@@ -5263,6 +5327,15 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 		break;
 #endif
 #endif
+#if CONFIG_P25
+	case RREQ_P25:
+		if (req->arg != 0) {
+			p25_enter(sm, now_ms);
+		} else {
+			p25_stop(sm, now_ms);
+		}
+		break;
+#endif
 #if CONFIG_DMR_ROAMING
 	case RREQ_ROAM:
 		roam_request(sm, (uint8_t)req->arg, now_ms);
@@ -5459,7 +5532,8 @@ static void battery_poll(radio_sm_t *sm, uint32_t now_ms)
 static bool save_allowed(const radio_sm_t *sm, uint32_t now_ms)
 {
 	if (sm->set.rx_save == 0 || board.radio->rx_sleep == NULL || sm->view.ch.mode != RADIO_MODE_FM || sm->hotspot ||
-			sm->view.state != RS_IDLE || sm->view.monitor || sm->ptt || sm->view.ch.no_eco || sm->view.bcast) {
+			sm->p25 || sm->view.state != RS_IDLE || sm->view.monitor || sm->ptt || sm->view.ch.no_eco ||
+			sm->view.bcast) {
 		return false;
 	}
 #if CONFIG_APRS
@@ -5627,7 +5701,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 	radio_status_t st;
 	// codeplug_serial() before zone_edit_busy(): a zone write that moved indexes has its log entry by then
 	if ((sm->reload_pending || codeplug_serial() != sm->codeplug_serial || ZONES_MOVED(sm)) && !ZONE_WRITE_BUSY() &&
-	    !sm->hotspot && !sm->ptt && sm->view.state != RS_TX) {
+	    !sm->hotspot && !sm->p25 && !sm->ptt && sm->view.state != RS_TX) {
 		reload(sm, now_ms);
 		persist(sm, now_ms);
 	}
@@ -5659,7 +5733,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_APRS
 		aprs = sm->aprs_phase != APRS_RF_OFF;
 #endif
-		if (sm->view.state == RS_TX || sm->hotspot) {
+		if (sm->view.state == RS_TX || sm->hotspot || sm->p25) {
 			sm->retune_due = false;
 			sm->retune_pending = true;
 		} else if (!aprs) {
@@ -5714,6 +5788,15 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 	if (sm->aprs_phase != APRS_RF_OFF) {
 		aprs_rf_service(sm, &st, now_ms);	// on the APRS frequency: no squelch, scan or time-out here
 		outputs(sm);
+		return;
+	}
+#endif
+#if CONFIG_P25
+	if (sm->p25) {
+		// The monitor has the receiver: no squelch, scan, DMR or time-out here; the probe decodes in this task
+		if (radio_p25_publish(&sm->view.p25)) {
+			changed(sm);
+		}
 		return;
 	}
 #endif
