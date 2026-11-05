@@ -185,6 +185,10 @@ void ui_pop(void)
 	if (stack[sp].scr == SCR_P25)
 		radio_req_p25(false);	// leaving the monitor screen: the receiver goes back to the channel
 #endif
+#if CONFIG_P25_VOICE
+	if (stack[sp].scr == SCR_P25_VOICE)
+		radio_req_p25_voice(false);	// leaving the voice screen: the receiver goes back to the channel
+#endif
 	if (sp > 0)
 		sp--;
 	if (ui_scr[stack[sp].scr]->flags & SF_FILTER)
@@ -203,6 +207,10 @@ void ui_go_home(void)
 #if CONFIG_P25
 	if (stack[sp].scr == SCR_P25)
 		radio_req_p25(false);
+#endif
+#if CONFIG_P25_VOICE
+	if (stack[sp].scr == SCR_P25_VOICE)
+		radio_req_p25_voice(false);
 #endif
 	sp = 0;
 	ui_st.quick_edit = false;
@@ -1631,6 +1639,24 @@ bool ui_p25_key(const input_event_t *ev)
 void ui_p25_enter(void)
 {
 	radio_req_p25(true);
+}
+#endif
+
+#if CONFIG_P25_VOICE
+// P25 voice: like the monitor screen, it owns the receiver; only BACK leaves (and stops the receiver)
+void ui_p25v_draw(void)
+{
+	ui_draw_p25(view, &ui_st);
+}
+
+bool ui_p25v_key(const input_event_t *ev)
+{
+	return ev->action != ACT_BACK;
+}
+
+void ui_p25v_enter(void)
+{
+	radio_req_p25_voice(true);
 }
 #endif
 

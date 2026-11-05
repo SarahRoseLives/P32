@@ -36,6 +36,7 @@ typedef enum {
 	SCR_LANGUAGE,			// Settings > Display > Language: every language, those not built dimmed
 	SCR_CP_FOREIGN,			// another firmware's codeplug: what the first edit does with it (ui_svc_codeplug_answer)
 	SCR_P25,			// the P25 control-channel monitor (CONFIG_P25)
+	SCR_P25_VOICE,		// the P25 voice receiver (CONFIG_P25_VOICE)
 	SCR_COUNT
 } ui_scr_t;
 
@@ -190,6 +191,11 @@ bool ui_diag_key(const input_event_t *ev);
 void ui_p25_draw(void);
 bool ui_p25_key(const input_event_t *ev);
 void ui_p25_enter(void);
+#endif
+#if CONFIG_P25_VOICE
+void ui_p25v_draw(void);
+bool ui_p25v_key(const input_event_t *ev);
+void ui_p25v_enter(void);
 #endif
 void ui_home_draw(void);
 bool ui_home_key(const input_event_t *ev);

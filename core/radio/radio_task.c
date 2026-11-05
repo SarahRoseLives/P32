@@ -291,6 +291,9 @@ void radio_req_retune(void) { post(RREQ_RETUNE, 0, pdMS_TO_TICKS(50)); }
 #if CONFIG_P25
 void radio_req_p25(bool on) { post(RREQ_P25, on ? 1 : 0, pdMS_TO_TICKS(50)); }
 #endif
+#if CONFIG_P25_VOICE
+void radio_req_p25_voice(bool on) { post(RREQ_P25_VOICE, on ? 1 : 0, pdMS_TO_TICKS(50)); }
+#endif
 void radio_req_reload(void) { post(RREQ_RELOAD, 0, pdMS_TO_TICKS(50)); }
 void radio_req_bandwidth(radio_bw_t bw) { post(RREQ_BANDWIDTH, bw, 0); }
 void radio_req_tone(uint8_t which, subtone_t tone) { post(RREQ_TONE, radio_tone_arg(which, tone), 0); }

@@ -4568,7 +4568,7 @@ void ui_crash_tick(uint32_t now_ms)
 // user guide) is the same everywhere. The one a radio may not have (Battery) is last, so no radio has a gap; a build
 // without diagnostics skips 7
 enum { T_SCAN, T_POSITION, T_HOTSPOT, T_USB_NET, T_SFR, T_ROAM, T_DIAG, T_APRS, T_BATTERY, T_ZONE_OFFER,
-       T_P25, T_COUNT };
+       T_P25, T_P25_VOICE, T_COUNT };
 
 // A tool this build or radio doesn't have is left out of the list (Battery, Supply on a radio that measures its DC
 // input instead, is left out where the radio measures neither)
@@ -4577,6 +4577,13 @@ static bool tool_shown(uint16_t i)
 	if (i == T_P25) {
 #if CONFIG_P25
 		return board.p25_probe != NULL;	// a radio whose demodulator has the PHY receive probe
+#else
+		return false;
+#endif
+	}
+	if (i == T_P25_VOICE) {
+#if CONFIG_P25_VOICE
+		return board.p25_probe != NULL && board.p25_probe->audio_start != NULL;
 #else
 		return false;
 #endif
@@ -4625,7 +4632,7 @@ static void tools_item(uint16_t row, ui_item_t *it)
 {
 	static const char *const names[] = { TRN("Scan"), TRN("Position"), TRN("Hotspot"), TRN("USB network"),
 					     TRN("Single-freq repeater"), TRN("Roaming"), TRN("Diagnostics"), "APRS",
-					     TRN("Battery"), TRN("Zones/Chs Received"), "P25" };
+					     TRN("Battery"), TRN("Zones/Chs Received"), "P25", TRN("P25 voice") };
 	uint16_t i = tools_row(row);
 	if (i >= T_COUNT)
 		return;
@@ -4725,6 +4732,9 @@ static void tools_select(uint16_t row, bool hold)
 	case T_APRS: ui_push(SCR_APRS, 0); break;
 #if CONFIG_P25
 	case T_P25: ui_push(SCR_P25, 0); break;
+#endif
+#if CONFIG_P25_VOICE
+	case T_P25_VOICE: ui_push(SCR_P25_VOICE, 0); break;
 #endif
 	case T_ZONE_OFFER: ui_push(SCR_OFFER, 0); break;
 	default: break;
@@ -5684,6 +5694,11 @@ static const ui_scr_def_t p25_screen = {
 	.name = "p25", .flags = 0, .key = ui_p25_key, .draw = ui_p25_draw, .enter = ui_p25_enter,
 };
 #endif
+#if CONFIG_P25_VOICE
+static const ui_scr_def_t p25v_screen = {
+	.name = "p25v", .flags = 0, .key = ui_p25v_key, .draw = ui_p25v_draw, .enter = ui_p25v_enter,
+};
+#endif
 static const ui_scr_def_t volume_screen = {
 	.name = "volume", .flags = SF_FIELD, .key = ui_volume_key, .draw = ui_volume_draw,
 };
@@ -5776,6 +5791,9 @@ const ui_scr_def_t *const ui_scr[SCR_COUNT] = {
 	[SCR_DIAG] = &diag_screen, [SCR_EMERGENCY] = &emergency_screen, [SCR_SCAN] = &scan_screen,
 #if CONFIG_P25
 	[SCR_P25] = &p25_screen,
+#endif
+#if CONFIG_P25_VOICE
+	[SCR_P25_VOICE] = &p25v_screen,
 #endif
 	[SCR_ROAM] = &roam_screen, [SCR_APRS] = &ui_aprs_screen, [SCR_APRS_HEARD] = &ui_aprs_heard_screen,
 	[SCR_APRS_POS] = &ui_aprs_pos_screen, [SCR_ABOUT] = &about_screen,

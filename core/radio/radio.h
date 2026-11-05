@@ -217,8 +217,9 @@ typedef struct {
 } radio_roam_view_t;
 #endif
 
-#if CONFIG_P25
-// P25 Phase 1 control-channel monitor (docs/spec/p25.md 8): the decoded control channel while its screen is listening.
+#if CONFIG_P25 || CONFIG_P25_VOICE
+// P25 Phase 1: the decoded control channel while its screen is listening (CONFIG_P25), or the voice receiver's call
+// state and counters (CONFIG_P25_VOICE, docs/spec/p25.md 6, 9).
 // on: the monitor has the receiver; valid: a control channel has been decoded since it started. A field keeps its last
 // value until a later TSBK sets it.
 typedef struct {
@@ -233,6 +234,10 @@ typedef struct {
 	uint16_t tg, vch;
 	uint32_t freq_hz;
 	uint32_t frames;	// control-channel bursts decoded since it started
+	bool voice;		// the voice receiver, not the control-channel monitor
+	uint8_t call_state;	// voice: p25_receive_class (0 wait, 1 clear, 2 encrypted, 3 unsupported, 4 bad)
+	uint16_t call_nac, call_group;
+	uint32_t units, voices;	// voice: validated frames and decoded voice payloads
 } radio_p25_view_t;
 #endif
 
@@ -319,7 +324,7 @@ typedef struct {
 #if CONFIG_DMR_ROAMING
 	radio_roam_view_t roam;
 #endif
-#if CONFIG_P25
+#if CONFIG_P25 || CONFIG_P25_VOICE
 	radio_p25_view_t p25;
 #endif
 } radio_view_t;
@@ -389,6 +394,9 @@ void radio_req_clear_temporary(void);		// BACK on Home: revert temporary changes
 void radio_req_retune(void);			// tune again now, or after the transmission (the reference trim changed)
 #if CONFIG_P25
 void radio_req_p25(bool on);			// the control-channel monitor: 1 enter (from idle), 0 leave
+#endif
+#if CONFIG_P25_VOICE
+void radio_req_p25_voice(bool on);		// the voice receiver: 1 enter (from idle, tuned), 0 leave
 #endif
 void radio_req_reload(void);			// the settings' preferences changed (squelch, master power, DMR ID)
 // FM bandwidth and sub-audio. On a channel these are temporary changes (P7); in the VFO they change the VFO itself.

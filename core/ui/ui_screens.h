@@ -250,8 +250,8 @@ void ui_draw_volume(const radio_view_t *v, const ui_state_t *s);
 void ui_draw_diag(const radio_view_t *v, uint32_t keys, int32_t enc_total, uint8_t first_line);
 // The first board line of the page after the one starting at first_line (wraps to 0)
 uint8_t ui_diag_next_page(uint8_t first_line);
-#if CONFIG_P25
-// P25 control-channel monitor: the decoded NAC/WACN/SYS/RFSS/SITE/TG/VCH and the IdenUp frequency (docs/spec/p25.md 8)
+#if CONFIG_P25 || CONFIG_P25_VOICE
+// P25: the decoded control channel (CONFIG_P25) or the voice call state and counters (CONFIG_P25_VOICE)
 void ui_draw_p25(const radio_view_t *v, const ui_state_t *s);
 #endif
 

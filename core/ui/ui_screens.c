@@ -3039,7 +3039,7 @@ void ui_draw_diag(const radio_view_t *v, uint32_t keys, int32_t enc_total, uint8
 }
 #endif
 
-#if CONFIG_P25
+#if CONFIG_P25 || CONFIG_P25_VOICE
 // A hexadecimal field (NAC, WACN, SYS, the TSBK opcode) into the line being built
 static void p25_hex(sbuf_t *b, uint32_t v, int digits)
 {
@@ -3058,7 +3058,45 @@ void ui_draw_p25(const radio_view_t *v, const ui_state_t *s)
 	int y;
 
 	gfx_clear(ui_col.bg);
-	y = ui_draw_top(v, s, NULL, "P25") + 2;
+	y = ui_draw_top(v, s, NULL, p->voice ? "P25 voice" : "P25") + 2;
+
+	if (p->voice) {
+		static const char *const cls[] = { "waiting", "clear", "encrypted", "unsupported", "bad data" };
+
+		if (!p->on) {
+			gfx_text(f, 0, y, "voice off", ui_col.dim);
+			ui_draw_bottom(s, "Back");
+			return;
+		}
+		if (!p->valid) {
+			gfx_text(f, 0, y, "listening...", ui_col.dim);
+			ui_draw_bottom(s, "Back");
+			return;
+		}
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, "NAC ");
+		p25_hex(&b, p->call_nac, 3);
+		sb_str(&b, "  ");
+		sb_str(&b, cls[p->call_state < 5u ? p->call_state : 4u]);
+		gfx_text(f, 0, y, buf, ui_col.fg);
+		y += f->h;
+
+		if (p->call_group != 0) {
+			sb_init(&b, buf, sizeof buf);
+			sb_str(&b, "TG ");
+			sb_u32(&b, p->call_group, 1);
+			gfx_text(f, 0, y, buf, ui_col.fg);
+			y += f->h;
+		}
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, "frames ");
+		sb_u32(&b, p->units, 1);
+		sb_str(&b, "  voice ");
+		sb_u32(&b, p->voices, 1);
+		gfx_text(f, 0, y, buf, ui_col.fg);
+		ui_draw_bottom(s, "Back");
+		return;
+	}
 
 	if (!p->on) {
 		gfx_text(f, 0, y, "monitor off", ui_col.dim);

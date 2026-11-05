@@ -45,8 +45,11 @@
 #if CONFIG_HOTSPOT
 #include "radio/radio_hotspot.h"	// the CW ID handover
 #endif
-#if CONFIG_P25
-#include "radio/radio_p25.h"		// the control-channel monitor view
+#if CONFIG_P25 || CONFIG_P25_VOICE
+#include "radio/radio_p25.h"		// the control-channel / voice view
+#endif
+#if CONFIG_P25_VOICE
+#include "p25/p25_voice.h"		// the voice receiver
 #endif
 #if CONFIG_SFR_CWID
 static void cw_cancel(radio_sm_t *sm);
@@ -4116,7 +4119,7 @@ static void hotspot_leave(radio_sm_t *sm, uint32_t now_ms)
 // decoded control channel shown on its screen. Entered only from idle: it takes the receiver from the channel ---
 static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 {
-	if (sm->p25 || board.p25_probe == NULL || board.p25_probe->last_cc == NULL) {
+	if (sm->p25 || sm->p25_voice || board.p25_probe == NULL || board.p25_probe->last_cc == NULL) {
 		return;
 	}
 	if (sm->ptt || sm->hotspot || sm->view.state == RS_TX || sm->view.state == RS_TX_DENIED) {
@@ -4166,6 +4169,51 @@ static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
 	}
 	sm->p25 = false;
 	sm->view.p25.on = false;
+	sm->view.p25.valid = false;
+	tune(sm, now_ms);	// the channel again (restores the RF chip's mode too)
+	changed(sm);
+}
+#endif
+
+#if CONFIG_P25_VOICE
+// --- P25 voice (docs/spec/p25.md 6, 9): the discriminator into the software demodulator and the fixed-point codec.
+// A mode of its own, like the control-channel monitor: the poll below leaves the receiver alone until the screen
+// closes, so a mode or channel change cannot tune the radio out from under the voice stream ---
+static void p25v_enter(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (sm->p25_voice || sm->p25 || sm->ptt || sm->hotspot || sm->view.state == RS_TX ||
+	    sm->view.state == RS_TX_DENIED) {
+		return;
+	}
+#if CONFIG_APRS
+	if (sm->aprs_phase != APRS_RF_OFF) {
+		return;
+	}
+#endif
+	scan_stop(sm, false, now_ms);
+	end_reception(sm, now_ms);
+	if (!p25_voice_start()) {
+		tune(sm, now_ms);
+		return;
+	}
+	memset(&sm->view.p25, 0, sizeof sm->view.p25);
+	sm->p25_voice = true;
+	sm->view.p25.on = true;
+	sm->view.p25.voice = true;
+	sm->view.state = RS_IDLE;
+	outputs(sm);
+	changed(sm);
+}
+
+static void p25v_stop(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (!sm->p25_voice) {
+		return;
+	}
+	p25_voice_stop();
+	sm->p25_voice = false;
+	sm->view.p25.on = false;
+	sm->view.p25.voice = false;
 	sm->view.p25.valid = false;
 	tune(sm, now_ms);	// the channel again (restores the RF chip's mode too)
 	changed(sm);
@@ -5336,6 +5384,15 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 		}
 		break;
 #endif
+#if CONFIG_P25_VOICE
+	case RREQ_P25_VOICE:
+		if (req->arg != 0) {
+			p25v_enter(sm, now_ms);
+		} else {
+			p25v_stop(sm, now_ms);
+		}
+		break;
+#endif
 #if CONFIG_DMR_ROAMING
 	case RREQ_ROAM:
 		roam_request(sm, (uint8_t)req->arg, now_ms);
@@ -5532,7 +5589,7 @@ static void battery_poll(radio_sm_t *sm, uint32_t now_ms)
 static bool save_allowed(const radio_sm_t *sm, uint32_t now_ms)
 {
 	if (sm->set.rx_save == 0 || board.radio->rx_sleep == NULL || sm->view.ch.mode != RADIO_MODE_FM || sm->hotspot ||
-			sm->p25 || sm->view.state != RS_IDLE || sm->view.monitor || sm->ptt || sm->view.ch.no_eco ||
+			sm->p25 || sm->p25_voice || sm->view.state != RS_IDLE || sm->view.monitor || sm->ptt || sm->view.ch.no_eco ||
 			sm->view.bcast) {
 		return false;
 	}
@@ -5701,7 +5758,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 	radio_status_t st;
 	// codeplug_serial() before zone_edit_busy(): a zone write that moved indexes has its log entry by then
 	if ((sm->reload_pending || codeplug_serial() != sm->codeplug_serial || ZONES_MOVED(sm)) && !ZONE_WRITE_BUSY() &&
-	    !sm->hotspot && !sm->p25 && !sm->ptt && sm->view.state != RS_TX) {
+	    !sm->hotspot && !sm->p25 && !sm->p25_voice && !sm->ptt && sm->view.state != RS_TX) {
 		reload(sm, now_ms);
 		persist(sm, now_ms);
 	}
@@ -5733,7 +5790,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_APRS
 		aprs = sm->aprs_phase != APRS_RF_OFF;
 #endif
-		if (sm->view.state == RS_TX || sm->hotspot || sm->p25) {
+		if (sm->view.state == RS_TX || sm->hotspot || sm->p25 || sm->p25_voice) {
 			sm->retune_due = false;
 			sm->retune_pending = true;
 		} else if (!aprs) {
@@ -5795,6 +5852,15 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 	if (sm->p25) {
 		// The monitor has the receiver: no squelch, scan, DMR or time-out here; the probe decodes in this task
 		if (radio_p25_publish(&sm->view.p25)) {
+			changed(sm);
+		}
+		return;
+	}
+#endif
+#if CONFIG_P25_VOICE
+	if (sm->p25_voice) {
+		// The voice receiver has the receiver: its task owns the demodulator, codec and speaker. Only the view updates.
+		if (radio_p25_voice_publish(&sm->view.p25)) {
 			changed(sm);
 		}
 		return;
