@@ -393,6 +393,54 @@ static size_t cmd_ptt(const uint8_t *req, uint16_t len, uint8_t *out)
 	return 3;
 }
 
+// --- P25 bench probe: the 8 kHz FM discriminator (docs/spec/p25.md 5.1) ---
+
+#if CONFIG_P25_PROBE
+static int16_t p25_audio[512];
+
+static size_t cmd_p25(const uint8_t *req, uint16_t len, uint8_t *out, size_t cap)
+{
+	if (board.p25_probe == NULL) {
+		return status_only(out, DL_ST_UNAVAILABLE);
+	}
+	if (len < 1) {
+		return status_only(out, DL_ST_BAD_ARG);
+	}
+	switch (req[0]) {
+	case 0:		// start
+		if (board.p25_probe->audio_start == NULL) {
+			return status_only(out, DL_ST_UNAVAILABLE);
+		}
+		return status_only(out, board.p25_probe->audio_start() ? DL_ST_OK : DL_ST_REFUSED);
+	case 1:		// stop
+		if (board.p25_probe->audio_stop != NULL) {
+			board.p25_probe->audio_stop();
+		}
+		return status_only(out, DL_ST_OK);
+	case 2: {	// max u16 LE -> status, n u16 LE, n int16 LE samples
+		if (board.p25_probe->audio_read == NULL) {
+			return status_only(out, DL_ST_UNAVAILABLE);
+		}
+		uint16_t max = len >= 3 ? (uint16_t)(req[1] | (req[2] << 8)) : 400;
+		if (max > (cap - 3u) / 2u) {
+			max = (uint16_t)((cap - 3u) / 2u);
+		}
+		if (max > sizeof p25_audio / sizeof p25_audio[0]) {
+			max = (uint16_t)(sizeof p25_audio / sizeof p25_audio[0]);
+		}
+		uint16_t n = board.p25_probe->audio_read(p25_audio, max);
+		out[0] = DL_ST_OK;
+		out[1] = (uint8_t)n;
+		out[2] = (uint8_t)(n >> 8);
+		memcpy(out + 3, p25_audio, (size_t)n * 2u);
+		return 3u + (size_t)n * 2u;
+	}
+	default:
+		return status_only(out, DL_ST_BAD_ARG);
+	}
+}
+#endif
+
 // --- log ---
 
 static size_t cmd_get_log(uint8_t *out, size_t cap)
@@ -842,6 +890,12 @@ static size_t handle(uint8_t cmd, const uint8_t *req, uint16_t len, uint8_t *out
 		return debuglink_cmd_rx2(req, len, out, cap);
 	case DL_CMD_IDDB:
 		return debuglink_cmd_iddb(req, len, out, cap);
+	case DL_CMD_P25:
+#if CONFIG_P25_PROBE
+		return cmd_p25(req, len, out, cap);
+#else
+		return status_only(out, DL_ST_UNAVAILABLE);
+#endif
 	case DL_CMD_CODEPLUG:
 #if CONFIG_CPS_FAST
 		return cps_fast_cmd(req, len, out, cap, hal_millis());

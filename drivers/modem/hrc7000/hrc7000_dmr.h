@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "config.h"
 #include "hrc7000.h"
 #include "hal_dmr_modem.h"
 
@@ -125,6 +126,11 @@ typedef struct {
 	// FM receive audio half ready (SYS_INTERP bit 14, modem-hrc7000.md 8.5): called from the system interrupt whether
 	// or not the engine runs, NULL for none. Set it after hrc7000_dmr_init
 	void (*fm_rx)(void);
+#if CONFIG_P25_PROBE
+	// Every system interrupt, with the bit list just read and cleared (docs/spec/p25.md 5.1): the P25 PHY receive
+	// probe uses it. Called in interrupt context whether or not the engine runs, NULL for none
+	void (*sys_hook)(uint32_t list);
+#endif
 	bool lcss;		// LCSS on voice bursts B-E (user guide); false = 0 on every burst like the 2026 builds
 	dmr_config_t cfg;
 	int8_t cc_filter;	// -1 any (scan)

@@ -19,6 +19,9 @@
 
 #if CONFIG_DMR	// the whole file: DMR only
 #include "platform.h"
+#if CONFIG_P25_PROBE
+#include "p25_probe.h"
+#endif
 #include "modem/hrc7000/hrc7000_dmr.h"
 #if defined(CONFIG_HOTSPOT_SPLIT) && CONFIG_HOTSPOT_SPLIT
 #include "modem/hrc7000/hrc7000_bs.h"
@@ -154,6 +157,9 @@ void hrc_dmr_board_init(hrc7000_t *modem, const hrc_dmr_board_t *hooks)
 {
 	brd = hooks;
 	hrc7000_dmr_init(&eng, modem, &ops);
+#if CONFIG_P25_PROBE
+	hrc_p25_probe_attach(modem);
+#endif
 	hrc_irq_register(IRQ_MODEM_SYS, isr_sys);
 	hrc_irq_register(IRQ_MODEM_TS_TX, isr_ts_tx);
 	hrc_irq_register(IRQ_MODEM_TS_RX, isr_ts_rx);
@@ -193,6 +199,21 @@ void hrc_dmr_rx_restart(void)
 {
 	hrc7000_dmr_rx_restart(&eng);
 }
+
+#if CONFIG_P25_PROBE
+bool hrc_dmr_active(void)
+{
+	return active;
+}
+
+void hrc_dmr_sys_hook(void (*fn)(uint32_t list))
+{
+	uint32_t s = hrc_irq_save();
+	eng.sys_hook = fn;
+	hrc_irq_restore(s);
+	hrc_irq_enable(IRQ_MODEM_SYS, active || fn != NULL || eng.fm_rx != NULL);
+}
+#endif
 
 bool hrc_dmr_tx_active(void)
 {

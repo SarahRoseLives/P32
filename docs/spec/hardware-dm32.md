@@ -726,6 +726,12 @@ Band select by frequency (f in 10 Hz units; first matching row wins):
 
 Below 16 MHz nothing is written.
 
+RadioFoundry lists one receive-only band outside the rated ranges, 16 to 1000 MHz, last in `boards/dm32/board.c`
+`bands[]`. It opens the VFO and receive-only channels to frequencies the FD6818's band table accepts (the top row is
+740 MHz and above) without allowing transmit there. The UHF front end and its LNA are characterized at 400-480 MHz
+only, so reception above 480 MHz is untested and likely weak; 771.18125 MHz is inside the FD6818's register range but
+not inside a characterized front-end band.
+
 Reference trim ([radio-features.md](radio-features.md) 6.1): the modem's DC bias stays the factory's tune. RadioFoundry
 programs the FD6818 at f x (1 + trim), in receive, FM transmit and every DMR burst; the next tune applies a new trim.
 Checked on the radio by hand (2026-10-30): 10 ppm moved the carrier 4400 Hz, as expected at 440 MHz.

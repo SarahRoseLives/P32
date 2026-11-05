@@ -8,6 +8,9 @@
 #include "platform.h"
 #include "hrc_afsk.h"
 #include "hrc_bcast.h"
+#if CONFIG_P25_PROBE
+#include "p25_probe.h"
+#endif
 #if CONFIG_BCAST_FM
 #include "bcast/rda5807m/rda5807m_hal.h"
 #endif
@@ -26,6 +29,10 @@ static const band_t bands[] = {
 #if CONFIG_BCAST_FM
 	{ 65000000, 108000000, false },		// the broadcast band, on the RDA5807M (airband-and-broadcast.md 4)
 #endif
+	// Receive only outside the rated bands: the FD6818 band table has a row for 740 MHz and above (hardware-dm32.md
+	// 8.3) and the VFO should reach it, but the front-end filters and LNA are only characterized on the two transmit
+	// bands, so sensitivity here is untested. Last, so a rated band always wins; TX stays denied.
+	{ 16000000, 1000000000, false },
 };
 
 // Power levels 0..8 of hardware-dm32.md 11.3 (level 9, the user value, isn't offered). Labels are nominal: the radio
@@ -88,6 +95,9 @@ const board_t board = {
 	.dmr = &hrc_dmr,
 	.audio = &hrc_audio_pcm,
 	.vocoder = &hrc_vocoder,
+#endif
+#if CONFIG_P25_PROBE
+	.p25_probe = &hrc_p25_probe,
 #endif
 #if CONFIG_APRS
 	.afsk = &hrc_afsk,
@@ -212,6 +222,7 @@ static const hrc_flash_cfg_t flash_cfg = {
 	.map = &flash_map,
 };
 
+#if CONFIG_GPS
 // The ATGM336H on UART1; PTA9 is UART1's RXD from io_init
 static const hrc_gps_cfg_t gps_cfg = {
 	.uart_base = UART1_BASE,
@@ -219,6 +230,7 @@ static const hrc_gps_cfg_t gps_cfg = {
 	.power_pin = PIN_GPS_POWER,
 	.power_on_level = GPS_POWER_ON_LEVEL,
 };
+#endif
 
 #if CONFIG_BCAST_FM
 // The RDA5807M on PTA25 / PTA26 (hardware-dm32.md 8.7): no enable line is known; its audio is assumed to reach the

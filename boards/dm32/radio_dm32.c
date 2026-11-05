@@ -56,6 +56,7 @@ static bool rx_audio;		// the squelch is open (the radio's audio hook)
 static bool rx_am_on;		// the FD6818 plays its AM demodulator (rx_am, the air band)
 static bool asleep;		// the receiver is powered down between listen windows (rx_sleep)
 static bool aprs_listen;	// APRS takes the HR_C7000's FM audio (aprs_listen_route)
+static bool p25_listen;		// the P25 probe takes the FM discriminator (audio_to_modem)
 static bool afsk_tx;		// APRS tones play through the prompt FIFO into the modulator (afsk_tx_route)
 
 // The speaker amplifier is on while any user wants it
@@ -441,15 +442,17 @@ static void status(radio_status_t *st)
 // (AUDIO_CONTROL b6) and the codec instead
 static void speaker_source(void)
 {
-	// The FD6818's output is squelched noise while the squelch is closed: the speaker listens to it only while it is open
-	bool fm_open = mode == RADIO_MODE_FM && !transmitting && !pcm_on && rx_audio;
-	bool analog = fm_open && !aprs_listen;
+	// The FD6818's output is squelched noise while the squelch is closed: the speaker listens to it only while it is open.
+	// The APRS and P25 listeners need it in the HR_C7000 even with the squelch closed, so they count as open
+	bool listen = aprs_listen || p25_listen;
+	bool fm_open = mode == RADIO_MODE_FM && !transmitting && !pcm_on && (rx_audio || p25_listen);
+	bool analog = fm_open && !listen;
 	hrc_pin_write(PIN_SPK_SOURCE, analog);
 	if (!transmitting) {
 		hrc_pin_write(PIN_MIC_PATH, !analog);
 	}
 	if (mode == RADIO_MODE_FM && !transmitting) {
-		bool play = fm_open && aprs_listen;
+		bool play = fm_open && listen;
 		uint32_t s = hrc_irq_save();	// the AUDIO_CONTROL shadow is shared with the audio task
 		hrc7000_audio_bits(&modem, play ? C7_AUDIO_FM_PLAY : 0, play ? 0 : C7_AUDIO_FM_PLAY);
 		hrc_irq_restore(s);
@@ -472,6 +475,30 @@ static void aprs_listen_route(bool on)
 	hrc_irq_restore(s);
 }
 #endif
+
+// The P25 probe takes the RF chip's discriminator into the HR_C7000 (hal_radio_t.audio_to_modem): the same route as
+// APRS listening, but independent of it, so it works in a build without APRS
+static bool audio_to_modem(bool on)
+{
+	uint32_t s = hrc_irq_save();
+	// The documented FM receive set-up: 0x47 = 0x0140 puts the demodulated audio on the chip's output, 0x30 = 0xBFF1
+	// is RX. Re-write it even if the core thinks it is in FM, so a prior DMR set-up cannot leave the AF muted
+	if (on) {
+		fd6818_set_mode(&fd, FD6818_MODE_FM);
+		fd6818_set_state(&fd, FD6818_STATE_RX);
+		fd6818_set_bandwidth(&fd, FD6818_BW_FM_12K5);	// the mode table forces 25 kHz
+	}
+	p25_listen = on;
+	if (rx_audio) {
+		amp(AMP_RADIO, false);	// the source changes under an open squelch: no click
+	}
+	speaker_source();
+	if (rx_audio) {
+		amp(AMP_RADIO, true);
+	}
+	hrc_irq_restore(s);
+	return true;
+}
 
 static void amp(uint8_t who, bool on)
 {
@@ -594,6 +621,7 @@ const hal_radio_t dm32_radio = {
 #endif
 	.status = status,
 	.audio = audio,
+	.audio_to_modem = audio_to_modem,
 	.volume = NULL,
 #if CONFIG_REF_TRIM
 	.ref_trim = ref_trim,

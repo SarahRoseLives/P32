@@ -9,7 +9,7 @@ boards); the stack-side contract is in `dmr-modem.md`; the HR_C6000 equivalent i
 | Contents | |
 |---|---|
 | 1 | System view: memory map, buffers |
-| 2 | Register map: mode, sync words, CRC masks, interrupts, layer 2, BS mode, physical layer transmit |
+| 2 | Register map: mode, sync words, CRC masks, interrupts, layer 2, BS mode, physical layer transmit and receive |
 | 3 | Interrupts and TX timing |
 | 4, 5 | Initialization, entering DMR, receive |
 | 6, 7 | Transmit sequences, CRC and FEC |
@@ -472,6 +472,38 @@ Slewing (`split-duplex.md` 3.8, capability bit 2), 2026-10-22, no RF. (measured)
 | 13 | LAYER2_MAX_CNT (2.5, datasheet 10.2.2.20: b7 sign and b3:0 n × 100 µs for TX slots, b15 and b11:8 for RX) does not move the physical layer's slot timer. Tried: the TX trim for one slot (written at a boundary, cleared at the next), the TX and RX trims together, and both held set. The boundaries stayed where they were: the HR_C7000 driver offers no `bs_slew`, so a keyed TX half reports its drift and re-aligns at the next unkey, as the HR_C6000 does | `test_split_slew` with a scratch driver: 35 trims of +100 µs asked in 5 s, the phase unchanged (-1535, -1696, -1464 µs in the three runs) |
 
 ---
+
+### 2.11 Physical-layer receive (the P25 probe)
+
+The receive counterpart of 2.10, documented as a bit-error-rate test. The datasheet's set-up (table 49):
+
+| Register | Value |
+|---|---|
+| WORK_MODE | 0x02 physical layer, continuous mode (0x22: timeslot mode) |
+| RF_MODE | 0xA0000060: bits 31 and 29 set, two-point transmit, IF receive |
+| LAYER2_CONTROL | 0x40 passive receive |
+| LAYER2_TXRX_CTRL | 0x41 passive receive enable |
+
+The deframed information lands in the RX RAM at +0x30 (datasheet table 47): in continuous mode 0x30..0x32 is a
+24-bit CACH word and 0x33..0x53 the 264 bits after the sync; in timeslot mode 0x30..0x50 is the 264 bits.
+PHY_RECEIVE_STATE (0x1c0) reports the receiver's state. The sync detector uses the RECV_*_SYNC registers of 2.2, so
+a 48-bit pattern other than DMR's can be tried there.
+
+The datasheet numbers the PHY interrupts PHY_RECV_ABNORMAL 8, PHY_RDY 9 and PHY_RX 10; this page's DMR measurements
+have them at 16, 12 and 11. The probe enables all of 10, 11, 12 and 16 and reports which bit the interrupt list
+carried, which settles it.
+
+CONFIG_P25_PROBE builds `platform/hrc7000/p25_probe.c` (docs/spec/p25.md 5.1): debug link RADIO op 35 starts it
+(op 1, or op 3 with a variant byte: bit 0 continuous vs timeslot, bit 1 keep `RF_MODE` b11), logs the accumulated
+stream (op 2) and stops it (op 0). The radio must be tuned and idle: the modem borrows the FM receive path. The probe
+saves and restores every register it changes. The P25 frame sync goes to the MS slot and swapped and inverted copies
+to the BS and TDMA slots.
+
+Bench 2026-11-04 on a P25 control channel (NAC 0x293): continuous mode (`WORK_MODE 0x02`) works, timeslot (`0x22`)
+reports slot abnormal. Only `SYS_INTERP_LIST == 0x800` (PHY_RX) writes a block; `0x1000` is PHY_RDY and `0x10000`
+PHY_RECV_ABNORMAL, and taking their stale RX RAM was an earlier probe bug. Each PHY_RX appends 264 bits at `0x33`;
+the chunks slide over the demodulated stream. The first chunk is sync-aligned (sync at bit 20, the datasheet's
+`SyncType = 2` slot-type fields first) and the P25 NID sits 88 bits after the sync. See `p25.md` 5.2.
 
 ## 3. Interrupts
 

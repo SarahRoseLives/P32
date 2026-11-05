@@ -7,6 +7,7 @@
 #include "board.h"
 #include "debuglink/debuglink.h"
 #include "debuglink/debuglink_proto.h"
+#include "debuglink/dlog.h"
 #include "radio/beep.h"
 #include "radio/vibe.h"
 #include "radio/mic_gain.h"
@@ -322,6 +323,48 @@ uint8_t debuglink_radio_feature_op(uint8_t op, const uint8_t *a, uint16_t len)
 		}
 		radio_req_dtmf((char)a[0], a[1] != 0);
 		return DL_ST_OK;
+	case DL_OP_P25_PROBE:
+#if CONFIG_P25_PROBE
+	{
+		if (len < 1 || a[0] > 3) {
+			return DL_ST_BAD_ARG;
+		}
+		if (board.p25_probe == NULL) {
+			return DL_ST_UNAVAILABLE;
+		}
+		if (a[0] == 1) {
+			return board.p25_probe->start() ? DL_ST_OK : DL_ST_REFUSED;
+		}
+		if (a[0] == 3) {		// start with a variant byte (bit 0 continuous, bit 1 dual PHY)
+			if (len < 2 || board.p25_probe->start_ex == NULL) {
+				return DL_ST_BAD_ARG;
+			}
+			return board.p25_probe->start_ex(a[1]) ? DL_ST_OK : DL_ST_REFUSED;
+		}
+		if (a[0] == 0) {
+			board.p25_probe->stop();
+			return DL_ST_OK;
+		}
+		uint32_t ty, ps, list, count;
+		uint8_t data[231];		// the probe's accumulated stream (7 x 264-bit blocks)
+		uint8_t n = board.p25_probe->read(&ty, &ps, &list, &count, data, sizeof data);
+		dlog("p25p ty %08x st %08x si %05x n %u b %u", (unsigned)ty, (unsigned)ps, (unsigned)list,
+		     (unsigned)n, (unsigned)count);
+		for (uint8_t i = 0; i < n; i += 12) {	// 12 bytes per line: the dump's lines fit the log's 80 characters
+			char hex[25];
+			uint8_t k = 0;
+			for (uint8_t j = i; j < i + 12 && j < n; j++) {
+				hex[k++] = "0123456789ABCDEF"[data[j] >> 4];
+				hex[k++] = "0123456789ABCDEF"[data[j] & 0xF];
+			}
+			hex[k] = '\0';
+			dlog("p25p %s", hex);
+		}
+		return DL_ST_OK;
+	}
+#else
+		return DL_ST_UNAVAILABLE;
+#endif
 	case DL_OP_ROAM:
 		if (len < 1 || a[0] > RROAM_LOCK_TOGGLE) {
 			return DL_ST_BAD_ARG;

@@ -1284,6 +1284,17 @@ run-boards::
 .PHONY: run-boards
 -include $(wildcard $(ROOT)/boards/*/tests/host.mk)
 
+# P25 Phase 1 physical layer: the NID BCH(63,16,11), frame sync, status symbols and NAC/DUID (docs/spec/p25.md)
+TESTS   += p25PhyTest
+p25PhyTest: p25PhyTest.c $(CORE)/p25/p25_phy.c $(CORE)/p25/p25_phy.h $(CORE)/p25/p25_bch.c $(CORE)/p25/p25_bch.h
+	$(CC) $(CFLAGS) -o $@ p25PhyTest.c $(CORE)/p25/p25_phy.c $(CORE)/p25/p25_bch.c
+
+run: run-p25
+run-p25: p25PhyTest
+	./p25PhyTest
+
+.PHONY: run-p25
+
 # Every test in TESTS must be run by a group: run: $(TESTS) above expands before the later TESTS += lines, so a test
 # missing from its group's run lines is built by no rule and run by none (two were, unnoticed). HELPERS are programs
 # a test script drives, not tests of their own

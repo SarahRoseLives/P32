@@ -168,6 +168,7 @@ OP_DMR_FIELDS = 31
 OP_VFO_COPY = 32
 OP_VOICE_TEST = 33
 OP_DTMF = 34
+OP_P25_PROBE = 35
 DTMF_DIGITS = "0123456789*#ABCD"
 VOLUME_KNOB = 0xFF
 OP_PPP = 28
@@ -1321,6 +1322,12 @@ def cmd_radio(link, a):
         link.tone_burst(args[:1] != ["off"])
     elif op == "voice-test":          # voice-test on|off (the DMR encoder's test signal, RAM only)
         link.voice_test(args[:1] != ["off"])
+    elif op == "p25":                 # p25 start|stop|dump: the PHY receive probe; dump writes the last block to the log
+        sub = args[0] if args else "dump"
+        codes = {"stop": 0, "start": 1, "dump": 2}
+        if sub not in codes:
+            raise SystemExit("p25 start|stop|dump")
+        link.radio(OP_P25_PROBE, bytes([codes[sub]]))
     elif op == "set":                 # set NAME VALUE
         link.setting(args[0], num(1))
     elif op == "usb":                 # usb network|serial
@@ -1722,6 +1729,33 @@ def tone_estimate(x, rate=8000):
     return (len(crossings) - 1) / 2 / ((crossings[-1] - crossings[0]) / rate)
 
 
+P25_AUDIO = 0x20
+
+
+def cmd_p25audio(link, a):
+    """Capture the 8 kHz FM discriminator from the P25 probe into a WAV (p25.md 5.1)."""
+    import wave
+    link.request(P25_AUDIO, bytes([0]))          # start
+    chunks = []
+    start = time.monotonic()
+    try:
+        while time.monotonic() - start < a.seconds:
+            _, r = link.request(P25_AUDIO, bytes([2]) + struct.pack("<H", 400))
+            n = struct.unpack_from("<H", r)[0]
+            chunks.append(r[2:2 + 2 * n])
+            time.sleep(0.01)
+    finally:
+        link.request(P25_AUDIO, bytes([1]))      # stop
+    data = b"".join(chunks)
+    with wave.open(a.output, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(data)
+    print(f"{len(data) // 2} samples at 8 kHz -> {a.output}")
+    return 0
+
+
 def cmd_aprobe(link, a):
     args = a.args
     num = lambda v: int(v, 0)
@@ -2020,7 +2054,8 @@ def main(argv=None):
     p.add_argument("op", choices=["channel", "pos", "zone", "vfo", "freq", "step", "power", "squelch", "bw", "tone",
                                   "monitor", "clear", "reply-cancel", "hotspot-exit", "target", "contact", "call-back",
                                   "target-clear", "privacy", "scan", "scan-vfo", "beep", "burst", "set", "usb",
-                                  "usb-settings", "ppp", "vibrate", "mode", "cc", "ts", "copy-vfo", "voice-test", "dtmf"])
+                                  "usb-settings", "ppp", "vibrate", "mode", "cc", "ts", "copy-vfo", "voice-test", "dtmf",
+                                  "p25"])
     p.add_argument("args", nargs="*")
     p = sub.add_parser("data", help="DMR data: sms, call alert, radio check, settings, inbox")
     p.add_argument("op", choices=["sms", "alert", "check", "settings", "inbox", "read", "emergency", "em-settings",
@@ -2070,6 +2105,9 @@ def main(argv=None):
                                      "mod"])
     p.add_argument("args", nargs="*")
     p.add_argument("-o", "--output", help="samples: also write the block as raw 16-bit stereo; ram: the bytes")
+    p = sub.add_parser("p25audio", help="capture the P25 probe's 8 kHz FM discriminator into a WAV (CONFIG_P25_PROBE)")
+    p.add_argument("seconds", type=float)
+    p.add_argument("output", help="WAV file to write (8 kHz, mono, 16-bit)")
     a = ap.parse_args(argv)
 
     if a.cmd == "ptt" and not 0 < a.seconds <= INJECT_MAX_S:
@@ -2134,6 +2172,8 @@ def main(argv=None):
                 for i in a.ids:
                     r = link.iddb(i)
                     print(f"{i} {r['text']!r}" if r["found"] else f"{i} -")
+            elif a.cmd == "p25audio":
+                return cmd_p25audio(link, a)
             elif a.cmd == "aprobe":
                 return cmd_aprobe(link, a)
             elif a.cmd == "split":
