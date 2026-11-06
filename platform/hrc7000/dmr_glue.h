@@ -22,7 +22,7 @@ typedef struct {
 	uint32_t pa_delay_us;
 } hrc_dmr_board_t;
 
-#if CONFIG_DMR
+#if CONFIG_HRC_MODEM
 // Once, from the radio init, after the modem is attached: interrupts, PA timer, task
 void hrc_dmr_board_init(hrc7000_t *modem, const hrc_dmr_board_t *hooks);
 void hrc_dmr_enter(void);		// the modem has just entered DMR: engine on, interrupts on

@@ -16,6 +16,10 @@ extern "C" {
 #endif
 // Start and stop (task level). Start needs the FM discriminator stream and the PCM audio path.
 bool p25_voice_start(void);
+// Start locked to a grant's NAC and talkgroup (0 = any) so a following receiver ignores other calls
+bool p25_voice_start_filtered(uint16_t nac, uint16_t tg);
+// True once the call ended (TDU/TDULC) or went quiet; the caller stops the receiver and returns to the control channel
+bool p25_voice_ended(void);
 void p25_voice_stop(void);
 bool p25_voice_running(void);
 

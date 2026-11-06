@@ -19,7 +19,7 @@
 #include "config.h"
 #include "audio_pcm.h"
 
-#if CONFIG_DMR	// the whole file: DMR only
+#if CONFIG_HRC_MODEM	// the whole file: DMR only
 #include "platform.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -278,4 +278,4 @@ void hrc_audio_pcm_mic_stats(uint8_t *level, uint16_t *peak, uint32_t *halves, b
 }
 #endif
 
-#endif	// CONFIG_DMR
+#endif	// CONFIG_HRC_MODEM

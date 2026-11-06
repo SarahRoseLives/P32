@@ -231,6 +231,9 @@
 #ifndef CONFIG_P25_PROBE
 #define CONFIG_P25_PROBE		0
 #endif
+#ifndef CONFIG_HRC_MODEM
+#define CONFIG_HRC_MODEM		CONFIG_DMR
+#endif
 #ifndef CONFIG_P25
 #define CONFIG_P25			0
 #endif

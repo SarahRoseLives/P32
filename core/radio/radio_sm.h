@@ -150,6 +150,7 @@ typedef enum {
 	RREQ_VFO_TX,		// arg: the VFO's TX Hz, 0 = simplex (its RX frequency)
 	RREQ_P25,		// P25 control-channel monitor (CONFIG_P25): arg 1 enter, 0 leave
 	RREQ_P25_VOICE,		// P25 voice receiver (CONFIG_P25_VOICE): arg 1 enter, 0 leave
+	RREQ_P25_FOLLOW,		// P25 monitor follow grants on/off (CONFIG_P25): arg 1 on, 0 off
 } radio_req_type_t;
 
 // RREQ_TONE's argument: which (RADIO_TONE_*) in bits 25:24, the tone type in 23:16, the value in 15:0
@@ -268,7 +269,13 @@ typedef struct {
 	int8_t red_out;
 	bool hotspot;			// hotspot mode: the host link owns the modem
 	bool p25;			// the P25 control-channel monitor has the receiver (CONFIG_P25)
+#if CONFIG_P25 || CONFIG_P25_VOICE
 	bool p25_voice;		// the P25 voice receiver has the receiver (CONFIG_P25_VOICE)
+	bool p25_follow;		// the P25 monitor follows voice grants (CONFIG_P25 + CONFIG_P25_VOICE)
+	uint32_t p25_cc_hz;		// the control channel to return to
+	uint32_t p25_voice_hz;		// the voice channel of the call being followed
+	uint32_t p25_grant_seen;		// grants seen when the monitor last acted
+#endif
 
 	radio_settings_t set;		// the settings in effect
 	uint32_t activity_ms;		// last request, reception or transmission (battery save)

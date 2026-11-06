@@ -45,6 +45,7 @@ static uint16_t stream_len;
 // The monitor screen's last decoded control channel; last_cc() runs the decode in task context (the trellis is too
 // heavy for the interrupt) and then clears the capture so the next burst fills it again
 static hal_p25_cc_t last;
+static p25_cc_t band;	// accumulated IdenUp band plans (the capture decodes one TSBK at a time)
 static uint32_t decoded_blocks, frames;
 
 // Only PHY_RX (project bit 11) writes a block. PHY_RDY (bit 12) is the slot clock and PHY_RECV_ABNORMAL (bit 16)
@@ -307,11 +308,11 @@ static bool p25_decode(uint16_t *nac, uint8_t *duid, bool *have_tsbk, p25_cc_t *
 			uint8_t out[12];
 
 			if (p25_tsbk_decode(tb, er, out) >= 0) {
-				p25_cc_t tmp;
+				p25_cc_t tmp = band;	// keep the band plans from earlier captures
 
-				memset(&tmp, 0, sizeof tmp);
 				tmp.nac = *nac;
 				(void)p25_tsbk_parse(out, &tmp);	// opcode always set; fields when known
+				band = tmp;
 				*cc = tmp;
 				*have_tsbk = true;
 			}
@@ -493,6 +494,8 @@ static bool last_cc(hal_p25_cc_t *out)
 				if (cc.freq_hz != 0) {
 					last.freq_hz = cc.freq_hz;
 				}
+				last.voice_hz = cc.voice_hz;
+				last.grants = cc.grant_seq;
 			}
 			frames++;
 		}

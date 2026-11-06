@@ -93,8 +93,10 @@ const board_t board = {
 #endif
 #if CONFIG_DMR
 	.dmr = &hrc_dmr,
-	.audio = &hrc_audio_pcm,
 	.vocoder = &hrc_vocoder,
+#endif
+#if CONFIG_HRC_MODEM
+	.audio = &hrc_audio_pcm,
 #endif
 #if CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
 	.p25_probe = &hrc_p25_probe,

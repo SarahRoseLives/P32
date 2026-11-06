@@ -40,6 +40,10 @@ bool radio_p25_publish(radio_p25_view_t *v)
 		n.vch = cc.vch;
 		n.freq_hz = cc.freq_hz;
 		n.frames = cc.blocks;
+		n.voice_hz = cc.voice_hz;
+		n.grants = cc.grants;
+		n.follow = v->follow;
+		n.voice = v->voice;
 		if (memcmp(&n, v, sizeof n) != 0) {
 			*v = n;
 			return true;
@@ -67,6 +71,8 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.voices = st.voices;
 	n.underruns = st.underruns;
 	n.overflows = st.overflows;
+	n.follow = v->follow;
+	n.voice_hz = v->voice_hz;
 	if (memcmp(&n, v, sizeof n) != 0) {
 		*v = n;
 		return true;

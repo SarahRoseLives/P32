@@ -23,7 +23,7 @@
 
 #define P25_VOICE_PCM_FRAMES	32u	// 640 ms: two LDUs plus jitter
 #define P25_VOICE_PREFILL	16u	// start after ~320 ms so a late LDU never gaps the speaker
-#define P25_VOICE_STACK		1024	// words: the demodulator and the codec run in this task
+#define P25_VOICE_STACK		1536	// words (6 KB): the demodulator, policies and codec nest; stack-check needs 3896 B
 
 static struct {
 	p25_demod demod;
@@ -40,6 +40,10 @@ static struct {
 	int32_t agc_q8;			// Q8 gain, 256 = unity
 	TaskHandle_t task;
 	uint32_t samples, units, voices, corrected, underruns, overflows, accepted, repeated, muted;
+	uint16_t f_nac, f_tg;		// grant filter (0 = any)
+	bool filter;
+	volatile bool ended;		// a terminator was seen
+	uint32_t started_ms, last_voice_ms;
 	uint16_t peak;
 } v;
 
@@ -134,8 +138,17 @@ static void on_frame(const p25_rx *f, void *ctx)
 	p25_receive_event event;
 
 	(void)ctx;
-	v.units++;
 	bool valid = p25_call_decode(f->frame, f->duid, &meta);
+
+	if (v.filter) {
+		if (f->nac != v.f_nac) {
+			return;		// another system on the voice channel
+		}
+		if (v.f_tg != 0 && valid && meta.group_valid && meta.group != v.f_tg) {
+			return;		// another talkgroup
+		}
+	}
+	v.units++;
 	event = p25_receive_update(&v.call, f->nac, f->duid, &meta, valid, hal_micros());
 	if (event.reset) {
 		p25_imbe_reset();
@@ -152,6 +165,7 @@ static void on_frame(const p25_rx *f, void *ctx)
 		v.starved = 0;
 	}
 	if (f->duid == 3 || f->duid == 15) {
+		v.ended = true;
 		return;
 	}
 	if ((f->duid != 5 && f->duid != 10) || !event.voice) {
@@ -171,6 +185,7 @@ static void on_frame(const p25_rx *f, void *ctx)
 			audio_process(pcm);
 			memcpy(v.last, pcm, sizeof v.last);
 			v.accepted++;
+			v.last_voice_ms = hal_millis();
 			for (unsigned j = 0; j < P25_IMBE_SAMPLES; j++) {
 				int16_t a = pcm[j] < 0 ? (int16_t)-pcm[j] : pcm[j];
 				if (a > (int16_t)v.peak) {
@@ -211,7 +226,7 @@ static void decode_task(void *arg)
 	vTaskDelete(NULL);
 }
 
-bool p25_voice_start(void)
+static bool start_common(uint16_t nac, uint16_t tg)
 {
 	if (v.running) {
 		return true;
@@ -227,6 +242,10 @@ bool p25_voice_start(void)
 	p25_demod_init(&v.demod);
 	p25_receive_reset(&v.call);
 	p25_voice_policy_init(&v.quality);
+	v.f_nac = nac;
+	v.f_tg = tg;
+	v.filter = nac != 0 || tg != 0;
+	v.started_ms = hal_millis();
 	if (!board.p25_probe->audio_start()) {
 		dlog("p25v: discriminator start refused");
 		return false;
@@ -249,6 +268,37 @@ bool p25_voice_start(void)
 	}
 	dlog("p25v start");
 	return true;
+}
+
+bool p25_voice_start(void)
+{
+	return start_common(0, 0);
+}
+
+bool p25_voice_start_filtered(uint16_t nac, uint16_t tg)
+{
+	return start_common(nac, tg);
+}
+
+bool p25_voice_ended(void)
+{
+	uint32_t now;
+
+	if (!v.running) {
+		return true;
+	}
+	if (v.ended) {
+		v.ended = false;
+		return true;
+	}
+	now = hal_millis();
+	if (v.voices != 0 && (uint32_t)(now - v.last_voice_ms) > 1500u) {
+		return true;
+	}
+	if (v.units == 0 && (uint32_t)(now - v.started_ms) > 3000u) {
+		return true;	// nothing on this voice channel
+	}
+	return false;
 }
 
 void p25_voice_stop(void)

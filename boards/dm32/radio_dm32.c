@@ -184,9 +184,11 @@ static void dmr_pa_on(void)
 	}
 }
 
+#if CONFIG_HRC_MODEM
 static const hrc_dmr_board_t dmr_board = {
 	.rf_switch = dmr_rf_switch, .pa_on = dmr_pa_on, .pa_delay_us = DMR_PA_DELAY_US,
 };
+#endif
 
 #if CONFIG_APRS
 static bool afsk_tx_route(bool on);
@@ -221,8 +223,10 @@ static void init(void)
 	fd6818_set_mode(&fd, FD6818_MODE_FM);
 	mode = RADIO_MODE_FM;
 
+#if CONFIG_HRC_MODEM
 	hrc_dmr_board_init(&modem, &dmr_board);
 	hrc_audio_pcm_attach(&modem, dm32_speaker_pcm);
+#endif
 	hrc_fm_rx_attach(&modem);
 #if CONFIG_APRS
 	hrc_afsk_attach(&modem, &afsk_board);
@@ -251,7 +255,9 @@ static void set_mode(radio_mode_t m)
 		mode = RADIO_MODE_DMR;
 		hrc_dmr_enter();
 	} else {
+#if CONFIG_HRC_MODEM
 		hrc_dmr_leave();
+#endif
 		dmr_keyed = false;
 		pa_off();
 		fd6818_set_mode(&fd, FD6818_MODE_FM);

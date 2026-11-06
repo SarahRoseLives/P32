@@ -18,7 +18,12 @@ typedef struct {
 	uint8_t site;
 	uint16_t tg;
 	uint16_t vch;
-	uint32_t freq_hz;	// from an IdenUp
+	uint32_t freq_hz;	// from an IdenUp (the band's base)
+	uint8_t iden_valid;	// bit i: IdenUp channel id i has been seen
+	uint32_t base_hz[16];	// IdenUp base per channel id
+	uint16_t spacing_hz[16];
+	uint32_t voice_hz;	// the last grant's channel on its band plan (0 unknown)
+	uint32_t grant_seq;	// grants parsed so far (the radio follows a change)
 } p25_cc_t;
 
 // Decode one CRC-checked 12-byte TSBK into cc. Returns false for an opcode this parser does not know (cc->opcode is

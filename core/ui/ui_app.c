@@ -1633,7 +1633,13 @@ void ui_p25_draw(void)
 // Only BACK: it pops (ui_pop stops the monitor). Every other key is consumed: nothing may retune the receiver under it
 bool ui_p25_key(const input_event_t *ev)
 {
-	return ev->action != ACT_BACK;
+	if (ev->action == ACT_BACK) {
+		return false;
+	}
+	if (ev->action == ACT_SELECT && ev->gesture == GESTURE_PRESS) {
+		radio_req_p25_follow(!ui_view()->p25.follow);
+	}
+	return true;
 }
 
 void ui_p25_enter(void)

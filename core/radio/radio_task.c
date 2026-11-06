@@ -32,8 +32,8 @@
 
 // Task layout (see core/app/app.c for the whole picture)
 #define RADIO_TASK_PRIORITY	4
-#if CONFIG_DMR
-#define RADIO_TASK_STACK	768	// words: the DMR call stack and the AMBE FEC run here
+#if CONFIG_DMR || CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
+#define RADIO_TASK_STACK	768	// words: the DMR call stack and the P25 control-channel decode run here
 #else
 #define RADIO_TASK_STACK	512	// words
 #endif
@@ -290,6 +290,7 @@ void radio_req_clear_temporary(void) { post(RREQ_CLEAR_TEMP, 0, 0); }
 void radio_req_retune(void) { post(RREQ_RETUNE, 0, pdMS_TO_TICKS(50)); }
 #if CONFIG_P25
 void radio_req_p25(bool on) { post(RREQ_P25, on ? 1 : 0, pdMS_TO_TICKS(50)); }
+void radio_req_p25_follow(bool on) { post(RREQ_P25_FOLLOW, on ? 1 : 0, pdMS_TO_TICKS(50)); }
 #endif
 #if CONFIG_P25_VOICE
 void radio_req_p25_voice(bool on) { post(RREQ_P25_VOICE, on ? 1 : 0, pdMS_TO_TICKS(50)); }

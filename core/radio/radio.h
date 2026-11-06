@@ -234,6 +234,9 @@ typedef struct {
 	uint16_t tg, vch;
 	uint32_t freq_hz;
 	uint32_t frames;	// control-channel bursts decoded since it started
+	uint32_t voice_hz;	// the last grant's voice channel (IdenUp band plan applied)
+	uint32_t grants;	// grants seen (a change means a new grant)
+	bool follow;		// follow voice grants from the control channel
 	bool voice;		// the voice receiver, not the control-channel monitor
 	uint8_t call_state;	// voice: p25_receive_class (0 wait, 1 clear, 2 encrypted, 3 unsupported, 4 bad)
 	uint16_t call_nac, call_group;
@@ -395,6 +398,7 @@ void radio_req_clear_temporary(void);		// BACK on Home: revert temporary changes
 void radio_req_retune(void);			// tune again now, or after the transmission (the reference trim changed)
 #if CONFIG_P25
 void radio_req_p25(bool on);			// the control-channel monitor: 1 enter (from idle), 0 leave
+void radio_req_p25_follow(bool on);		// follow voice grants from the control channel
 #endif
 #if CONFIG_P25_VOICE
 void radio_req_p25_voice(bool on);		// the voice receiver: 1 enter (from idle, tuned), 0 leave

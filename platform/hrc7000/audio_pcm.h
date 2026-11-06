@@ -12,7 +12,7 @@
 #include "hal_audio.h"
 #include "modem/hrc7000/hrc7000.h"
 
-#if CONFIG_DMR
+#if CONFIG_HRC_MODEM
 // Once, from the radio init, after the modem is attached. speaker_pcm(on) switches the modem's speaker source between
 // its FM demodulator and the CPU's PCM buffer (the radio owns the AUDIO_CONTROL bits); it runs with interrupts on
 void hrc_audio_pcm_attach(hrc7000_t *modem, void (*speaker_pcm)(bool on));
@@ -28,7 +28,7 @@ void hrc_audio_pcm_reset_stats(void);
 
 // The microphone level for VOX (hal_power_t.mic_level), from the mic PCM (audio_pcm.c, drivers/audio/miclevel).
 // HRC_MIC_LEVEL is the hook for a board's hal_power_t, NULL in a build without the PCM stream or VOX
-#if CONFIG_DMR && CONFIG_VOX
+#if CONFIG_HRC_MODEM && CONFIG_VOX
 uint8_t hrc_audio_pcm_mic_level(void);
 // The meter now: its level, the last half's peak from its mean (0..32767), halves measured, running. Doesn't start it
 void hrc_audio_pcm_mic_stats(uint8_t *level, uint16_t *peak, uint32_t *halves, bool *on);
@@ -37,7 +37,7 @@ void hrc_audio_pcm_mic_stats(uint8_t *level, uint16_t *peak, uint32_t *halves, b
 #define HRC_MIC_LEVEL		NULL
 #endif
 
-#if !CONFIG_DMR
+#if !CONFIG_HRC_MODEM
 static inline void hrc_audio_pcm_attach(hrc7000_t *modem, void (*speaker_pcm)(bool on)) { (void)modem; (void)speaker_pcm; }
 static inline void hrc_audio_pcm_hold(bool on) { (void)on; }
 #endif

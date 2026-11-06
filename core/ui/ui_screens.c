@@ -3101,6 +3101,13 @@ void ui_draw_p25(const radio_view_t *v, const ui_state_t *s)
 		sb_str(&b, "  over ");
 		sb_u32(&b, p->overflows, 1);
 		gfx_text(f, 0, y, buf, ui_col.dim);
+		y += f->h;
+		if (p->voice_hz != 0) {
+			sb_init(&b, buf, sizeof buf);
+			sb_str(&b, "voice ");
+			sb_freq(&b, p->voice_hz);
+			gfx_text(f, 0, y, buf, ui_col.dim);
+		}
 		ui_draw_bottom(s, "Back");
 		return;
 	}
@@ -3176,6 +3183,16 @@ void ui_draw_p25(const radio_view_t *v, const ui_state_t *s)
 	sb_u32(&b, p->frames, 1);
 	sb_str(&b, "  op ");
 	p25_hex(&b, p->opcode, 2);
+	gfx_text(f, 0, y, buf, ui_col.dim);
+	y += f->h;
+
+	sb_init(&b, buf, sizeof buf);
+	sb_str(&b, "follow ");
+	sb_str(&b, p->follow ? "on" : "off");
+	if (p->voice_hz != 0) {
+		sb_str(&b, "  voice ");
+		sb_freq(&b, p->voice_hz);
+	}
 	gfx_text(f, 0, y, buf, ui_col.dim);
 
 	ui_draw_bottom(s, "Back");

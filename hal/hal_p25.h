@@ -25,6 +25,8 @@ typedef struct {
 	uint16_t vch;
 	uint32_t freq_hz;	// from an IdenUp
 	uint32_t blocks;	// PHY blocks captured since start
+	uint32_t voice_hz;	// the last grant's voice channel (band plan applied; 0 unknown)
+	uint32_t grants;	// grants seen since start (a change means a new grant)
 } hal_p25_cc_t;
 
 typedef struct {

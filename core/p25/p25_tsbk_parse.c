@@ -28,14 +28,24 @@ bool p25_tsbk_parse(const uint8_t tsbk[12], p25_cc_t *cc)
 		cc->rfss = (uint8_t)((a >> 32) & 0xFFu);
 		cc->site = (uint8_t)((a >> 24) & 0xFFu);
 		return true;
-	case 0x3D:		// Identifier Update: the band's transmit frequency
-		cc->freq_hz = (uint32_t)((a & 0xFFFFFFFFu) * 5u);
+	case 0x3D: {	// Identifier Update: channel id, bandwidth, offset, spacing, base
+		unsigned id = (unsigned)((a >> 60) & 0xFu);
+
+		cc->base_hz[id] = (uint32_t)(a & 0xFFFFFFFFu) * 5u;
+		cc->spacing_hz[id] = (uint16_t)(((a >> 32) & 0x3FFu) * 125u);
+		cc->iden_valid = (uint8_t)(cc->iden_valid | (1u << id));
+		cc->freq_hz = cc->base_hz[id];
 		return true;
-	case 0x00: {		// Group Voice Grant: channel and talkgroup
+	}
+	case 0x00: {		// Group Voice Grant: channel id, channel and talkgroup
 		uint32_t ch = (uint32_t)((a >> 40) & 0xFFFFu);
+		unsigned id = (unsigned)((ch >> 12) & 0xFu);
 
 		cc->vch = (uint16_t)(ch & 0xFFFu);
 		cc->tg = (uint16_t)((a >> 24) & 0xFFFFu);
+		cc->voice_hz = (cc->iden_valid & (1u << id)) != 0
+			? cc->base_hz[id] + (uint32_t)cc->vch * cc->spacing_hz[id] : 0u;
+		cc->grant_seq++;
 		return true;
 	}
 	default:

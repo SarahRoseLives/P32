@@ -17,7 +17,7 @@
 #include "config.h"
 #include "dmr_glue.h"
 
-#if CONFIG_DMR	// the whole file: DMR only
+#if CONFIG_HRC_MODEM	// the whole file: DMR only
 #include "platform.h"
 #if CONFIG_P25_PROBE || CONFIG_P25 || CONFIG_P25_VOICE
 #include "p25_probe.h"
@@ -495,4 +495,4 @@ bool hrc_dmr_stats_line(uint8_t i, char *buf, uint8_t len)
 	return true;
 }
 
-#endif	// CONFIG_DMR
+#endif	// CONFIG_HRC_MODEM

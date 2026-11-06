@@ -51,6 +51,11 @@
 #if CONFIG_P25_VOICE
 #include "p25/p25_voice.h"		// the voice receiver
 #endif
+#if CONFIG_P25 || CONFIG_P25_VOICE
+#define sm_p25_voice(s)		((s)->p25_voice)
+#else
+#define sm_p25_voice(s)		false
+#endif
 #if CONFIG_SFR_CWID
 static void cw_cancel(radio_sm_t *sm);
 #endif
@@ -4150,7 +4155,13 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 	}
 	memset(&sm->view.p25, 0, sizeof sm->view.p25);
 	sm->p25 = true;
+	sm->p25_voice = false;
+	sm->p25_follow = true;
+	sm->p25_cc_hz = sm->view.ch.rx_hz;
+	sm->p25_voice_hz = 0;
+	sm->p25_grant_seen = 0;
 	sm->view.p25.on = true;
+	sm->view.p25.follow = true;
 	sm->view.state = RS_IDLE;
 	outputs(sm);
 	changed(sm);
@@ -4161,6 +4172,13 @@ static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
 	if (!sm->p25) {
 		return;
 	}
+#if CONFIG_P25_VOICE
+	if (sm->p25_voice) {
+		p25_voice_stop();
+		sm->p25_voice = false;
+		sm->view.p25.voice = false;
+	}
+#endif
 	board.p25_probe->stop();
 	if (board.radio->audio_to_modem_data != NULL) {
 		board.radio->audio_to_modem_data(false);
@@ -5383,6 +5401,11 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 			p25_stop(sm, now_ms);
 		}
 		break;
+	case RREQ_P25_FOLLOW:
+		sm->p25_follow = req->arg != 0;
+		sm->view.p25.follow = sm->p25_follow;
+		changed(sm);
+		break;
 #endif
 #if CONFIG_P25_VOICE
 	case RREQ_P25_VOICE:
@@ -5589,7 +5612,7 @@ static void battery_poll(radio_sm_t *sm, uint32_t now_ms)
 static bool save_allowed(const radio_sm_t *sm, uint32_t now_ms)
 {
 	if (sm->set.rx_save == 0 || board.radio->rx_sleep == NULL || sm->view.ch.mode != RADIO_MODE_FM || sm->hotspot ||
-			sm->p25 || sm->p25_voice || sm->view.state != RS_IDLE || sm->view.monitor || sm->ptt || sm->view.ch.no_eco ||
+			sm->p25 || sm_p25_voice(sm) || sm->view.state != RS_IDLE || sm->view.monitor || sm->ptt || sm->view.ch.no_eco ||
 			sm->view.bcast) {
 		return false;
 	}
@@ -5758,7 +5781,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 	radio_status_t st;
 	// codeplug_serial() before zone_edit_busy(): a zone write that moved indexes has its log entry by then
 	if ((sm->reload_pending || codeplug_serial() != sm->codeplug_serial || ZONES_MOVED(sm)) && !ZONE_WRITE_BUSY() &&
-	    !sm->hotspot && !sm->p25 && !sm->p25_voice && !sm->ptt && sm->view.state != RS_TX) {
+	    !sm->hotspot && !sm->p25 && !sm_p25_voice(sm) && !sm->ptt && sm->view.state != RS_TX) {
 		reload(sm, now_ms);
 		persist(sm, now_ms);
 	}
@@ -5793,7 +5816,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_APRS
 		aprs = sm->aprs_phase != APRS_RF_OFF;
 #endif
-		if (sm->view.state == RS_TX || sm->hotspot || sm->p25 || sm->p25_voice) {
+		if (sm->view.state == RS_TX || sm->hotspot || sm->p25 || sm_p25_voice(sm)) {
 			sm->retune_due = false;
 			sm->retune_pending = true;
 		} else if (!aprs) {
@@ -5853,10 +5876,66 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 #endif
 #if CONFIG_P25
 	if (sm->p25) {
-		// The monitor has the receiver: no squelch, scan, DMR or time-out here; the probe decodes in this task
+		// The monitor has the receiver: no squelch, scan, DMR or time-out here; the probe decodes in this task.
+#if CONFIG_P25_VOICE
+		if (sm->p25_voice) {
+			if (radio_p25_voice_publish(&sm->view.p25)) {
+				changed(sm);
+			}
+			if (p25_voice_ended()) {
+				p25_voice_stop();
+				sm->p25_voice = false;
+				sm->view.p25.voice = false;
+				if (board.radio->rx != NULL) {
+					board.radio->rx(sm->p25_cc_hz, sm->view.ch.bw, NULL);
+				}
+				if (board.radio->audio_to_modem_data != NULL) {
+					board.radio->audio_to_modem_data(true);
+				} else if (board.radio->audio_to_modem != NULL) {
+					board.radio->audio_to_modem(true);
+				}
+				board.p25_probe->start();
+				sm->p25_grant_seen = 0;
+				changed(sm);
+			}
+			return;
+		}
+#endif
 		if (radio_p25_publish(&sm->view.p25)) {
 			changed(sm);
 		}
+#if CONFIG_P25_VOICE
+		sm->view.p25.follow = sm->p25_follow;
+		if (sm->p25_follow && sm->view.p25.valid && sm->view.p25.opcode == 0x00 &&
+		    sm->view.p25.voice_hz != 0 && sm->view.p25.grants != sm->p25_grant_seen) {
+			uint32_t hz = sm->view.p25.voice_hz;
+			uint16_t nac = sm->view.p25.nac;
+			uint16_t tg = sm->view.p25.tg;
+
+			sm->p25_grant_seen = sm->view.p25.grants;
+			board.p25_probe->stop();
+			if (board.radio->rx != NULL) {
+				board.radio->rx(hz, RADIO_BW_12K5, NULL);
+			}
+			if (p25_voice_start_filtered(nac, tg)) {
+				sm->p25_voice = true;
+				sm->p25_voice_hz = hz;
+				sm->view.p25.voice = true;
+				sm->view.p25.on = true;
+			} else {
+				if (board.radio->rx != NULL) {
+					board.radio->rx(sm->p25_cc_hz, sm->view.ch.bw, NULL);
+				}
+				if (board.radio->audio_to_modem_data != NULL) {
+					board.radio->audio_to_modem_data(true);
+				} else if (board.radio->audio_to_modem != NULL) {
+					board.radio->audio_to_modem(true);
+				}
+				board.p25_probe->start();
+			}
+			changed(sm);
+		}
+#endif
 		return;
 	}
 #endif
