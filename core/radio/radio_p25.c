@@ -41,7 +41,13 @@ bool radio_p25_publish(radio_p25_view_t *v)
 		n.freq_hz = cc.freq_hz;
 		n.frames = cc.blocks;
 		n.voice_hz = cc.voice_hz;
+		n.voice_tx_hz = cc.voice_tx_hz;
+		n.source = cc.source;
 		n.grants = cc.grants;
+		n.system_tg = v->system_tg;
+		n.system_unit = v->system_unit;
+		n.system_cc_hz = v->system_cc_hz;
+		n.system_uplink_hz = v->system_uplink_hz;
 		n.follow = v->follow;
 		n.voice = v->voice;
 		if (memcmp(&n, v, sizeof n) != 0) {
@@ -71,8 +77,19 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.voices = st.voices;
 	n.underruns = st.underruns;
 	n.overflows = st.overflows;
+	n.repeated = st.repeated;
+	n.muted = st.muted;
+	n.resets = st.resets;
+	n.drops = st.drops;
+	n.peak = st.peak;
+	n.corrected = st.corrected;
 	n.follow = v->follow;
 	n.voice_hz = v->voice_hz;
+	n.system_tg = v->system_tg;
+	n.system_unit = v->system_unit;
+	n.system_cc_hz = v->system_cc_hz;
+	n.system_uplink_hz = v->system_uplink_hz;
+	n.boost = p25_voice_agc();
 	if (memcmp(&n, v, sizeof n) != 0) {
 		*v = n;
 		return true;

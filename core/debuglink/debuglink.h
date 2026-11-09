@@ -71,6 +71,8 @@ void debuglink_dmr_reset(void);
 void debuglink_view_radio(const radio_view_t *v, dl_text_t *t);
 // The P25 control-channel monitor's view (debuglink_view_p25.c, CONFIG_P25): "p25.built=0" without it
 void debuglink_view_p25(const radio_view_t *v, dl_text_t *t);
+// The P25 PHY transmit test engine command (debuglink_p25_tx.c, CONFIG_P25_TX; docs/spec/p25.md 10)
+size_t debuglink_cmd_p25_tx(const uint8_t *req, uint16_t len, uint8_t *out, size_t cap);
 enum {
 	DL_OP_SCAN = 20, DL_OP_SCAN_VFO = 21, DL_OP_BEEP = 22, DL_OP_TONE_BURST = 23, DL_OP_SETTING = 24,
 	DL_OP_ROAM = 26, DL_OP_VIBRATE = 29, DL_OP_VOLUME = 30, DL_OP_DMR_FIELDS = 31, DL_OP_VFO_COPY = 32,

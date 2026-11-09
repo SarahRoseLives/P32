@@ -803,6 +803,7 @@ static void test_settings_layout(void)
 		{ offsetof(settings_t, zone_jrn_index), 272 },
 		{ offsetof(settings_t, zone_jrn_count), 274 },
 		{ offsetof(settings_t, zone_jrn_kind), 276 },
+		{ offsetof(settings_t, p25), 392 },		// appended after zs_import
 	};
 	for (unsigned i = 0; i < sizeof(offs) / sizeof(offs[0]); i++) {
 		if (offs[i].got != offs[i].want) {
@@ -828,6 +829,11 @@ static void test_settings_layout(void)
 	CHECK(s.vfo2_cc == 1 && s.dual_b == 0);
 	CHECK(s.squelch == 4 && s.vfo_rx_hz == 146500000u && strcmp(s.radio_name, "W1AW") == 0 &&
 	      s.snmp_write_hash == 0x12345678u);
+	// The P25 system was appended after that record: it reads the defaults
+	CHECK(s.p25.cc_hz == 438800000u && s.p25.uplink_hz == 433800000u && s.p25.wacn == 0xBEEF0u && s.p25.sys == 0x123 && s.p25.nac == 0x123 &&
+	      s.p25.tg == 256 && s.p25.rfss == 1 && s.p25.site == 1 && s.p25.unit_id == 2 && s.p25.band_auto == 1 &&
+	      s.p25.valid == 1 && strcmp(s.p25.name, "438.800") == 0 && s.p25.base_hz == 0 && s.p25.spacing_hz == 0 &&
+	      s.p25.offset_hz == 0);
 
 	// The DMR VFO's talk target shares bytes with the mode, bandwidth, color code, slot and the old reserved1 (settings-store.md 3):
 	// an old record reads as no target, and each setter leaves the others' bits alone

@@ -41,4 +41,19 @@ void p25_imbe_decode(const uint8_t frame[P25_IMBE_BYTES], int16_t pcm[P25_IMBE_S
 	voc->decode_4400(pcm, copy);
 }
 
+#if CONFIG_P25_TX
+void p25_imbe_encode(const int16_t pcm[P25_IMBE_SAMPLES], uint8_t frame[P25_IMBE_BYTES])
+{
+	int16_t samples[P25_IMBE_SAMPLES];
+
+	if (!voc) {
+		codec_construct();
+	}
+	for (int i = 0; i < P25_IMBE_SAMPLES; i++) {
+		samples[i] = pcm[i];
+	}
+	voc->encode_4400(samples, frame);
+}
+#endif
+
 #endif

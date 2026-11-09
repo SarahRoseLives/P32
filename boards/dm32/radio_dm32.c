@@ -67,6 +67,10 @@ static bool afsk_tx;		// APRS tones play through the prompt FIFO into the modula
 static void speaker_source(void);
 static void ring_play(void);
 static void amp(uint8_t who, bool on);
+#if CONFIG_P25_TX
+static void wake(void);
+static void retune(void);
+#endif
 
 // ---- FD6818 bus ----
 
@@ -184,9 +188,66 @@ static void dmr_pa_on(void)
 	}
 }
 
+#if CONFIG_P25_TX
+// P25 PHY transmit preparation (platform/hrc7000/p25_tx.c): the DMR data path on the calibrated low power, without
+// entering the DMR engine. The modem's own PHY registers are the platform's; the per-burst RF TX interrupt and the
+// PA one-shot above key the RF chip and PA. Task context, before the PHY interrupts.
+static bool p25_ready(uint32_t hz)
+{
+	return board_in_band(hz, true) && bf_cal_valid();
+}
+
+static bool p25_prepare(uint32_t hz)
+{
+	if (!board_in_band(hz, true)) {
+		return false;
+	}
+	wake();
+	tx_uhf = hz >= UHF_FROM_HZ;
+	tx_drive = bf_cal_power_level(hz, 0);
+	tx_hz = hz;
+	// The per-burst RX return retunes to rx_hz; a radio that never tuned would program frequency 0
+	if (!have_rx) {
+		rx_hz = hz;
+		rx_bw = RADIO_BW_12K5;
+		rx_tone = (subtone_t){ TONE_NONE, 0 };
+		have_rx = true;
+	}
+	write_mod_bias(hz);
+	// The DM32-Multimode path enters the HR_C7000 DMR baseband before switching to the PHY transmitter
+	// (set_mode(RADIO_MODE_DMR) -> hrc7000_dmr_enter); without it the PHY interrupt stream is not modulated.
+	hrc7000_dmr_enter(&modem, hrc7000_mod_bias(bf_cal_tx_center(), bf_cal_modcal(hz)), MIC_GAIN_DB);
+	fd6818_set_freq(&fd, synth_hz(hz));
+	hrc_dac_b_power(true);
+	hrc_pin_write(PIN_MIC_PATH, false);
+	lna(hz, true);
+	fd6818_set_mode(&fd, FD6818_MODE_DMR);
+	fd6818_set_bandwidth(&fd, FD6818_BW_DMR);
+	fd6818_set_state(&fd, FD6818_STATE_RX);
+	dmr_keyed = true;
+	transmitting = true;
+	return true;
+}
+
+static void p25_finish(void)
+{
+	dmr_keyed = false;
+	pa_off();
+	fd6818_set_mode(&fd, FD6818_MODE_FM);
+	hrc7000_fm_idle(&modem);
+	transmitting = false;
+	if (have_rx) {
+		retune();
+	}
+}
+#endif
+
 #if CONFIG_HRC_MODEM
 static const hrc_dmr_board_t dmr_board = {
 	.rf_switch = dmr_rf_switch, .pa_on = dmr_pa_on, .pa_delay_us = DMR_PA_DELAY_US,
+#if CONFIG_P25_TX
+	.p25_prepare = p25_prepare, .p25_finish = p25_finish, .p25_ready = p25_ready,
+#endif
 };
 #endif
 

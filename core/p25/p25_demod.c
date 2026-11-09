@@ -29,6 +29,10 @@ static bool acquire(p25_demod_lane *l) {
     int32_t gain=(int32_t)((int64_t)xy*16/yy);
     if(gain>-100 && gain<100) return false;
     l->gain=gain;l->offset=(sx*16-gain*sy)/24;l->quality=quality;
+    {
+        uint32_t ag=(uint32_t)(gain<0 ? -gain : gain);
+        l->gain_recip=ag!=0 ? (int32_t)(((1u<<16)+(ag>>1))/ag) : 0;
+    }
     l->previous_symbol=0;
     p25_rx_gap(&l->rx);
     for(unsigned i=0;i<24;++i)

@@ -34,6 +34,25 @@ typedef struct {
 	uint8_t reserved[3];
 } settings_zs_import_t;
 
+// A P25 trunking system (docs/spec/p25.md 8.1). The 32-bit fields come first so the compiler adds no padding
+typedef struct {
+	uint32_t cc_hz;			// control channel (downlink)
+	uint32_t wacn;			// 20 bits
+	uint32_t unit_id;		// our subscriber unit ID
+	uint16_t sys;			// system ID (12 bits)
+	uint16_t nac;			// network access code (12 bits)
+	uint16_t tg;			// talkgroup
+	uint16_t rfss;			// RF subsystem
+	uint16_t site;
+	uint8_t band_auto;		// 1 = learn IDEN_UP, 0 = the manual plan below
+	uint8_t valid;			// 1 = configured
+	uint32_t base_hz;		// manual band plan: base frequency, 0 = unknown
+	uint32_t spacing_hz;		// channel spacing, 0 = unknown
+	int32_t offset_hz;		// offset from the base, 0 = unknown
+	char name[17];			// NUL padded
+	uint32_t uplink_hz;		// subscriber transmit frequency for the control channel (appended: older records keep defaults)
+} settings_p25_t;
+
 typedef struct {
 	// Where the radio is
 	uint8_t vfo;			// 1 = tuning the VFO, 0 = on a channel
@@ -223,6 +242,9 @@ typedef struct {
 	// Zone share: the zones imported last, so the same zone sent again updates its import instead of adding a copy
 	// (docs/spec/zone-share.md 5.4); key 0 = unused, the oldest replaced first
 	settings_zs_import_t zs_import[SETTINGS_ZS_IMPORTS];
+	// The P25 trunking system (CONFIG_P25, docs/spec/p25.md 8.1). Appended at the end so an older record keeps the
+	// defaults; TX and trunking use it later, the Tools screen edits it now
+	settings_p25_t p25;
 } settings_t;
 
 // Pages: settings_t is stored as records of SETTINGS_PAGE_BYTES each (settings-store.md 2.1). Only the pages its size

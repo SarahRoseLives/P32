@@ -275,6 +275,17 @@ typedef struct {
 	uint32_t p25_cc_hz;		// the control channel to return to
 	uint32_t p25_voice_hz;		// the voice channel of the call being followed
 	uint32_t p25_grant_seen;		// grants seen when the monitor last acted
+#if CONFIG_P25_TX
+	uint8_t p25_call;		// P25 PTT call state (radio_sm.c)
+	uint32_t p25_call_deadline_ms;
+	uint32_t p25_call_voice_hz;	// grant's subscriber transmit channel
+	uint32_t p25_call_unit;
+	uint16_t p25_call_nac, p25_call_tg;
+	uint8_t p25_affiliated;
+	uint8_t p25_retries;
+	bool p25_tot;		// the talk timer ended this P25 call
+	bool p25_boot_affil;	// register/affiliate once when the monitor starts
+#endif
 #endif
 
 	radio_settings_t set;		// the settings in effect

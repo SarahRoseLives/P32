@@ -37,6 +37,7 @@ typedef enum {
 	SCR_CP_FOREIGN,			// another firmware's codeplug: what the first edit does with it (ui_svc_codeplug_answer)
 	SCR_P25,			// the P25 control-channel monitor (CONFIG_P25)
 	SCR_P25_VOICE,		// the P25 voice receiver (CONFIG_P25_VOICE)
+	SCR_P25_SYS,		// the P25 trunking system's settings (CONFIG_P25)
 	SCR_COUNT
 } ui_scr_t;
 

@@ -34,7 +34,21 @@ enum {
 	DL_CMD_RX2		= 0x1E,	// the second receiver's SoC: state, the update bridge, restart (debuglink_rx2.c, 3.22)
 	DL_CMD_IDDB		= 0x1F,	// the DMR ID database: its format, records and an ID looked up (debuglink_iddb.c, 3.23)
 	DL_CMD_P25		= 0x20,	// the P25 bench probe's 8 kHz FM discriminator: start, stop, read samples (p25.md 5.1)
+	DL_CMD_P25_TX		= 0x21,	// the P25 PHY transmit test engine: arm, start, stop, status (p25.md 10)
 };
+
+// DL_CMD_P25_TX operations (first payload byte; docs/spec/p25.md 10). ARM and START carry the token ALLOW_RF at the
+// end of the payload so an accidental frame can't key the transmitter.
+enum {
+	DL_P25_TX_OP_STATUS = 0,
+	DL_P25_TX_OP_ARM = 1,	// hz u32, variant u8 (0..11), invert u8 (0/1), token
+	DL_P25_TX_OP_START = 2,	// token
+	DL_P25_TX_OP_STOP = 3,
+	DL_P25_TX_OP_LIVE_START = 4,	// hz u32, nac u16, tg u16, unit u32, token
+	DL_P25_TX_OP_CC = 5,		// token: send Unit Registration + Group Affiliation on the configured uplink
+};
+#define DL_P25_TX_TOKEN		"ALLOW_RF"
+#define DL_P25_TX_TOKEN_LEN	8u
 
 // DL_CMD_RX2 operations (first payload byte; docs/spec/debuglink.md 3.22). The token is u32 little endian
 enum {

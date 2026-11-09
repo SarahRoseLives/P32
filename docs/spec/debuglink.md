@@ -111,6 +111,7 @@ All multi-byte numbers are little endian. Text is ASCII, lines end with `\n`.
 | `0x1D` | WATCHDOG | operation u8 + arguments (3.21); `CONFIG_WATCHDOG` builds, else status 4 | none (3.21) |
 | `0x1E` | RX2 | operation u8 + arguments (3.22) | flags, or none (3.22) |
 | `0x1F` | IDDB | DMR ID u32 (3.23); `CONFIG_DMR` builds, else status 4 | format u8, records u32, found u8, text (3.23) |
+| `0x21` | P25_TX | operation u8 + arguments (p25.md 10); `CONFIG_P25_TX` builds, else status 4 | status, or the engine's counters as text |
 
 ### 3.1 VERSION
 

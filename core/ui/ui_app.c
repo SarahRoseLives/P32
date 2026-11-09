@@ -21,6 +21,9 @@
 #include "i18n.h"
 #include "input/input.h"
 #include "radio/tones.h"
+#if CONFIG_P25_VOICE
+#include "p25/p25_voice.h"
+#endif
 #include "config.h"
 #if CONFIG_HOTSPOT || (CONFIG_USB_NETWORK && CONFIG_HOSTLINK)
 #include "hostlink/hostlink.h"
@@ -1637,7 +1640,11 @@ bool ui_p25_key(const input_event_t *ev)
 		return false;
 	}
 	if (ev->action == ACT_SELECT && ev->gesture == GESTURE_PRESS) {
-		radio_req_p25_follow(!ui_view()->p25.follow);
+		if (ui_view()->p25.voice) {
+			p25_voice_set_agc(!p25_voice_agc());
+		} else {
+			radio_req_p25_follow(!ui_view()->p25.follow);
+		}
 	}
 	return true;
 }
@@ -1657,7 +1664,13 @@ void ui_p25v_draw(void)
 
 bool ui_p25v_key(const input_event_t *ev)
 {
-	return ev->action != ACT_BACK;
+	if (ev->action == ACT_BACK) {
+		return false;
+	}
+	if (ev->action == ACT_SELECT && ev->gesture == GESTURE_PRESS) {
+		p25_voice_set_agc(!p25_voice_agc());
+	}
+	return true;
 }
 
 void ui_p25v_enter(void)

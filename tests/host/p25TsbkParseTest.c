@@ -38,13 +38,14 @@ int main(void)
 	CHECK(cc.rfss == 1);
 	CHECK(cc.site == 1);
 
-	// Group Voice Grant 0x00: talkgroup and voice channel
-	static const uint8_t grant[12] = { 0x80, 0x00, 0x02, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xA7, 0x79 };
+	// Group Voice Grant 0x00: channel, talkgroup and source (octets 2..3, 5..6 and 7..9)
+	static const uint8_t grant[12] = { 0x80, 0x00, 0x10, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0xA7, 0x79 };
 	memset(&cc, 0, sizeof cc);
 	CHECK(p25_tsbk_parse(grant, &cc));
 	CHECK(cc.opcode == 0x00);
 	CHECK(cc.tg == 1);
 	CHECK(cc.vch == 1);
+	CHECK(cc.source == 1);
 
 	// An unknown opcode is reported, not guessed
 	static const uint8_t other[12] = { 0xFF, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };

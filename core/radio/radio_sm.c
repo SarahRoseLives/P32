@@ -51,6 +51,9 @@
 #if CONFIG_P25_VOICE
 #include "p25/p25_voice.h"		// the voice receiver
 #endif
+#if CONFIG_P25_TX
+#include "p25/p25_tx_voice.h"		// the live voice transmitter owns the PCM stream too
+#endif
 #if CONFIG_P25 || CONFIG_P25_VOICE
 #define sm_p25_voice(s)		((s)->p25_voice)
 #else
@@ -3674,6 +3677,416 @@ static void roger_cancel(radio_sm_t *sm)
 }
 #endif
 
+#if CONFIG_P25_TX && CONFIG_P25
+static void p25_enter(radio_sm_t *sm, uint32_t now_ms);
+
+// --- P25 trunked PTT (docs/spec/p25.md 8.1, 10): request, grant, permit and voice ---------------------------------
+// The monitor owns the receiver while the P25 screen is open. PTT stops its probe, sends unit registration, group
+// affiliation and the group voice request on the control-channel uplink, then listens for the grant. The platform's
+// P25 transmitter and the voice engine play the rest; the radio task only sequences them and restores the monitor.
+enum { P25CALL_IDLE, P25CALL_BOOT_AFFIL, P25CALL_BOOT_WAIT, P25CALL_AFFIL, P25CALL_AFFIL_WAIT,
+       P25CALL_REQUEST, P25CALL_GRANT, P25CALL_PERMIT, P25CALL_VOICE, P25CALL_DRAIN, P25CALL_DEREG };
+#define P25CALL_AFFIL_MS		6000u
+#define P25CALL_AFFIL_SETTLE_MS	400u	// let the site's registration/affiliation state settle
+#define P25CALL_REQUEST_MS	2000u
+#define P25CALL_GRANT_MS		1000u	// the site sends ten grants after a decoded request
+#define P25CALL_RETRIES		8u
+#define P25CALL_PERMIT_MS	400u	// the local talk-permit beep has finished
+#define P25CALL_DRAIN_MS		3000u
+
+static void p25call_start_probe(radio_sm_t *sm)
+{
+	if (board.radio != NULL && board.radio->rx != NULL && sm->p25_cc_hz != 0) {
+		board.radio->rx(sm->p25_cc_hz, sm->view.ch.bw, NULL);
+	}
+	if (board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(true);
+	} else if (board.radio->audio_to_modem != NULL) {
+		board.radio->audio_to_modem(true);
+	}
+	if (board.p25_probe != NULL && board.p25_probe->start != NULL) {
+		(void)board.p25_probe->start();
+	}
+	// The probe's last block is cleared on start; clear the shown grant too so an earlier call cannot match this one.
+	sm->view.p25.valid = false;
+	sm->view.p25.opcode = 0;
+	sm->view.p25.tg = 0;
+	sm->view.p25.vch = 0;
+	sm->view.p25.voice_hz = 0;
+	sm->view.p25.voice_tx_hz = 0;
+	sm->view.p25.source = 0;
+	sm->view.p25.grants = 0;
+	sm->p25_grant_seen = 0;
+}
+
+static void p25call_restore(radio_sm_t *sm, uint32_t now_ms)
+{
+	p25call_start_probe(sm);
+	sm->p25_call = P25CALL_IDLE;
+	sm->view.state = RS_IDLE;
+	sm->view.tx_deny = TXDENY_NONE;
+	sm->view.tx_elapsed_ms = 0;
+	sm->view.tot_warning = false;
+	(void)now_ms;
+	outputs(sm);
+	changed(sm);
+}
+
+static void p25call_abort(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (board.p25_tx != NULL && board.p25_tx->stop != NULL) {
+		board.p25_tx->stop();
+	}
+	p25_tx_voice_stop();
+	p25call_restore(sm, now_ms);
+}
+
+static bool p25call_send_affiliate(void)
+{
+	settings_t st;
+	settings_read(&st);
+	return p25_cc_affiliate_start(&st.p25);
+}
+
+static bool p25call_send_vch(void)
+{
+	settings_t st;
+	settings_read(&st);
+	return p25_cc_voice_request_start(&st.p25);
+}
+
+static void p25call_down(radio_sm_t *sm, uint32_t now_ms)
+{
+	settings_t st;
+
+	if (sm->p25_call == P25CALL_BOOT_AFFIL || sm->p25_call == P25CALL_BOOT_WAIT) {
+		if (board.p25_tx != NULL && board.p25_tx->stop != NULL && sm->p25_call == P25CALL_BOOT_AFFIL) {
+			board.p25_tx->stop();
+		}
+		sm->p25_call = P25CALL_IDLE;
+		sm->p25_boot_affil = false;
+	}
+	settings_read(&st);
+	if (sm->set.tx_inhibit) {
+		deny(sm, TXDENY_INHIBIT);
+		return;
+	}
+	if (sm->batt.level == BATT_CRITICAL) {
+		deny(sm, TXDENY_BATTERY);
+		return;
+	}
+	if (board.p25_tx == NULL || board.p25_probe == NULL || !st.p25.valid) {
+		deny(sm, TXDENY_MODE);
+		return;
+	}
+	end_reception(sm, now_ms);
+#if CONFIG_P25_VOICE
+	if (sm->p25_voice) {
+		p25_voice_stop();
+		sm->p25_voice = false;
+		sm->view.p25.voice = false;
+	}
+#endif
+	// Affiliate before every voice request: a restarted site (or a lost roaming path) forgets the earlier
+	// registration, and its voice grant handler explicitly denies an unaffiliated unit.
+	bool affiliate = true;
+	sm->p25_call = affiliate ? P25CALL_AFFIL : P25CALL_REQUEST;
+	sm->p25_call_deadline_ms = now_ms + (affiliate ? P25CALL_AFFIL_MS : P25CALL_REQUEST_MS);
+	sm->p25_call_voice_hz = 0;
+	sm->p25_tot = false;
+	sm->p25_call_unit = st.p25.unit_id;
+	sm->p25_call_nac = st.p25.nac;
+	sm->p25_call_tg = st.p25.tg;
+	sm->p25_retries = 0;
+
+	// The PHY transmitter refuses while the receive probe owns the modem. The monitor's RF route goes with it.
+	board.p25_probe->stop();
+	if (board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(false);
+	} else if (board.radio->audio_to_modem != NULL) {
+		board.radio->audio_to_modem(false);
+	}
+	bool started = affiliate ? p25call_send_affiliate() : p25call_send_vch();
+	if (!started) {
+		p25call_restore(sm, now_ms);
+		deny(sm, TXDENY_MODE);
+		return;
+	}
+	sm->view.state = RS_TX;
+	sm->view.tx_deny = TXDENY_NONE;
+	sm->view.tx_elapsed_ms = 0;
+	sm->view.last_tx_ms = now_ms != 0 ? now_ms : 1;
+	sm->tx_start_ms = now_ms;
+	sm->tot_warned = false;
+	sm->view.tot_warning = false;
+	outputs(sm);
+	changed(sm);
+}
+
+static void p25call_timeout(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (sm->p25_call == P25CALL_DEREG) {
+		board.p25_tx->stop();
+		p25call_restore(sm, now_ms);
+		sm->power_off_busy = false;
+		return;
+	}
+	if (sm->p25_call == P25CALL_VOICE) {
+		p25_tx_voice_stop();
+		sm->p25_call = P25CALL_DRAIN;
+		sm->p25_call_deadline_ms = now_ms + P25CALL_DRAIN_MS;
+		sm->p25_tot = true;
+		changed(sm);
+		return;
+	}
+	p25call_abort(sm, now_ms);
+	if (sm->ptt) {
+		deny(sm, TXDENY_TIMEOUT);
+	}
+}
+
+static void p25call_boot(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (!sm->p25_boot_affil || sm->p25_affiliated || sm->p25_call != P25CALL_IDLE) {
+		return;
+	}
+	sm->p25_boot_affil = false;
+	board.p25_probe->stop();
+	if (board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(false);
+	} else if (board.radio->audio_to_modem != NULL) {
+		board.radio->audio_to_modem(false);
+	}
+	if (!p25call_send_affiliate()) {
+		p25call_restore(sm, now_ms);
+		return;
+	}
+	sm->p25_call = P25CALL_BOOT_AFFIL;
+	sm->p25_call_deadline_ms = now_ms + P25CALL_AFFIL_MS;
+	sm->view.state = RS_TX;
+	sm->tx_start_ms = now_ms;
+	sm->view.tx_elapsed_ms = 0;
+	sm->view.tx_deny = TXDENY_NONE;
+	outputs(sm);
+	changed(sm);
+}
+
+static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
+{
+	// The generic TX timer and its time-out: the P25 branch returned before them, so the elapsed time stayed 0.
+	tx_timer(sm, now_ms);
+	if (sm->view.tot_s != 0 && sm->view.tx_elapsed_ms >= (uint32_t)sm->view.tot_s * 1000u) {
+		p25call_timeout(sm, now_ms);
+		return;
+	}
+	switch (sm->p25_call) {
+	case P25CALL_BOOT_AFFIL:
+		if (!board.p25_tx->active()) {
+			p25call_start_probe(sm);
+			sm->p25_call = P25CALL_BOOT_WAIT;
+			sm->p25_call_deadline_ms = now_ms + P25CALL_AFFIL_SETTLE_MS;
+			sm->p25_affiliated = 1;
+			changed(sm);
+		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			p25call_restore(sm, now_ms);
+		}
+		break;
+	case P25CALL_BOOT_WAIT:
+		if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			p25call_restore(sm, now_ms);	// back to the control channel; no PTT was involved
+		}
+		break;
+	case P25CALL_AFFIL:
+		if (!board.p25_tx->active()) {
+			p25call_start_probe(sm);
+			sm->p25_call = P25CALL_AFFIL_WAIT;
+			sm->p25_call_deadline_ms = now_ms + P25CALL_AFFIL_SETTLE_MS;
+			sm->p25_affiliated = 1;
+			changed(sm);
+		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			p25call_abort(sm, now_ms);
+			beep(sm, BEEP_TX_DENY);
+		}
+		break;
+	case P25CALL_AFFIL_WAIT:
+		if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			board.p25_probe->stop();
+			if (board.radio->audio_to_modem_data != NULL) {
+				board.radio->audio_to_modem_data(false);
+			} else if (board.radio->audio_to_modem != NULL) {
+				board.radio->audio_to_modem(false);
+			}
+			if (!p25call_send_vch()) {
+				p25call_restore(sm, now_ms);
+				beep(sm, BEEP_TX_DENY);
+			} else {
+				sm->p25_call = P25CALL_REQUEST;
+				sm->p25_call_deadline_ms = now_ms + P25CALL_REQUEST_MS;
+				changed(sm);
+			}
+		}
+		break;
+	case P25CALL_REQUEST:
+		if (!board.p25_tx->active()) {
+			p25call_start_probe(sm);
+			sm->p25_call = P25CALL_GRANT;
+			sm->p25_call_deadline_ms = now_ms + P25CALL_GRANT_MS;
+			changed(sm);
+		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			p25call_abort(sm, now_ms);
+			beep(sm, BEEP_TX_DENY);
+		}
+		break;
+	case P25CALL_GRANT: {
+		if (radio_p25_publish(&sm->view.p25)) {
+			changed(sm);
+		}
+		const radio_p25_view_t *p = &sm->view.p25;
+		bool grant = p->valid && p->opcode == 0x00 && p->voice_hz != 0 &&
+			(p->source == 0u || p->source == sm->p25_call_unit) &&
+			(p->tg == 0u || p->tg == sm->p25_call_tg);
+		if (grant) {
+			uint32_t hz = p->voice_tx_hz != 0 ? p->voice_tx_hz : p->voice_hz;
+			board.p25_probe->stop();
+			if (board.radio->audio_to_modem_data != NULL) {
+				board.radio->audio_to_modem_data(false);
+			} else if (board.radio->audio_to_modem != NULL) {
+				board.radio->audio_to_modem(false);
+			}
+			sm->p25_call_voice_hz = hz;
+			sm->p25_call = P25CALL_PERMIT;
+			sm->p25_call_deadline_ms = now_ms + P25CALL_PERMIT_MS;
+			sm->view.state = RS_TX;
+			sm->tx_start_ms = now_ms;
+			sm->view.tx_elapsed_ms = 0;
+			beep(sm, BEEP_TX_PERMIT);
+			changed(sm);
+		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			if (sm->p25_retries < P25CALL_RETRIES) {
+				sm->p25_retries++;
+				board.p25_probe->stop();
+				if (board.radio->audio_to_modem_data != NULL) {
+					board.radio->audio_to_modem_data(false);
+				} else if (board.radio->audio_to_modem != NULL) {
+					board.radio->audio_to_modem(false);
+				}
+				if (!p25call_send_vch()) {
+					p25call_restore(sm, now_ms);
+					beep(sm, BEEP_TX_DENY);
+				} else {
+					sm->p25_call = P25CALL_REQUEST;
+					sm->p25_call_deadline_ms = now_ms + P25CALL_REQUEST_MS;
+					changed(sm);
+				}
+			} else {
+				p25call_restore(sm, now_ms);
+				beep(sm, BEEP_TX_DENY);
+			}
+		}
+		break;
+	}
+	case P25CALL_PERMIT:
+		if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			if (p25_tx_voice_start(sm->p25_call_voice_hz, sm->p25_call_nac, sm->p25_call_tg,
+					       sm->p25_call_unit, true)) {
+				sm->p25_call = P25CALL_VOICE;
+				sm->view.state = RS_TX;
+				changed(sm);
+			} else {
+				p25call_restore(sm, now_ms);
+				beep(sm, BEEP_TX_DENY);
+			}
+		}
+		break;
+	case P25CALL_VOICE:
+		if (!sm->ptt) {
+			p25_tx_voice_stop();
+			sm->p25_call = P25CALL_DRAIN;
+			sm->p25_call_deadline_ms = now_ms + P25CALL_DRAIN_MS;
+			changed(sm);
+		} else if (!p25_tx_voice_active()) {
+			p25call_restore(sm, now_ms);
+		}
+		break;
+	case P25CALL_DEREG:
+		if (!board.p25_tx->active() || (int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			if (board.p25_tx->active()) {
+				board.p25_tx->stop();
+			}
+			p25call_restore(sm, now_ms);
+			sm->p25_affiliated = 0;	// the site has dropped us
+			sm->power_off_busy = false;
+		}
+		break;
+	case P25CALL_DRAIN:
+		if (!p25_tx_voice_active() || (int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
+			bool tot = sm->p25_tot;
+			p25call_restore(sm, now_ms);
+			if (tot) {
+				sm->p25_tot = false;
+				if (sm->ptt) {
+					deny(sm, TXDENY_TIMEOUT);
+				}
+			}
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+static bool p25call_power_off(radio_sm_t *sm, uint32_t now_ms)
+{
+	settings_t st;
+
+	if (!sm->p25 || !sm->p25_affiliated || board.p25_tx == NULL) {
+		return false;
+	}
+	if (sm->p25_call != P25CALL_IDLE) {
+		p25call_abort(sm, now_ms);
+	}
+	settings_read(&st);
+	board.p25_probe->stop();
+	if (board.radio->audio_to_modem_data != NULL) {
+		board.radio->audio_to_modem_data(false);
+	} else if (board.radio->audio_to_modem != NULL) {
+		board.radio->audio_to_modem(false);
+	}
+	if (!p25_cc_deregister_start(&st.p25)) {
+		p25call_restore(sm, now_ms);
+		return false;
+	}
+	sm->p25_call = P25CALL_DEREG;
+	sm->p25_call_deadline_ms = now_ms + 5000u;
+	sm->view.state = RS_TX;
+	sm->tx_start_ms = now_ms;
+	sm->view.tx_elapsed_ms = 0;
+	sm->view.tx_deny = TXDENY_NONE;
+	sm->power_off_busy = true;
+	outputs(sm);
+	changed(sm);
+	return true;
+}
+
+static void p25call_release(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (sm->p25_call == P25CALL_IDLE) {
+		return;
+	}
+	if (sm->p25_call == P25CALL_VOICE) {
+		p25_tx_voice_stop();
+		sm->p25_call = P25CALL_DRAIN;
+		sm->p25_call_deadline_ms = now_ms + P25CALL_DRAIN_MS;
+		changed(sm);
+		return;
+	}
+	if (sm->p25_call == P25CALL_DRAIN) {
+		return;
+	}
+	p25call_abort(sm, now_ms);
+}
+#endif
+
 static void ptt_down(radio_sm_t *sm, uint32_t now_ms)
 {
 	if (sm->ptt) {
@@ -3709,6 +4122,21 @@ static void ptt_down(radio_sm_t *sm, uint32_t now_ms)
 		scan_stop(sm, !on_signal, now_ms);
 	}
 #endif
+#if CONFIG_P25_TX && CONFIG_P25
+	if (!sm->p25) {
+		settings_t pst;
+		settings_read(&pst);
+		if (pst.p25.valid && pst.p25.cc_hz != 0 && board.p25_probe != NULL) {
+			p25_enter(sm, now_ms);	// before PTT: p25_enter refuses while ptt is set
+			sm->p25_boot_affil = false;
+			if (!sm->p25) {
+				sm->ptt = true;
+				deny(sm, TXDENY_MODE);
+				return;
+			}
+		}
+	}
+#endif
 	sm->ptt = true;
 	sm->tot_warned = false;
 	sm->view.tot_warning = false;
@@ -3720,6 +4148,12 @@ static void ptt_down(radio_sm_t *sm, uint32_t now_ms)
 	if (sm->sfr_rpt) {
 		deny(sm, TXDENY_SFR_RPT);	// the repeater keys for the calls it repeats
 		return;
+	}
+#endif
+#if CONFIG_P25_TX && CONFIG_P25
+	if (sm->p25) {
+		p25call_down(sm, now_ms);
+		return;		// the P25 monitor's channel is the system, not the FM channel under it
 	}
 #endif
 	end_reception(sm, now_ms);
@@ -3777,6 +4211,12 @@ static void ptt_release(radio_sm_t *sm, bool roger, uint32_t now_ms)
 	if (sm->host_audio) {
 		roger = false;		// the host sends its own audio, tones included
 	}
+#if CONFIG_P25_TX && CONFIG_P25
+	if (sm->p25 && sm->p25_call != P25CALL_IDLE) {
+		p25call_release(sm, now_ms);
+		return;
+	}
+#endif
 #if CONFIG_DMR
 	if (sm->dmr_running) {
 		dmr_call_ptt(false);
@@ -4137,6 +4577,16 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 #endif
 	scan_stop(sm, false, now_ms);
 	end_reception(sm, now_ms);
+	// The FPP system is the radio's control channel when configured; the current channel only when it is not.
+	uint32_t cc_hz = sm->view.ch.rx_hz;
+	settings_t pst;
+	settings_read(&pst);
+	if (pst.p25.valid && pst.p25.cc_hz != 0) {
+		cc_hz = pst.p25.cc_hz;
+	}
+	if (cc_hz != sm->view.ch.rx_hz && board.radio->rx != NULL) {
+		board.radio->rx(cc_hz, sm->view.ch.bw, NULL);
+	}
 	// The RF chip's discriminator to the modem (the board's data receive table, wide enough for the 4FSK)
 	if (board.radio->audio_to_modem_data != NULL) {
 		board.radio->audio_to_modem_data(true);
@@ -4154,12 +4604,20 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 		return;
 	}
 	memset(&sm->view.p25, 0, sizeof sm->view.p25);
+	sm->view.p25.system_tg = pst.p25.tg;
+	sm->view.p25.system_unit = (uint16_t)pst.p25.unit_id;
+	sm->view.p25.system_cc_hz = pst.p25.cc_hz;
+	sm->view.p25.system_uplink_hz = pst.p25.uplink_hz != 0 ? pst.p25.uplink_hz : cc_hz;
+	sm->p25_affiliated = 0;
 	sm->p25 = true;
 	sm->p25_voice = false;
 	sm->p25_follow = true;
-	sm->p25_cc_hz = sm->view.ch.rx_hz;
+	sm->p25_cc_hz = cc_hz;
 	sm->p25_voice_hz = 0;
 	sm->p25_grant_seen = 0;
+#if CONFIG_P25_TX
+	sm->p25_call = P25CALL_IDLE;
+#endif
 	sm->view.p25.on = true;
 	sm->view.p25.follow = true;
 	sm->view.state = RS_IDLE;
@@ -4172,6 +4630,15 @@ static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
 	if (!sm->p25) {
 		return;
 	}
+#if CONFIG_P25_TX
+	if (sm->p25_call != P25CALL_IDLE) {
+		if (board.p25_tx != NULL && board.p25_tx->stop != NULL) {
+			board.p25_tx->stop();
+		}
+		p25_tx_voice_stop();
+		sm->p25_call = P25CALL_IDLE;
+	}
+#endif
 #if CONFIG_P25_VOICE
 	if (sm->p25_voice) {
 		p25_voice_stop();
@@ -4188,6 +4655,7 @@ static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
 	sm->p25 = false;
 	sm->view.p25.on = false;
 	sm->view.p25.valid = false;
+	sm->p25_boot_affil = false;
 	tune(sm, now_ms);	// the channel again (restores the RF chip's mode too)
 	changed(sm);
 }
@@ -4921,6 +5389,14 @@ void radio_sm_init(radio_sm_t *sm, uint32_t now_ms)
 	} else {
 		tune(sm, now_ms);
 	}
+#if CONFIG_P25_TX && CONFIG_P25
+	// The configured system is the radio's main mode: the P25 monitor starts at boot, so PTT is always P25 and needs
+	// no Tools screen. The FPP entry remains the only place its values are edited.
+	if (st.p25.valid && st.p25.cc_hz != 0 && board.p25_probe != NULL) {
+		p25_enter(sm, now_ms);
+		sm->p25_boot_affil = true;
+	}
+#endif
 	sm->rssi_published = sm->view.rssi_dbm;
 #if CONFIG_APRS
 	aprs_init(now_ms);
@@ -5424,6 +5900,12 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 	case RREQ_POWER_OFF:
 		if (req->arg != 0) {
 			// Still running after all (auto power off with the knob on): back to normal, registration kept
+#if CONFIG_P25_TX && CONFIG_P25
+			if (sm->p25_call == P25CALL_DEREG) {
+				board.p25_tx->stop();
+				p25call_restore(sm, now_ms);
+			}
+#endif
 			sm->power_off_req = false;
 			sm->power_off_busy = false;
 #if CONFIG_DMR_DATA_CORE
@@ -5433,6 +5915,11 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 		}
 		sm->power_off_req = true;
 		sm->power_off_busy = CONFIG_DMR_DATA_CORE;	// data_tick clears it once the deregistration is out
+#if CONFIG_P25_TX && CONFIG_P25
+		if (p25call_power_off(sm, now_ms)) {
+			sm->power_off_busy = true;
+		}
+#endif
 		break;
 	case RREQ_RELOAD:
 #if CONFIG_APRS
@@ -5795,6 +6282,9 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_P25_VOICE
 	shared = shared || p25_voice_running();	// P25 owns the PCM stream: a beep must not stop it on its way out
 #endif
+#if CONFIG_P25_TX
+	shared = shared || p25_tx_voice_active();
+#endif
 	beep_service(shared);
 #endif
 #if CONFIG_VIBRATE
@@ -5877,6 +6367,15 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_P25
 	if (sm->p25) {
 		// The monitor has the receiver: no squelch, scan, DMR or time-out here; the probe decodes in this task.
+#if CONFIG_P25_TX
+		if (sm->p25_call == P25CALL_IDLE) {
+			p25call_boot(sm, now_ms);
+		}
+		if (sm->p25_call != P25CALL_IDLE) {
+			p25call_poll(sm, now_ms);
+			return;
+		}
+#endif
 #if CONFIG_P25_VOICE
 		if (sm->p25_voice) {
 			if (radio_p25_voice_publish(&sm->view.p25)) {

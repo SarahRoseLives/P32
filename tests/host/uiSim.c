@@ -139,6 +139,7 @@ static const struct { const char *name, *script; } gallery[] = {
 	{ "gps_grid", "ok 6 2 4" },
 	{ "hotspot_info", "ok 6 3" },
 	{ "diagnostics", "ok 6 7" },
+	{ "p25_system", "p25 ok 6 down down down down down down down down down down down ok" },	// Tools > P25 system
 	{ "roaming", "ok 6 6 1 wait:4000" },
 	{ "settings", "ok 7" },
 	{ "settings_display", "ok 7 2" },

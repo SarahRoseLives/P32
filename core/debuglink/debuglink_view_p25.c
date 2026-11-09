@@ -14,6 +14,10 @@ void debuglink_view_p25(const radio_view_t *v, dl_text_t *t)
 	dl_text(t, "p25.wacn=%x\np25.sys=%x\np25.rfss=%u\np25.site=%u\np25.tg=%u\np25.vch=%u\n", (unsigned)v->p25.wacn,
 		(unsigned)v->p25.sys, v->p25.rfss, v->p25.site, v->p25.tg, v->p25.vch);
 	dl_text(t, "p25.freq_hz=%u\np25.frames=%u\n", (unsigned)v->p25.freq_hz, (unsigned)v->p25.frames);
+	dl_text(t, "p25.source=%u\np25.voice_tx_hz=%u\n", (unsigned)v->p25.source,
+		(unsigned)v->p25.voice_tx_hz);
+	dl_text(t, "p25.system_cc_hz=%u\np25.system_uplink_hz=%u\np25.system_tg=%u\np25.system_unit=%u\n",
+		(unsigned)v->p25.system_cc_hz, (unsigned)v->p25.system_uplink_hz, v->p25.system_tg, v->p25.system_unit);
 #else
 	(void)v;
 	dl_text(t, "p25.built=0\n");

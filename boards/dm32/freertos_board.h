@@ -10,6 +10,12 @@
 // 1 KB for a moment (core/ui/ui_svc_zone.c). 33 KB keeps about 4.7 KB spare at the most, twice the 2 KB
 // tests/hil/test_task_stacks.py asks for, and gives the rest to main RAM (the air MTU's 64-burst lists took the last
 // 1 KB from 34). The debug link's tasks view reports the least free since start (tasks.heap_min_free)
+#if CONFIG_P25_TX
+// The live P25 encoder needs the reference's 16 KB task stack in addition to the ordinary tasks; keep headroom for a
+// second audio/call task and a zone share while it runs.
+#define configTOTAL_HEAP_SIZE	(52 * 1024)
+#else
 #define configTOTAL_HEAP_SIZE	(33 * 1024)
+#endif
 
 #endif

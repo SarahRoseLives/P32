@@ -454,8 +454,11 @@ UIAPP   := $(UI) $(CORE)/ui/ui_app.c $(CORE)/ui/ui_menus.c $(CORE)/ui/ui_find.c 
 # The About page's data header, as the firmware build makes it (tools/gen_about.py; the STM32F4 list stands in)
 ABOUT_H := out/gen/rfoundry_about.h
 $(shell python3 $(ROOT)/tools/gen_about.py $(ROOT)/AUTHORS $(ROOT)/platform/stm32f4/THIRD_PARTY $(ABOUT_H) >/dev/null)
+# P25 is on so the Tools rows and the P25 system screen are in every UI test: whether a radio has the probe is the
+# "p25" simulator token (tests/host/sim/ui_sim.c)
 UIFLAGS := -std=gnu99 -Wall -Wextra -Wno-unused-parameter -Wshadow -g $(COVFLAGS) $(SANFLAGS) -I$(CORE) -I$(ROOT)/hal -I. -Iout/gen \
-           '-DGFX_FB_BYTES=(320u*320u*2u)' -DGFX_MAX_ROWS=320 -DCONFIG_FONT_XL=1 -DFONT_BOTH -DGFX_INDEXED=1 -DGFX_FIT_TRACE
+           '-DGFX_FB_BYTES=(320u*320u*2u)' -DGFX_MAX_ROWS=320 -DCONFIG_FONT_XL=1 -DFONT_BOTH -DGFX_INDEXED=1 -DGFX_FIT_TRACE \
+           -DCONFIG_P25=1 -DCONFIG_P25_VOICE=1
 UIDEPS  := $(UIAPP) $(ABOUT_H) $(LANG_H) $(wildcard $(CORE)/ui/*.h $(CORE)/ui/fonts/*.inc sim/ui_sim.h)
 TESTS   += uiFlowTest uiFlowTestNoColor uiSim
 
@@ -1295,11 +1298,27 @@ p25TsbkTest: p25TsbkTest.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_tsbk.h
 p25TsbkParseTest: p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_tsbk_parse.h
 	$(CC) $(CFLAGS) -o $@ p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c
 
+# P25 Phase 1 trunked control-channel TSBK encoding and CC frame construction (core/p25/p25_cc_tx)
+TESTS   += p25CcTxTest
+p25CcTxTest: p25CcTxTest.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_cc_tx.h $(CORE)/p25/p25_tsbk.c \
+		$(CORE)/p25/p25_tsbk.h $(CORE)/p25/p25_bch.c $(CORE)/p25/p25_bch.h
+	$(CC) $(CFLAGS) -Werror -o $@ p25CcTxTest.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
+
+# Conventional P25 transmit framing and timing (core/p25/tx): the 36-byte block stream, boundary pacing and aborts
+TESTS   += p25TxTest
+P25TX   := $(CORE)/p25/tx/p25_test_tx.c $(CORE)/p25/tx/p25_live_tx.c $(CORE)/p25/tx/p25_live_frame.c
+p25TxTest: p25TxTest.c $(P25TX) $(CORE)/p25/tx/p25_test_tx.h $(CORE)/p25/tx/p25_live_tx.h \
+		$(CORE)/p25/tx/p25_live_frame.h $(CORE)/p25/tx/p25_test_vectors.h \
+		$(CORE)/p25/tx/p25_interleave.h $(CORE)/p25/tx/p25_channel_masks.h
+	$(CC) $(CFLAGS) -Werror -o $@ p25TxTest.c $(P25TX)
+
 run: run-p25
-run-p25: p25PhyTest p25TsbkTest p25TsbkParseTest
+run-p25: p25PhyTest p25TsbkTest p25TsbkParseTest p25CcTxTest p25TxTest
 	./p25PhyTest
 	./p25TsbkTest
 	./p25TsbkParseTest
+	./p25CcTxTest
+	./p25TxTest
 
 .PHONY: run-p25
 

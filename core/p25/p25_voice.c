@@ -13,6 +13,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "debuglink/dlog.h"
+#if CONFIG_WATCHDOG
+#include "app/watchdog.h"
+#endif
 #include "p25/p25_voice.h"
 #include "p25/p25_demod.h"
 #include "p25/p25_rx.h"
@@ -21,8 +24,8 @@
 #include "p25/p25_voice_policy.h"
 #include "p25/p25_imbe.h"
 
-#define P25_VOICE_PCM_FRAMES	32u	// 640 ms: two LDUs plus jitter
-#define P25_VOICE_PREFILL	16u	// start after ~320 ms so a late LDU never gaps the speaker
+#define P25_VOICE_PCM_FRAMES	48u	// 960 ms: three LDUs plus jitter
+#define P25_VOICE_PREFILL	18u	// start after ~360 ms so a late LDU never gaps the speaker
 #define P25_VOICE_STACK		1536	// words (6 KB): the demodulator, policies and codec nest; stack-check needs 3896 B
 
 static struct {
@@ -40,20 +43,26 @@ static struct {
 	int32_t agc_q8;			// Q8 gain, 256 = unity
 	TaskHandle_t task;
 	uint32_t samples, units, voices, corrected, underruns, overflows, accepted, repeated, muted;
+	uint32_t max_push_us, max_frame_us, resets;
 	uint16_t f_nac, f_tg;		// grant filter (0 = any)
 	bool filter;
 	volatile bool ended;		// a terminator was seen
+	bool agc_off;		// play the codec output as-is (default: no boost)
+	uint32_t logged;
 	uint32_t started_ms, last_voice_ms;
 	uint16_t peak;
 } v;
 
 // DC blocker and AGC/limiter: the fixed-point decoder's output is quiet (peak a few hundred for speech), so boost
 // it to a steady level and saturate instead of clipping. The gate keeps codec idle noise from being amplified.
-#define P25_AGC_TARGET		12000
-#define P25_AGC_GATE		24
-#define P25_AGC_MAX_Q8		8192	// 32x
+#define P25_AGC_TARGET		9000
+#define P25_AGC_GATE		32
+#define P25_AGC_MAX_Q8		3072	// 12x: the codec is quiet, but 32x amplifies its noise
 static void audio_process(int16_t pcm[P25_IMBE_SAMPLES])
 {
+	if (v.agc_off) {
+		return;	// reference-like: no DC blocker, AGC or gate
+	}
 	int32_t tmp[P25_IMBE_SAMPLES];
 	int32_t peak = 0;
 
@@ -77,11 +86,11 @@ static void audio_process(int16_t pcm[P25_IMBE_SAMPLES])
 		int32_t desired = (P25_AGC_TARGET << 8) / v.env;
 		if (desired < 256) desired = 256;
 		if (desired > P25_AGC_MAX_Q8) desired = P25_AGC_MAX_Q8;
-		v.agc_q8 += (desired - v.agc_q8) >> 4;	// ~320 ms in either direction
+		v.agc_q8 += (desired - v.agc_q8) >> 5;	// ~640 ms: syllables do not pump the gain
 	} else {
 		v.agc_q8 += (256 - v.agc_q8) >> 6;
 	}
-	if (peak < 16) {
+	if (peak < 32) {
 		memset(pcm, 0, P25_IMBE_SAMPLES * sizeof(int16_t));	// idle: never amplify codec noise
 		return;
 	}
@@ -151,6 +160,7 @@ static void on_frame(const p25_rx *f, void *ctx)
 	v.units++;
 	event = p25_receive_update(&v.call, f->nac, f->duid, &meta, valid, hal_micros());
 	if (event.reset) {
+		v.resets++;
 		p25_imbe_reset();
 		p25_voice_policy_init(&v.quality);
 		v.hp_x1 = v.hp_y1 = 0;
@@ -160,7 +170,7 @@ static void on_frame(const p25_rx *f, void *ctx)
 		v.starved = 0;
 	}
 	if (event.discard) {
-		v.head = v.tail;	// a new/encrypted/unknown call never keeps old speech queued
+		v.head = v.tail;
 		v.playing = false;
 		v.starved = 0;
 	}
@@ -181,7 +191,23 @@ static void on_frame(const p25_rx *f, void *ctx)
 		}
 		p25_voice_action action = p25_voice_policy_frame(&v.quality, bits, quality.e0, quality.et);
 		if (action == P25_VOICE_ACCEPT) {
+			uint32_t t0 = hal_micros();
 			p25_imbe_decode(bits, pcm);
+			uint32_t dt = hal_micros() - t0;
+			if (dt > v.max_frame_us) {
+				v.max_frame_us = dt;
+			}
+			if (v.logged < 6u) {
+				int16_t pk = 0;
+				for (unsigned j = 0; j < P25_IMBE_SAMPLES; j++) {
+					int16_t a = pcm[j] < 0 ? (int16_t)-pcm[j] : pcm[j];
+					if (a > pk) pk = a;
+				}
+				dlog("p25v cw %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x pk %u et %u", bits[0], bits[1],
+				     bits[2], bits[3], bits[4], bits[5], bits[6], bits[7], bits[8], bits[9], bits[10],
+				     (unsigned)pk, quality.et);
+				v.logged++;
+			}
 			audio_process(pcm);
 			memcpy(v.last, pcm, sizeof v.last);
 			v.accepted++;
@@ -202,6 +228,7 @@ static void on_frame(const p25_rx *f, void *ctx)
 		pcm_push(pcm);
 		v.voices++;
 		v.corrected += quality.et;
+		vTaskDelay(1);	// one yield per codec frame: bounds the burst without slowing the demod
 	}
 }
 
@@ -216,7 +243,15 @@ static void decode_task(void *arg)
 		if (n) {
 			v.samples += n;
 			for (uint16_t i = 0; i < n && v.running; i++) {
+				uint32_t t0 = hal_micros();
 				p25_demod_push(&v.demod, samples[i], on_frame, NULL);
+				uint32_t dt = hal_micros() - t0;
+				if (dt > v.max_push_us) {
+					v.max_push_us = dt;
+				}
+				if ((i & 31u) == 31u) {
+					vTaskDelay(1);
+				}
 			}
 		}
 		// Yield every chunk: the demodulator's sync search is CPU heavy and must not starve the watchdog feeder
@@ -239,6 +274,7 @@ static bool start_common(uint16_t nac, uint16_t tg)
 		return false;
 	}
 	memset(&v, 0, sizeof v);
+	v.agc_off = false;
 	p25_demod_init(&v.demod);
 	p25_receive_reset(&v.call);
 	p25_voice_policy_init(&v.quality);
@@ -268,6 +304,16 @@ static bool start_common(uint16_t nac, uint16_t tg)
 	}
 	dlog("p25v start");
 	return true;
+}
+
+void p25_voice_set_agc(bool on)
+{
+	v.agc_off = !on;
+}
+
+bool p25_voice_agc(void)
+{
+	return !v.agc_off;
 }
 
 bool p25_voice_start(void)
@@ -316,8 +362,9 @@ void p25_voice_stop(void)
 		vTaskDelete(v.task);
 		v.task = NULL;
 	}
-	dlog("p25v stop n %u v %u over %u under %u", (unsigned)v.units, (unsigned)v.voices,
-	     (unsigned)v.overflows, (unsigned)v.underruns);
+	dlog("p25v stop n %u v %u a %u r %u m %u res %u und %u ov %u", (unsigned)v.units,
+	     (unsigned)v.voices, (unsigned)v.accepted, (unsigned)v.repeated, (unsigned)v.muted, (unsigned)v.resets,
+	     (unsigned)v.underruns, (unsigned)v.overflows);
 }
 
 bool p25_voice_running(void)
@@ -334,6 +381,14 @@ void p25_voice_stats(p25_voice_stats_t *out)
 	out->repeated = v.repeated;
 	out->muted = v.muted;
 	out->peak = v.peak;
+	out->resets = v.resets;
+	out->drops = (board.p25_probe != NULL && board.p25_probe->audio_dropped != NULL)
+		? board.p25_probe->audio_dropped() : 0;
+	out->max_push_us = v.max_push_us;
+	out->resets = v.resets;
+	out->drops = (board.p25_probe != NULL && board.p25_probe->audio_dropped != NULL)
+		? board.p25_probe->audio_dropped() : 0;
+	out->max_frame_us = v.max_frame_us;
 	out->units = v.units;
 	out->voices = v.voices;
 	out->corrected = v.corrected;

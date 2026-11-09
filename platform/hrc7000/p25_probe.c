@@ -359,11 +359,12 @@ static uint8_t read_block(uint32_t *ty, uint32_t *ps, uint32_t *list, uint32_t *
 // the system interrupt bit 14 says a half is ready. A ring of four halves (128 ms) so a software demodulator can keep
 // up; the p25audio command drains it too. The caller tunes the radio and leaves it idle, then the board's
 // audio_to_modem routes the RF chip's discriminator into the modem.
-#define P25_AUDIO_HALVES	8u
+#define P25_AUDIO_HALVES	16u
 #define P25_AUDIO_SAMPLES	(P25_AUDIO_HALVES * HRC7000_FM_RX_SAMPLES)
 
 static int16_t p25_audio[P25_AUDIO_SAMPLES];
-static volatile uint16_t p25_audio_head, p25_audio_tail, p25_audio_dropped;
+static volatile uint16_t p25_audio_head, p25_audio_tail;
+static volatile uint32_t p25_audio_dropped;
 static uint32_t p25_saved_fm_bw, p25_saved_fm_dev;
 static bool p25_saved_valid;
 
@@ -378,6 +379,11 @@ static void audio_half(void)
 	if (hrc7000_fm_rx_audio(modem, &p25_audio[head & (P25_AUDIO_SAMPLES - 1u)]) != 0) {
 		p25_audio_head = (uint16_t)(head + HRC7000_FM_RX_SAMPLES);
 	}
+}
+
+static uint32_t audio_dropped(void)
+{
+	return p25_audio_dropped;
 }
 
 static bool audio_start(void)
@@ -495,6 +501,8 @@ static bool last_cc(hal_p25_cc_t *out)
 					last.freq_hz = cc.freq_hz;
 				}
 				last.voice_hz = cc.voice_hz;
+				last.voice_tx_hz = cc.voice_tx_hz;
+				last.source = cc.source;
 				last.grants = cc.grant_seq;
 			}
 			frames++;
@@ -513,6 +521,15 @@ static bool last_cc(hal_p25_cc_t *out)
 	return last.valid;
 }
 
+bool hrc_p25_probe_active(void)
+{
+#if CONFIG_P25_PROBE || CONFIG_P25_VOICE
+	return on || p25_saved_valid;
+#else
+	return on;
+#endif
+}
+
 const hal_p25_probe_t hrc_p25_probe = {
 	.start = start,
 	.start_ex = start_cfg,
@@ -522,6 +539,7 @@ const hal_p25_probe_t hrc_p25_probe = {
 	.audio_start = audio_start,
 	.audio_stop = audio_stop,
 	.audio_read = audio_read,
+	.audio_dropped = audio_dropped,
 #endif
 	.last_cc = last_cc,
 };

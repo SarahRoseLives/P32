@@ -47,6 +47,7 @@
 //   splash              draw the boot screen (put it last: nothing redraws over it)
 //   splash:loader       the same splash as the stub entry draws it, while the flashing tools have the radio
 //   shot:<name>         save the screen (sim_set_shot_dir)
+//   p25                 the board has the P25 probe (Tools > P25, P25 voice and P25 system)
 //   expect:<key>=<value>   check (see check()); value "*" = anything; shows=<text> / hides=<text>: a drawn
 //                          text contains it / none does; markafter=<text> / nomarkafter=<text>: a mark is drawn just right of it / none is;
 //                          centered=<text>: a text that contains it is centered on the screen, to a character cell
@@ -69,6 +70,9 @@
 #include "hotspot/hotspot.h"
 #include "stubentry/stub_entry.h"
 #include "ui/ui_svc_aprs.h"
+#if CONFIG_P25
+#include "settings/settings.h"
+#endif
 
 #define TICK_MS		50
 #define PRESS_MS	150
@@ -1307,6 +1311,57 @@ static bool soft_volume;
 static bool bcast_rx;
 // A reference trim (Settings > Advanced > Freq trim) only with the "trim" token, the same way
 static bool ref_trim;
+
+#if CONFIG_P25
+// The P25 probe (Tools > P25 and P25 system) only with the "p25" token, the same way. The screens draw the radio's
+// view, and the system screen keeps its values here since the host has no settings store
+static bool p25_start(void) { return true; }
+static void p25_stop(void) { }
+static bool p25_audio_start(void) { return true; }
+static void p25_audio_stop(void) { }
+static uint16_t p25_audio_read(int16_t *buf, uint16_t max) { (void)buf; (void)max; return 0; }
+static uint32_t p25_audio_dropped(void) { return 0; }
+static bool p25_last_cc(hal_p25_cc_t *out)
+{
+	memset(out, 0, sizeof *out);
+	out->valid = true;
+	return true;
+}
+static const hal_p25_probe_t sim_p25_probe = {
+	.start = p25_start, .stop = p25_stop, .audio_start = p25_audio_start, .audio_stop = p25_audio_stop,
+	.audio_read = p25_audio_read, .audio_dropped = p25_audio_dropped, .last_cc = p25_last_cc,
+};
+
+static settings_t sim_settings;
+settings_t *settings_begin(void) { return &sim_settings; }
+void settings_end(uint32_t now) { (void)now; }
+void settings_read(settings_t *out) { *out = sim_settings; }
+
+static void sim_settings_defaults(void)
+{
+	memset(&sim_settings, 0, sizeof sim_settings);
+	sim_settings.p25.cc_hz = 438800000;
+	sim_settings.p25.uplink_hz = 433800000;
+	sim_settings.p25.wacn = 0xBEEF0;
+	sim_settings.p25.unit_id = 2;
+	sim_settings.p25.sys = 0x123;
+	sim_settings.p25.nac = 0x123;
+	sim_settings.p25.tg = 256;
+	sim_settings.p25.rfss = 1;
+	sim_settings.p25.site = 1;
+	sim_settings.p25.band_auto = 1;
+	sim_settings.p25.valid = 1;
+	strcpy(sim_settings.p25.name, "438.800");
+}
+
+// The radio core's P25 requests and the voice codec's AGC: the UI drives them, the simulator doesn't need them
+void radio_req_p25(bool on) { (void)on; }
+void radio_req_p25_follow(bool on) { (void)on; }
+void radio_req_p25_voice(bool on) { (void)on; }
+void p25_voice_set_agc(bool on) { (void)on; }
+bool p25_voice_agc(void) { return false; }
+#endif
+
 uint32_t ui_svc_features(void)
 {
 	return 0xFFFFFFFFu & ~(soft_volume ? 0 : UI_FEAT_VOLUME) & ~(bcast_rx ? 0 : UI_FEAT_BCAST) &
@@ -1937,6 +1992,10 @@ void sim_reset(const sim_geom_t *g, sim_map_t map)
 	board.side_key_names = side_names;
 	board.side_key_count = maps[map].side_n;
 	board.caps = maps[map].caps;
+#if CONFIG_P25
+	board.p25_probe = NULL;
+	sim_settings_defaults();
+#endif
 	power.supply_mv = NULL;
 	cur_map = map;
 	gfx_init(&disp);
@@ -2715,6 +2774,13 @@ static bool run_token(char *t, char *err, size_t len)
 		ref_trim = true;
 		return true;
 	}
+#if CONFIG_P25
+	if (strcmp(t, "p25") == 0) {		// this radio has the P25 probe (board.p25_probe)
+		board.p25_probe = &sim_p25_probe;
+		advance(200);
+		return true;
+	}
+#endif
 	if (strcmp(t, "contacts") == 0 && arg != NULL) {	// contacts:full, contacts:<n>
 		unsigned long n = strcmp(arg, "full") == 0 ? CODEPLUG_CONTACTS_MAX : strtoul(arg, NULL, 10);
 		if (n == 0 || n > CODEPLUG_CONTACTS_MAX) {

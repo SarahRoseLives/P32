@@ -20,6 +20,9 @@ bool p25_voice_start(void);
 bool p25_voice_start_filtered(uint16_t nac, uint16_t tg);
 // True once the call ended (TDU/TDULC) or went quiet; the caller stops the receiver and returns to the control channel
 bool p25_voice_ended(void);
+// Level processing (DC blocker, AGC, noise gate): off plays the codec output as-is (reference behavior)
+void p25_voice_set_agc(bool on);
+bool p25_voice_agc(void);
 void p25_voice_stop(void);
 bool p25_voice_running(void);
 
@@ -29,6 +32,9 @@ typedef struct {
 	uint32_t acquisitions;	// synced preambles
 	uint32_t accepted, repeated, muted;	// voice-policy actions
 	uint16_t peak;		// largest |sample| of an accepted frame
+	uint32_t max_push_us, max_frame_us;	// worst demodulator sample and codec frame (diagnostics)
+	uint32_t resets;	// codec resets (new calls / metadata changes)
+	uint32_t drops;	// discriminator halves dropped because the decoder fell behind
 	uint32_t units;		// complete validated frames
 	uint32_t voices;	// decoded voice payloads
 	uint32_t corrected;	// Golay/Hamming corrections summed

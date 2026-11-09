@@ -165,10 +165,24 @@ endif
 # P25 IMBE voice: the fixed-point vocoder (Pavel Yazev, GPL-3.0-or-later) and the C wrapper/bench. The codec is
 # freestanding C++, built by the same csky-elf toolchain's C++ front end and kept out of LTO (docs/spec/p25.md 6, 9)
 IMBE_DIR := core/p25/imbe
-IMBE_SRC := $(filter-out $(IMBE_DIR)/imbe_vocoder.cc,$(sort $(wildcard $(IMBE_DIR)/*.cc))) core/p25/p25_imbe_codec.cpp
+# The encoder and its fixed-point helpers are one unity translation unit (encoder_unity.cc) so GCC can inline the
+# inner loops, as the reference does; the remaining files build separately.
+IMBE_UNITY_NAMES := basicop2 math_sub aux_sub dsp_sub dc_rmv pe_lpf pitch_est pitch_ref v_uv_det qnt_sub sa_encode ch_encode encode
+IMBE_SRC := $(filter-out $(IMBE_DIR)/imbe_vocoder.cc $(IMBE_DIR)/encoder_unity.cc $(IMBE_DIR)/imbe_pitch_specialized.cc $(addprefix $(IMBE_DIR)/,$(addsuffix .cc,$(IMBE_UNITY_NAMES))),$(sort $(wildcard $(IMBE_DIR)/*.cc)))
+IMBE_SRC += $(IMBE_DIR)/encoder_unity.cc core/p25/p25_imbe_codec.cpp
 ifeq ($(CONFIG_P25_VOICE),y)
  APP_SRC += core/p25/p25_imbe.c core/p25/p25_voice.c core/p25/p25_demod.c core/p25/p25_rx.c \
 	core/p25/p25_call.c
+endif
+# The P25 PHY transmit test engine: the fixed 36-byte block stream and the HR_C7000 hardware path. Off, neither the
+# platform file nor the debug command is built and every other image is unchanged.
+ifeq ($(CONFIG_P25_TX),y)
+ APP_SRC += core/p25/tx/p25_test_tx.c core/p25/tx/p25_live_tx.c core/p25/tx/p25_live_frame.c \
+	core/p25/p25_tx_voice.c core/p25/p25_cc_tx.c
+else
+ APP_SRC := $(filter-out platform/hrc7000/p25_tx.c core/debuglink/debuglink_p25_tx.c \
+	core/p25/tx/p25_test_tx.c core/p25/tx/p25_live_tx.c core/p25/tx/p25_live_frame.c \
+	core/p25/p25_tx_voice.c core/p25/p25_cc_tx.c,$(APP_SRC))
 endif
 # Zone sharing over DMR data: the record, the sender and the offers (its codeplug side is core/codeplug/zone_import.c)
 ifeq ($(CONFIG_ZONE_SHARE),y)
@@ -354,6 +368,8 @@ $(shell python3 tools/gen_http_assets.py $(if $(filter y,$(CONFIG_NET_HTTP_GZIP)
 endif
 endif
 $(APP_OBJ) $(TP_OBJ): $(BUILD)/flags
+# The software P25 receive path runs at -O3 like the reference (the rest of the app is -Os)
+$(BUILD)/core/p25/p25_demod.o $(BUILD)/core/p25/p25_rx.o $(BUILD)/core/p25/p25_call.o: CFLAGS_APP += -O3
 $(BUILD)/core/hostlink/build_info.o: CFLAGS_APP += -DRFOUNDRY_FEATURES_OFF=\"$(RFOUNDRY_OFF)\" -DRFOUNDRY_PRESET=\"$(RFOUNDRY_PRESET)\"
 $(VERSION_OBJ): $(BUILD)/version
 $(VERSION_OBJ): CFLAGS_APP += -DRFOUNDRY_GIT=\"$(RFOUNDRY_VERSION)\" -DRFOUNDRY_GIT_ID=$(RFOUNDRY_GIT_ID) -DRFOUNDRY_GIT_DIRTY=$(RFOUNDRY_GIT_DIRTY) \
@@ -391,7 +407,7 @@ $(BUILD)/%.o: %.S
 
 # P25 IMBE codec: freestanding C++ (newlib headers only, via the narrow cstdint/cstring shims), no exceptions, RTTI,
 # static guards or LTO. The reference keeps the codec at -O3 while the rest of the app is -Os (docs/spec/p25.md 9)
-IMBE_CXXFLAGS := $(CPUFLAGS) -O3 -g3 -fno-lto -std=gnu++17 -fwrapv -fno-exceptions -fno-rtti -fno-threadsafe-statics \
+IMBE_CXXFLAGS := $(CPUFLAGS) -O3 -DIMBE_PITCH_SPECIALIZE -g3 -fno-lto -std=gnu++17 -fwrapv -fno-exceptions -fno-rtti -fno-threadsafe-statics \
 	-fno-use-cxa-atexit -nostdinc++ -I$(IMBE_DIR)/freestanding -I$(IMBE_DIR) -fno-common -MMD -MP $(STACK_INFO) \
 	$(DEFS) $(INCLUDES)
 $(BUILD)/$(IMBE_DIR)/%.o: $(IMBE_DIR)/%.cc

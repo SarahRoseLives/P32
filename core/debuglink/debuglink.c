@@ -896,6 +896,12 @@ static size_t handle(uint8_t cmd, const uint8_t *req, uint16_t len, uint8_t *out
 #else
 		return status_only(out, DL_ST_UNAVAILABLE);
 #endif
+	case DL_CMD_P25_TX:
+#if CONFIG_P25_TX
+		return debuglink_cmd_p25_tx(req, len, out, cap);
+#else
+		return status_only(out, DL_ST_UNAVAILABLE);
+#endif
 	case DL_CMD_CODEPLUG:
 #if CONFIG_CPS_FAST
 		return cps_fast_cmd(req, len, out, cap, hal_millis());

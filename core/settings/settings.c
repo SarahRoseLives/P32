@@ -28,7 +28,7 @@ _Static_assert(SETTINGS_PAGES <= SETTINGS_PAGES_MAX, "settings_t outgrew its pag
 _Static_assert(sizeof(settings_t) % 4 == 0, "settings_t has tail padding");
 _Static_assert(offsetof(settings_t, dual_b) == SETTINGS_PAGE_BYTES, "page 1 starts at its first field");
 _Static_assert(offsetof(settings_t, ref_trim_ppb) % 2 == 0, "ref_trim_ppb is aligned");
-_Static_assert(sizeof(settings_t) == 392, "settings_t changed size: update docs/spec/settings-store.md 3 and this");
+_Static_assert(sizeof(settings_t) == 452, "settings_t changed size: update docs/spec/settings-store.md 3 and this");
 
 static settings_t live;			// under the quick lock
 static settings_t saved;		// what the newest record holds (or the defaults)
@@ -63,6 +63,18 @@ void settings_defaults(settings_t *s)
 	s->vfo2_power = SETTINGS_UNSET8;
 	s->vfo2_cc = 1;
 	s->vfo2_ts = 1;
+	s->p25.cc_hz = 438800000;
+	s->p25.uplink_hz = 433800000;
+	s->p25.wacn = 0xBEEF0;
+	s->p25.unit_id = 2;
+	s->p25.sys = 0x123;
+	s->p25.nac = 0x123;
+	s->p25.tg = 256;
+	s->p25.rfss = 1;
+	s->p25.site = 1;
+	s->p25.band_auto = 1;
+	s->p25.valid = 1;
+	strcpy(s->p25.name, "438.800");
 }
 
 // Page k of a settings_t: its offset and length
@@ -213,6 +225,19 @@ settings_load_t settings_init(void)
 			}
 		}
 		stats.load = whole ? SETTINGS_LOADED : SETTINGS_UPGRADED;
+	}
+	// One-time correction for the first P25 FPP build: it stored SysID 123 as decimal and the old TG 1
+	// defaults. The development site is SysID 0x123 / TG 256 / uplink 433.800; a user edit to another system
+	// does not match this exact old-default tuple.
+	if (live.p25.cc_hz == 438800000u && live.p25.sys == 123u && live.p25.tg == 1u) {
+		live.p25.sys = 0x123;
+		live.p25.tg = 256;
+		if (live.p25.unit_id == 1u) {
+			live.p25.unit_id = 2;
+		}
+	}
+	if (live.p25.uplink_hz == 0u) {
+		live.p25.uplink_hz = 433800000u;
 	}
 	storage_unlock();
 	saved = live;

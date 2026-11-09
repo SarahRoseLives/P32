@@ -23,6 +23,7 @@
 #include "hal_bcast.h"
 #include "hal_afsk.h"
 #include "hal_p25.h"
+#include "hal_p25_tx.h"
 #include "hal_rx2.h"
 
 typedef struct {
@@ -96,6 +97,8 @@ typedef struct {
 	const hal_afsk_t *afsk;
 	// Optional: the P25 physical-layer receive bench probe (hal_p25.h); NULL when not built or the radio has none
 	const hal_p25_probe_t *p25_probe;
+	// Optional: the P25 physical-layer transmit test engine (hal_p25_tx.h); NULL when not built or the radio has none
+	const hal_p25_tx_t *p25_tx;
 	// Optional, with CAP_GPS: whether the GPS module is there, for radios sold with and without one on the same board
 	// (a G model beside the plain one): true once the module has been heard. NULL = CAP_GPS alone says
 	bool (*gps_present)(void);

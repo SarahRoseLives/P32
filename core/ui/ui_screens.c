@@ -242,6 +242,11 @@ static uint8_t rssi_bars(int16_t dbm)
 // The mode word: AM where an FM channel or the VFO is received in AM (the air band)
 static const char *mode_word(const radio_view_t *v)
 {
+#if CONFIG_P25_TX && CONFIG_P25
+	if (v->p25.on) {
+		return "P25";	// the monitor owns the receiver, even on the Home screen
+	}
+#endif
 	return v->ch.mode == RADIO_MODE_DMR ? "DMR" : v->am ? "AM" : "FM";
 }
 
@@ -852,6 +857,13 @@ static void draw_place(const radio_view_t *v, const ui_state_t *s)
 		// blanks for the rest
 		bool tx = v->state == RS_TX && v->vfo;
 		sb_init(&b, buf, sizeof buf);
+#if CONFIG_P25_TX && CONFIG_P25
+		if (v->p25.on) {
+			uint32_t hz = v->state == RS_TX && v->p25.system_uplink_hz != 0 ? v->p25.system_uplink_hz :
+				(v->p25.system_cc_hz != 0 ? v->p25.system_cc_hz : v->ch.rx_hz);
+			sb_freq(&b, hz);
+		} else
+#endif
 		if (s->entry) {
 			int dec = s->entry_len > UI_ENTRY_MHZ ? s->entry_len - UI_ENTRY_MHZ : 0;
 			int show = dec < 3 ? 3 : dec;
@@ -893,6 +905,24 @@ static void draw_place(const radio_view_t *v, const ui_state_t *s)
 
 static void draw_talk(const radio_view_t *v)
 {
+#if CONFIG_P25_TX && CONFIG_P25
+	if (v->p25.on) {
+		const ui_layout_t *L = &ui_layout;
+		const font_t *f = L->medium;
+		char buf[40], fit[40];
+		sbuf_t b;
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, TR("P25 trunking"));
+		if (v->p25.system_tg != 0) {
+			sb_str(&b, " TG ");
+			sb_u32(&b, v->p25.system_tg, 1);
+		}
+		int x = gfx_text(f, 0, L->talk_y, "PTT" GLYPH_ARROW " ", ui_col.dim);
+		gfx_text_fit(f, buf, gfx_width() - x, fit, sizeof fit);
+		gfx_text(f, x, L->talk_y, fit, ui_col.fg);
+		return;
+	}
+#endif
 #if CONFIG_DMR
 	if (v->ch.mode == RADIO_MODE_DMR) {
 		draw_talk_dmr(v);
@@ -3102,12 +3132,32 @@ void ui_draw_p25(const radio_view_t *v, const ui_state_t *s)
 		sb_u32(&b, p->overflows, 1);
 		gfx_text(f, 0, y, buf, ui_col.dim);
 		y += f->h;
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, "rep ");
+		sb_u32(&b, p->repeated, 1);
+		sb_str(&b, " mut ");
+		sb_u32(&b, p->muted, 1);
+		sb_str(&b, " res ");
+		sb_u32(&b, p->resets, 1);
+		gfx_text(f, 0, y, buf, ui_col.dim);
+		y += f->h;
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, "pk ");
+		sb_u32(&b, p->peak, 1);
+		sb_str(&b, " corr ");
+		sb_u32(&b, p->corrected, 1);
+		sb_str(&b, " drop ");
+		sb_u32(&b, p->drops, 1);
+		gfx_text(f, 0, y, buf, ui_col.dim);
+		y += f->h;
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, "boost ");
+		sb_str(&b, p->boost ? "on" : "off");
 		if (p->voice_hz != 0) {
-			sb_init(&b, buf, sizeof buf);
-			sb_str(&b, "voice ");
+			sb_str(&b, "  voice ");
 			sb_freq(&b, p->voice_hz);
-			gfx_text(f, 0, y, buf, ui_col.dim);
 		}
+		gfx_text(f, 0, y, buf, ui_col.dim);
 		ui_draw_bottom(s, "Back");
 		return;
 	}

@@ -2529,6 +2529,14 @@ msgid "Zones/Chs Received"
 msgstr "Zone/Can. ricevuti"
 
 #: core/ui/ui_menus.c
+msgid "P25 voice"
+msgstr "Voce P25"
+
+#: core/ui/ui_menus.c
+msgid "P25 system"
+msgstr "Sistema P25"
+
+#: core/ui/ui_menus.c
 msgid "Dual watch"
 msgstr "Doppio ascolto"
 
@@ -3089,6 +3097,82 @@ msgid "Edit scan lists in qdmr"
 msgstr "Modifica liste scan in qdmr"
 
 #: core/ui/ui_menus.c
+msgid "NAC is 3 hex digits"
+msgstr "NAC: 3 cifre hex"
+
+#: core/ui/ui_menus.c
+msgid "WACN is 5 hex digits"
+msgstr "WACN: 5 cifre hex"
+
+#: core/ui/ui_menus.c
+msgid "NAC"
+msgstr "NAC"
+
+#: core/ui/ui_menus.c
+msgid "WACN"
+msgstr "WACN"
+
+#: core/ui/ui_menus.c
+msgid "System ID"
+msgstr "ID sistema"
+
+#: core/ui/ui_menus.c
+msgid "Control channel"
+msgstr "Canale di controllo"
+
+#: core/ui/ui_menus.c
+msgid "Uplink"
+msgstr "Collegamento ascendente"
+
+#: core/ui/ui_menus.c
+msgid "RFSS"
+msgstr "RFSS"
+
+#: core/ui/ui_menus.c
+msgid "Site"
+msgstr "Sito"
+
+#: core/ui/ui_menus.c
+msgid "Unit ID"
+msgstr "ID unità"
+
+#: core/ui/ui_menus.c
+msgid "Band plan"
+msgstr "Piano di banda"
+
+#: core/ui/ui_menus.c
+msgid "Send CC test"
+msgstr "Invia test CC"
+
+#: core/ui/ui_menus.c
+msgid "Base"
+msgstr "Base"
+
+#: core/ui/ui_menus.c
+msgid "Spacing"
+msgstr "Spaziatura"
+
+#: core/ui/ui_menus.c
+msgid "Offset"
+msgstr "Scostamento"
+
+#: core/ui/ui_menus.c
+msgid "Manual"
+msgstr "Manuale"
+
+#: core/ui/ui_menus.c
+msgid "Press OK"
+msgstr "Premi OK"
+
+#: core/ui/ui_menus.c
+msgid "Sending CC test burst"
+msgstr "Invio test CC"
+
+#: core/ui/ui_menus.c
+msgid "Cannot transmit"
+msgstr "Impossibile trasmettere"
+
+#: core/ui/ui_menus.c
 msgid "In use"
 msgstr "In uso"
 
@@ -3143,6 +3227,10 @@ msgstr "ROAM"
 #: core/ui/ui_screens.c
 msgid "Step "
 msgstr "Passo "
+
+#: core/ui/ui_screens.c
+msgid "P25 trunking"
+msgstr "Trunking P25"
 
 #: core/ui/ui_screens.c
 msgid "DMR: not in this build"

@@ -13,8 +13,11 @@
 #if CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
 void hrc_p25_probe_attach(hrc7000_t *modem);
 extern const hal_p25_probe_t hrc_p25_probe;
+// True while the PHY receive probe or its discriminator capture holds the modem (the P25 transmit test refuses then)
+bool hrc_p25_probe_active(void);
 #else
 static inline void hrc_p25_probe_attach(hrc7000_t *modem) { (void)modem; }
+static inline bool hrc_p25_probe_active(void) { return false; }
 #endif
 
 #endif

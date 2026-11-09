@@ -21,6 +21,12 @@
 #include "hostlink/hostlink.h"
 #endif
 #include "rfoundry_about.h"
+#if CONFIG_P25
+#include "settings/settings.h"
+#endif
+#if CONFIG_P25_TX
+#include "p25/p25_tx_voice.h"
+#endif
 #if CONFIG_SFR
 #include "dmr/sfr.h"
 #endif
@@ -2551,13 +2557,22 @@ static uint8_t text_idx;
 static uint32_t text_ms;
 enum { TEXT_UPPER, TEXT_DIGITS, TEXT_LOWER, TEXT_MODES };	// the order # cycles through
 static uint8_t text_mode;
+static const char *text_heading = TRN("Name");	// the title, the field being typed
+static ui_scr_def_t text_screen;		// defined below; its prefix follows text_heading
 
-static void ui_text_open(char *target, uint8_t max)
+static void ui_text_open_as(char *target, uint8_t max, const char *heading)
 {
 	text_target = target;
 	text_done = NULL;
 	text_max = max < CODEPLUG_NAME_LEN ? max : CODEPLUG_NAME_LEN;
+	text_heading = heading;
+	text_screen.prefix = text_heading;
 	ui_push(SCR_TEXT, 0);
+}
+
+static void ui_text_open(char *target, uint8_t max)
+{
+	ui_text_open_as(target, max, TRN("Name"));
 }
 
 static void text_enter(void)
@@ -2694,7 +2709,7 @@ static const char *text_title(void)
 	return modes[text_mode];
 }
 
-static const ui_scr_def_t text_screen = {
+static ui_scr_def_t text_screen = {
 	.name = "text", .flags = SF_LIST, .prefix = TRN("Name"), .title = text_title,
 	.hint = TRN(TEXT_ALT_OPEN "Back delete  # ABC/123/abc  OK keep" TEXT_ALT_NEXT "Back del  # mode  OK" TEXT_ALT_CLOSE),
 	.count = text_count, .item = text_item, .key = text_key_fn, .enter = text_enter,
@@ -4568,7 +4583,7 @@ void ui_crash_tick(uint32_t now_ms)
 // user guide) is the same everywhere. The one a radio may not have (Battery) is last, so no radio has a gap; a build
 // without diagnostics skips 7
 enum { T_SCAN, T_POSITION, T_HOTSPOT, T_USB_NET, T_SFR, T_ROAM, T_DIAG, T_APRS, T_BATTERY, T_ZONE_OFFER,
-       T_P25, T_P25_VOICE, T_COUNT };
+       T_P25, T_P25_VOICE, T_P25_SYS, T_COUNT };
 
 // A tool this build or radio doesn't have is left out of the list (Battery, Supply on a radio that measures its DC
 // input instead, is left out where the radio measures neither)
@@ -4584,6 +4599,13 @@ static bool tool_shown(uint16_t i)
 	if (i == T_P25_VOICE) {
 #if CONFIG_P25_VOICE
 		return board.p25_probe != NULL && board.p25_probe->audio_start != NULL;
+#else
+		return false;
+#endif
+	}
+	if (i == T_P25_SYS) {
+#if CONFIG_P25
+		return board.p25_probe != NULL;	// the system a radio with the P25 probe stores
 #else
 		return false;
 #endif
@@ -4632,7 +4654,8 @@ static void tools_item(uint16_t row, ui_item_t *it)
 {
 	static const char *const names[] = { TRN("Scan"), TRN("Position"), TRN("Hotspot"), TRN("USB network"),
 					     TRN("Single-freq repeater"), TRN("Roaming"), TRN("Diagnostics"), "APRS",
-					     TRN("Battery"), TRN("Zones/Chs Received"), "P25", TRN("P25 voice") };
+					     TRN("Battery"), TRN("Zones/Chs Received"), "P25", TRN("P25 voice"),
+					     TRN("P25 system") };
 	uint16_t i = tools_row(row);
 	if (i >= T_COUNT)
 		return;
@@ -4735,6 +4758,9 @@ static void tools_select(uint16_t row, bool hold)
 #endif
 #if CONFIG_P25_VOICE
 	case T_P25_VOICE: ui_push(SCR_P25_VOICE, 0); break;
+#endif
+#if CONFIG_P25
+	case T_P25_SYS: ui_push(SCR_P25_SYS, 0); break;
 #endif
 	case T_ZONE_OFFER: ui_push(SCR_OFFER, 0); break;
 	default: break;
@@ -5678,6 +5704,344 @@ static const ui_scr_def_t scan_screen = {
 	.count = scan_count, .item = scan_item, .select = scan_select,
 };
 
+#if CONFIG_P25
+// ======================= P25 system (Tools > P25 system) =======================
+// The system the trunking receiver will follow (settings_t.p25, p25.md 8.1). A list of values: digits type a number
+// on the focused row, OK starts or saves it, BACK takes a digit back; NAC and WACN open the text entry so their
+// hexadecimal letters can be typed. Band plan Auto/Manual flips on OK, and the manual plan's rows show only then.
+
+enum {
+	P25S_CC, P25S_UPLINK, P25S_NAC, P25S_WACN, P25S_SYS, P25S_RFSS, P25S_SITE, P25S_TG, P25S_UNIT, P25S_BAND,
+#if CONFIG_P25_TX
+	P25S_TEST,
+#endif
+	P25S_BASE, P25S_SPACING, P25S_OFFSET, P25S_COUNT
+};
+
+static settings_p25_t p25s;		// the copy on screen
+static uint8_t p25s_edit_row = P25S_COUNT;	// the row whose number is being typed
+static uint32_t p25s_edit_val;
+static uint8_t p25s_edit_len;
+static bool p25s_edit_neg;
+static uint8_t p25s_text_row = P25S_COUNT;	// the row the text entry is for
+static char p25s_text[6];		// five hex digits and a NUL
+
+static void p25s_load(void)
+{
+	settings_t st;
+	settings_read(&st);
+	p25s = st.p25;
+}
+
+static void p25s_save(void)
+{
+	settings_t *st = settings_begin();
+	st->p25 = p25s;
+	settings_end(hal_millis());
+}
+
+static bool p25s_is_hex(uint16_t row) { return row == P25S_NAC || row == P25S_WACN || row == P25S_SYS; }
+
+static bool p25s_is_num(uint16_t row)
+{
+	return (row <= P25S_UNIT && !p25s_is_hex(row)) || row >= P25S_BASE;
+}
+
+static uint32_t p25s_max(uint16_t row)
+{
+	switch (row) {
+	case P25S_SYS: case P25S_RFSS: case P25S_SITE: case P25S_TG: return 0xFFFFu;
+	case P25S_OFFSET: return 2147483647u;
+	default: return 0xFFFFFFFFu;
+	}
+}
+
+// A hexadecimal field into the value's text: three digits for the NAC, five for the WACN
+static void p25s_hex(char *buf, size_t len, uint32_t v, int digits)
+{
+	sbuf_t b;
+	sb_init(&b, buf, len);
+	for (int i = digits - 1; i >= 0; i--)
+		sb_chr(&b, "0123456789ABCDEF"[(v >> (4 * i)) & 0xFu]);
+}
+
+static bool p25s_parse_hex(const char *s, uint32_t *out)
+{
+	uint32_t v = 0;
+	if (*s == 0)
+		return false;
+	for (; *s != 0; s++) {
+		uint8_t d;
+		if (*s >= '0' && *s <= '9')
+			d = (uint8_t)(*s - '0');
+		else if (*s >= 'A' && *s <= 'F')
+			d = (uint8_t)(*s - 'A' + 10);
+		else if (*s >= 'a' && *s <= 'f')
+			d = (uint8_t)(*s - 'a' + 10);
+		else
+			return false;
+		v = v * 16u + d;
+	}
+	*out = v;
+	return true;
+}
+
+static void p25s_text_kept(void)
+{
+	uint8_t row = p25s_text_row;
+	uint32_t v;
+	p25s_text_row = P25S_COUNT;
+	bool ok = p25s_parse_hex(p25s_text, &v);
+	if (row == P25S_NAC) {
+		ok = ok && v <= 0xFFFu;
+		if (ok)
+			p25s.nac = (uint16_t)v;
+	} else if (row == P25S_WACN) {
+		ok = ok && v <= 0xFFFFFu;
+		if (ok)
+			p25s.wacn = v;
+	} else if (row == P25S_SYS) {
+		ok = ok && v <= 0xFFFu;
+		if (ok)
+			p25s.sys = (uint16_t)v;
+	} else {
+		ok = false;
+	}
+	if (!ok) {
+		ui_toast(row == P25S_NAC ? TR("NAC is 3 hex digits") : TR("WACN is 5 hex digits"));
+		return;
+	}
+	p25s_save();
+	ui_toast(TR("Saved"));
+}
+
+static void p25s_text_begin(uint16_t row)
+{
+	p25s_text_row = row;
+	int digits = row == P25S_WACN ? 5 : 3;
+	p25s_hex(p25s_text, sizeof p25s_text,
+		row == P25S_NAC ? p25s.nac : row == P25S_WACN ? p25s.wacn : p25s.sys, digits);
+	ui_text_open_as(p25s_text, (uint8_t)digits,
+		row == P25S_NAC ? TRN("NAC") : row == P25S_WACN ? TRN("WACN") : TRN("System ID"));
+	text_done = p25s_text_kept;
+}
+
+static uint16_t p25s_count(void)
+{
+	return p25s.band_auto ? P25S_BASE : P25S_COUNT;
+}
+
+static void p25s_item(uint16_t i, ui_item_t *it)
+{
+	static const char *const labels[] = {
+		[P25S_CC] = TRN("Control channel"), [P25S_UPLINK] = TRN("Uplink"), [P25S_NAC] = TRN("NAC"), [P25S_WACN] = TRN("WACN"),
+		[P25S_SYS] = TRN("System ID"), [P25S_RFSS] = TRN("RFSS"), [P25S_SITE] = TRN("Site"),
+		[P25S_TG] = TRN("Talkgroup"), [P25S_UNIT] = TRN("Unit ID"), [P25S_BAND] = TRN("Band plan"),
+#if CONFIG_P25_TX
+		[P25S_TEST] = TRN("Send CC test"),
+#endif
+		[P25S_BASE] = TRN("Base"), [P25S_SPACING] = TRN("Spacing"), [P25S_OFFSET] = TRN("Offset"),
+	};
+	str_copy(it->label, sizeof it->label, tr(labels[i]));
+	char buf[24];
+	sbuf_t b;
+	sb_init(&b, buf, sizeof buf);
+	bool editing = p25s_edit_row == i;
+	switch (i) {
+	case P25S_CC:
+		if (editing)
+			sb_u32(&b, p25s_edit_val, 1);
+		else
+			sb_freq(&b, p25s.cc_hz);
+		break;
+	case P25S_UPLINK:
+		if (editing)
+			sb_u32(&b, p25s_edit_val, 1);
+		else
+			sb_freq(&b, p25s.uplink_hz);
+		break;
+	case P25S_NAC:
+		p25s_hex(buf, sizeof buf, p25s.nac, 3);
+		break;
+	case P25S_WACN:
+		p25s_hex(buf, sizeof buf, p25s.wacn, 5);
+		break;
+	case P25S_SYS:
+		p25s_hex(buf, sizeof buf, p25s.sys, 3);
+		break;
+	case P25S_RFSS:
+		sb_u32(&b, editing ? p25s_edit_val : p25s.rfss, 1);
+		break;
+	case P25S_SITE:
+		sb_u32(&b, editing ? p25s_edit_val : p25s.site, 1);
+		break;
+	case P25S_TG:
+		sb_u32(&b, editing ? p25s_edit_val : p25s.tg, 1);
+		break;
+	case P25S_UNIT:
+		sb_u32(&b, editing ? p25s_edit_val : p25s.unit_id, 1);
+		break;
+	case P25S_BAND:
+		sb_str(&b, p25s.band_auto ? TR("Auto") : TR("Manual"));
+		break;
+#if CONFIG_P25_TX
+	case P25S_TEST:
+		str_copy(it->value, sizeof it->value, TR("Press OK"));
+		return;
+#endif
+	case P25S_BASE:
+		if (editing)
+			sb_u32(&b, p25s_edit_val, 1);
+		else
+			sb_freq(&b, p25s.base_hz);
+		break;
+	case P25S_SPACING:
+		sb_u32(&b, editing ? p25s_edit_val : p25s.spacing_hz, 1);
+		sb_str(&b, " Hz");
+		break;
+	case P25S_OFFSET:
+		if (editing) {
+			if (p25s_edit_neg)
+				sb_chr(&b, '-');
+			sb_u32(&b, p25s_edit_val, 1);
+		} else {
+			sb_i32(&b, p25s.offset_hz);
+		}
+		sb_str(&b, " Hz");
+		break;
+	default:
+		break;
+	}
+	if (editing) {
+		if (p25s_edit_len == 0)
+			buf[0] = 0;	// the cursor alone until the first digit
+		sb_init(&b, it->value, sizeof it->value);
+		sb_str(&b, buf);
+		sb_chr(&b, '_');
+		it->flags |= UI_ITEM_EDIT;
+	} else {
+		str_copy(it->value, sizeof it->value, buf);
+	}
+}
+
+static void p25s_commit(uint16_t row)
+{
+	uint32_t v = p25s_edit_val;
+	p25s_edit_row = P25S_COUNT;
+	if (p25s_edit_len == 0)
+		return;		// nothing typed: as it was
+	switch (row) {
+	case P25S_CC: p25s.cc_hz = v; break;
+	case P25S_UPLINK: p25s.uplink_hz = v; break;
+	case P25S_SYS: p25s.sys = (uint16_t)v; break;
+	case P25S_RFSS: p25s.rfss = (uint16_t)v; break;
+	case P25S_SITE: p25s.site = (uint16_t)v; break;
+	case P25S_TG: p25s.tg = (uint16_t)v; break;
+	case P25S_UNIT: p25s.unit_id = v; break;
+	case P25S_BASE: p25s.base_hz = v; break;
+	case P25S_SPACING: p25s.spacing_hz = v; break;
+	case P25S_OFFSET: p25s.offset_hz = p25s_edit_neg ? -(int32_t)v : (int32_t)v; break;
+	default: return;
+	}
+	p25s_save();
+	ui_toast(TR("Saved"));
+}
+
+static bool p25s_key(const input_event_t *ev)
+{
+	bool press = ev->gesture == GESTURE_PRESS || ev->gesture == GESTURE_LONG;
+	uint16_t row = ui_frame()->focus;
+	if (row >= p25s_count())
+		return false;
+	if (ev->action >= ACT_DIGIT_0 && ev->action <= ACT_DIGIT_9 && press) {
+		if (!p25s_is_num(row))
+			return true;	// NAC and WACN are typed in their text entry, OK opens it
+		uint32_t d = (uint32_t)(ev->action - ACT_DIGIT_0);
+		if (p25s_edit_row != row) {
+			p25s_edit_row = (uint8_t)row;
+			p25s_edit_val = 0;
+			p25s_edit_len = 0;
+			p25s_edit_neg = row == P25S_OFFSET && p25s.offset_hz < 0;
+		}
+		uint32_t max = p25s_max(row);
+		if (p25s_edit_val > (max - d) / 10u) {
+			ui_toast(TR("That's the most it can hold"));
+			return true;
+		}
+		p25s_edit_val = p25s_edit_val * 10u + d;
+		p25s_edit_len++;
+		ui_dirty();
+		return true;
+	}
+	if (ev->action == ACT_CONTEXT && press && row == P25S_OFFSET) {
+		if (p25s_edit_row == row) {
+			p25s_edit_neg = !p25s_edit_neg;
+		} else {
+			p25s.offset_hz = -p25s.offset_hz;
+			p25s_save();
+		}
+		ui_dirty();
+		return true;
+	}
+	if (ev->action == ACT_SELECT && press) {
+		if (p25s_edit_row == row) {
+			p25s_commit(row);
+		}
+#if CONFIG_P25_TX
+		else if (row == P25S_TEST) {
+			if (p25_cc_burst_start(&p25s, 60)) {
+				ui_toast(TR("Sending CC test burst"));
+			} else {
+				ui_toast(TR("Cannot transmit"));
+			}
+		}
+#endif
+		else if (row == P25S_BAND) {
+			p25s.band_auto = !p25s.band_auto;
+			p25s_save();
+		} else if (p25s_is_hex(row)) {
+			p25s_text_begin(row);
+		} else {
+			p25s_edit_row = (uint8_t)row;	// OK starts a fresh value, as the DMR ID row
+			p25s_edit_val = 0;
+			p25s_edit_len = 0;
+			p25s_edit_neg = row == P25S_OFFSET && p25s.offset_hz < 0;
+		}
+		ui_dirty();
+		return true;
+	}
+	if (ev->action == ACT_BACK && ev->gesture == GESTURE_PRESS && p25s_edit_row == row) {
+		if (p25s_edit_len > 0) {
+			p25s_edit_len--;
+			p25s_edit_val /= 10u;
+		} else {
+			p25s_edit_row = P25S_COUNT;
+		}
+		ui_dirty();
+		return true;
+	}
+	if ((ev->action == ACT_NAV_UP || ev->action == ACT_NAV_DOWN || ev->action == ACT_ENC_STEP) &&
+			p25s_edit_row != P25S_COUNT) {
+		p25s_edit_row = P25S_COUNT;	// another row: what was typed is dropped, as the DMR ID row
+		ui_dirty();
+	}
+	return false;
+}
+
+static void p25s_enter(void)
+{
+	p25s_load();
+	p25s_edit_row = P25S_COUNT;
+	p25s_text_row = P25S_COUNT;
+}
+
+static const ui_scr_def_t p25sys_screen = {
+	.name = "p25sys", .flags = SF_LIST | SF_FIELD, .prefix = TRN("P25 system"),
+	.hint = TRN("0-9 type  OK edit/save  Back"),
+	.count = p25s_count, .item = p25s_item, .key = p25s_key, .enter = p25s_enter,
+};
+#endif
+
 // ======================= Screens with their own drawing =======================
 
 static const ui_scr_def_t home_screen = {
@@ -5794,6 +6158,9 @@ const ui_scr_def_t *const ui_scr[SCR_COUNT] = {
 #endif
 #if CONFIG_P25_VOICE
 	[SCR_P25_VOICE] = &p25v_screen,
+#endif
+#if CONFIG_P25
+	[SCR_P25_SYS] = &p25sys_screen,
 #endif
 	[SCR_ROAM] = &roam_screen, [SCR_APRS] = &ui_aprs_screen, [SCR_APRS_HEARD] = &ui_aprs_heard_screen,
 	[SCR_APRS_POS] = &ui_aprs_pos_screen, [SCR_ABOUT] = &about_screen,

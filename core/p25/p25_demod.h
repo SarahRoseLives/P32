@@ -10,6 +10,8 @@ typedef struct {
     int16_t history[48]; // duplicated, quantized sync history
     unsigned index, filled, quality;
     int32_t offset, gain;
+    int32_t gain_recip; // Q16 reciprocal of |gain| set at sync: one division per acquisition, not per symbol
+    uint8_t acquire_retry; // only retry the sync search every few symbols
     int32_t next_q16;
     int32_t sum, sum_squares;
     int32_t period_q16, previous_value, previous_symbol;

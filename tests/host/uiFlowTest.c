@@ -28,6 +28,8 @@ typedef struct {
 
 #define CALLER	"call:3101234,91,g wait:11000 "
 #define TALK_BACK	"ok 7 3 down down down down down down down down down ok long:back quick 7 ctx 3 5 ok "	// on, and A 3 / B 5
+// Tools > P25 system on a radio with the P25 probe ("p25"): the row after P25 voice
+#define P25_SYS_OPEN	"ok 6 down down down down down down down down down down down ok"
 
 static const flow_t flows[] = {
 	{ "1 next channel", "", "up", "pos=4", 1, false },
@@ -570,6 +572,11 @@ static const flow_t flows[] = {
 	{ "A KISS on USB", "ok 6 8", "up up ok", "aprs_kiss=1", 3, false },
 	{ "A stations heard", "", "ok 6 8 up ok", "screen=aprs-heard count=2", 5, false },
 	{ "A not in this build", "aprs:off", "ok 6 8 2", "toast=APRS:_not aprs_auto=0", 4, false },
+	// P25 system (Tools > P25 system, settings_t.p25): a radio with the P25 probe stores the system it will follow
+	{ "P25 system opens", "p25", P25_SYS_OPEN, "screen=p25sys shows=Control_channel", 14, false },
+	{ "P25 system NAC opens text entry", "p25 " P25_SYS_OPEN, "down down ok", "screen=text shows=NAC", 3, false },
+	{ "P25 system manual band plan rows", "p25 " P25_SYS_OPEN,
+	  "down down down down down down down down down ok down", "screen=p25sys shows=Base", 11, false },
 	// The crash log and its report (docs/spec/crash-log.md): Settings > Advanced > Crash log, after the restart
 	{ "C crash log from Advanced", "crash:on", "ok 7 0 down down down down ok", "screen=crash shows=Fault_3 shows=Crash_Log crash_seen=1",
 	  8, false },

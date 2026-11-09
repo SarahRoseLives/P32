@@ -22,7 +22,10 @@ typedef struct {
 	uint8_t iden_valid;	// bit i: IdenUp channel id i has been seen
 	uint32_t base_hz[16];	// IdenUp base per channel id
 	uint16_t spacing_hz[16];
-	uint32_t voice_hz;	// the last grant's channel on its band plan (0 unknown)
+	int32_t offset_hz[16];	// IdenUp subscriber transmit offset per channel id
+	uint32_t voice_hz;	// the last grant's downlink channel on its band plan (0 unknown)
+	uint32_t voice_tx_hz;	// the last grant's subscriber transmit channel (0 unknown)
+	uint32_t source;	// the last grant's source unit
 	uint32_t grant_seq;	// grants parsed so far (the radio follows a change)
 } p25_cc_t;
 

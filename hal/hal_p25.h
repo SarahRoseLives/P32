@@ -25,7 +25,9 @@ typedef struct {
 	uint16_t vch;
 	uint32_t freq_hz;	// from an IdenUp
 	uint32_t blocks;	// PHY blocks captured since start
-	uint32_t voice_hz;	// the last grant's voice channel (band plan applied; 0 unknown)
+	uint32_t voice_hz;	// the last grant's downlink voice channel (band plan applied; 0 unknown)
+	uint32_t voice_tx_hz;	// the last grant's subscriber transmit channel (0 unknown)
+	uint32_t source;	// the last grant's source unit
 	uint32_t grants;	// grants seen since start (a change means a new grant)
 } hal_p25_cc_t;
 
@@ -48,6 +50,8 @@ typedef struct {
 	bool (*audio_start)(void);
 	void (*audio_stop)(void);
 	uint16_t (*audio_read)(int16_t *buf, uint16_t max);
+	// Optional: halves the ring dropped because the reader fell behind (0 when none)
+	uint32_t (*audio_dropped)(void);
 
 	// Optional (NULL: none): the last decoded control channel, for the monitor screen. Runs the decode in the
 	// caller's task when new blocks have arrived, so it must be called from task context (the radio task's poll).

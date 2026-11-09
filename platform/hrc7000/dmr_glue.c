@@ -35,6 +35,7 @@
 #define DMR_POLL_MS		10
 
 static hrc7000_dmr_t eng;
+static hrc7000_t *modem_dev;
 static const hrc_dmr_board_t *brd;
 static TaskHandle_t task;
 static volatile bool active;
@@ -155,6 +156,7 @@ static void dmr_task(void *arg)
 
 void hrc_dmr_board_init(hrc7000_t *modem, const hrc_dmr_board_t *hooks)
 {
+	modem_dev = modem;
 	brd = hooks;
 	hrc7000_dmr_init(&eng, modem, &ops);
 #if CONFIG_P25_PROBE || CONFIG_P25 || CONFIG_P25_VOICE
@@ -200,7 +202,7 @@ void hrc_dmr_rx_restart(void)
 	hrc7000_dmr_rx_restart(&eng);
 }
 
-#if CONFIG_P25_PROBE || CONFIG_P25 || CONFIG_P25_VOICE
+#if CONFIG_P25_PROBE || CONFIG_P25 || CONFIG_P25_VOICE || CONFIG_P25_TX
 bool hrc_dmr_active(void)
 {
 	return active;
@@ -212,6 +214,29 @@ void hrc_dmr_sys_hook(void (*fn)(uint32_t list))
 	eng.sys_hook = fn;
 	hrc_irq_restore(s);
 	hrc_irq_enable(IRQ_MODEM_SYS, active || fn != NULL || eng.fm_rx != NULL);
+}
+#endif
+
+#if CONFIG_P25_TX
+hrc7000_t *hrc_dmr_modem(void)
+{
+	return modem_dev;
+}
+
+const hrc_dmr_board_t *hrc_dmr_board_hooks(void)
+{
+	return brd;
+}
+
+void hrc_dmr_irqs_reinstall(void)
+{
+	hrc_irq_register(IRQ_MODEM_SYS, isr_sys);
+	hrc_irq_register(IRQ_MODEM_TS_TX, isr_ts_tx);
+	hrc_irq_register(IRQ_MODEM_TS_RX, isr_ts_rx);
+	hrc_irq_register(IRQ_MODEM_RF_TX, isr_rftx);
+	hrc_irq_register(IRQ_TIMER3, isr_pa_timer);
+	hrc_irq_enable(IRQ_TIMER3, true);
+	irqs_enable(active);	// the FM receive audio hook keeps the system interrupt when no engine runs
 }
 #endif
 
