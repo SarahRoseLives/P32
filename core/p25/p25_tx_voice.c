@@ -78,8 +78,9 @@ static bool publish_ldu(void)
 	}
 	v.ldus++;
 	v.payload_count = 0;
-	// Six LDUs (about 1.1 s) of headroom before RF, leaving two queue slots so the next publish cannot race the full queue.
-	if (!v.started && v.ldus >= 6u) {
+	// The PHY needs two complete LDUs before it can key without underrunning. Do not add startup LDUs just for margin:
+	// every one adds 180 ms to the time between PTT and the first RF.
+	if (!v.started && v.ldus >= 2u) {
 		if (!board.p25_tx->start_live(hal_micros())) {
 			return false;
 		}
