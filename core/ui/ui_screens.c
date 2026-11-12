@@ -701,10 +701,37 @@ static int draw_wordmark(const font_t *f, int y)
 	return f->h;
 }
 
+// A board may supply its own bitmap boot screen (hal_splash_t): 4 bpp indexed RGB565. Draw it centered; the boot
+// screen is the whole panel on the board that provides one. Skip it on a 1 bpp panel, which has no palette.
+static void draw_boot_bitmap(const hal_splash_t *s)
+{
+	int w = gfx_width(), h = gfx_height();
+	int ox = (w - s->width) / 2, oy = (h - s->height) / 2;
+
+	gfx_clear(s->palette[0]);
+	int x0 = ox < 0 ? 0 : ox, y0 = oy < 0 ? 0 : oy;
+	int x1 = ox + s->width, y1 = oy + s->height;
+	if (x1 > w) x1 = w;
+	if (y1 > h) y1 = h;
+	for (int y = y0; y < y1; y++) {
+		int sy = y - oy;
+		for (int x = x0; x < x1; x++) {
+			int sx = x - ox;
+			uint8_t b = s->pixels[(sy * s->width + sx) >> 1];
+			uint8_t i = (sx & 1) ? (b & 0x0Fu) : (b >> 4);
+			gfx_pixel(x, y, s->palette[i]);
+		}
+	}
+}
+
 void ui_draw_splash(const char *board_name, const char *version, const char *line1, const char *line2)
 {
 	int w = gfx_width(), h = gfx_height();
 	const ui_layout_t *L = &ui_layout;
+	if (board.splash != NULL && gfx_bpp() != 1 && board.splash->width != 0 && board.splash->height != 0) {
+		draw_boot_bitmap(board.splash);
+		return;
+	}
 	gfx_clear(ui_col.bg);
 
 	const char *word = "RadioFoundry";

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The RadioFoundry Authors
 // Baofeng DM-32UV: board descriptor, IO mux and reset-time pin levels, key map
 #include "board.h"
+#include "boot_splash.h"
 #include "config.h"
 #include "dm32.h"
 #include "pins.h"
@@ -81,6 +82,7 @@ const board_t board = {
 	.power_names = power_names,
 	.power_default = 1,	// low
 	.display = &dm32_display,
+	.splash = &dm32_boot_splash,
 	.input = &dm32_input,
 	.keymap = keymap,
 	.keymap_len = sizeof(keymap) / sizeof(keymap[0]),

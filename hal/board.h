@@ -25,6 +25,7 @@
 #include "hal_p25.h"
 #include "hal_p25_tx.h"
 #include "hal_rx2.h"
+#include "hal_splash.h"
 
 typedef struct {
 	uint32_t lo_hz;
@@ -57,6 +58,8 @@ typedef struct {
 	const char *const *power_names;	// short labels for the status line, power_count entries
 	uint8_t power_default;
 	const hal_display_t *display;
+	// Optional: a bitmap boot screen; NULL uses the UI's mark and text
+	const hal_splash_t *splash;
 	const hal_input_t *input;
 	const keymap_entry_t *keymap;
 	uint8_t keymap_len;

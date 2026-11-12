@@ -8,9 +8,11 @@ Switch the radio on with its power switch. On the handhelds this is the volume k
 click. The [Radio reference](23-radios.md) says where the switch is on each radio. The boot screen shows for about a
 second, then the radio opens the Home screen. Keys pressed during the boot screen are ignored.
 
-The boot screen shows the RadioFoundry logo and the two boot text lines from the codeplug. Along the bottom it shows the radio
-model and the firmware version: the release name, such as v26.11 (the year and month it came out), or for a
-build between releases the commit it was built from. The boot text lines are 16 characters each, set in the codeplug, for example your callsign and name.
+A board may show its own bitmap instead of the standard boot screen. The standard screen shows the RadioFoundry
+logo and the two boot text lines from the codeplug. Along the bottom it shows the radio model and the firmware
+version: the release name, such as v26.11 (the year and month it came out), or for a build between releases the
+commit it was built from. The boot text lines are 16 characters each, set in the codeplug, for example your callsign
+and name.
 
 <img src="../ux/screens/160x120i5/boot.png" width="200" alt="Boot screen">
 
