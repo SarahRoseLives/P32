@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 The RadioFoundry Authors
-// Ported from DM32-Multimode for P32 conventional P25 TX.
+// Ported from a GPL-3.0-or-later P25 reference implementation for conventional P25 TX.
 // Generated from pinned OP25 op25_imbe_frame.h; see research/references/UPSTREAMS.json.
 static const uint16_t p25_voice_bits[9][144] = {
 

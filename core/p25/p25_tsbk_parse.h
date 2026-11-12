@@ -25,6 +25,8 @@ typedef struct {
 	int32_t offset_hz[16];	// IdenUp subscriber transmit offset per channel id
 	uint32_t voice_hz;	// the last grant's downlink channel on its band plan (0 unknown)
 	uint32_t voice_tx_hz;	// the last grant's subscriber transmit channel (0 unknown)
+	uint8_t voice_id;	// the last grant's IDEN (its band plan may arrive after the grant)
+	bool voice_grant;	// a group voice grant has been seen (channel number may be 0)
 	uint32_t source;	// the last grant's source unit
 	uint32_t grant_seq;	// grants parsed so far (the radio follows a change)
 } p25_cc_t;

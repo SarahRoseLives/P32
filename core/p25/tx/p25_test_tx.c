@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Copyright (c) 2026 DM32 P25 research contributors
+// Copyright (c) 2026 The P25 research contributors
 // Copyright (c) 2026 The RadioFoundry Authors
-// Ported from DM32-Multimode for P32 conventional P25 TX.
+// Ported from a GPL-3.0-or-later P25 reference implementation for conventional P25 TX.
 #include "p25_test_tx.h"
 #include "p25_test_vectors.h"
 #include <string.h>

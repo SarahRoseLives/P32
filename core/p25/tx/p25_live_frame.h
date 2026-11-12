@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 The RadioFoundry Authors
-// Ported from DM32-Multimode for P32 conventional P25 TX.
+// Ported from a GPL-3.0-or-later P25 reference implementation for conventional P25 TX.
 #ifndef P25_LIVE_FRAME_H
 #define P25_LIVE_FRAME_H
 #include <stdint.h>

@@ -27,6 +27,8 @@ typedef struct {
 	uint32_t blocks;	// PHY blocks captured since start
 	uint32_t voice_hz;	// the last grant's downlink voice channel (band plan applied; 0 unknown)
 	uint32_t voice_tx_hz;	// the last grant's subscriber transmit channel (0 unknown)
+	uint8_t voice_id;	// the last grant's IDEN, from the grant or a later IdenUp
+	bool voice_grant;	// a group voice grant has been seen
 	uint32_t source;	// the last grant's source unit
 	uint32_t grants;	// grants seen since start (a change means a new grant)
 } hal_p25_cc_t;

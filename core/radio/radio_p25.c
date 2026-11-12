@@ -42,14 +42,18 @@ bool radio_p25_publish(radio_p25_view_t *v)
 		n.frames = cc.blocks;
 		n.voice_hz = cc.voice_hz;
 		n.voice_tx_hz = cc.voice_tx_hz;
+		n.voice_id = cc.voice_id;
+		n.voice_grant = cc.voice_grant;
 		n.source = cc.source;
 		n.grants = cc.grants;
 		n.system_tg = v->system_tg;
 		n.system_unit = v->system_unit;
 		n.system_cc_hz = v->system_cc_hz;
 		n.system_uplink_hz = v->system_uplink_hz;
+		n.system_voice_hz = v->system_voice_hz;
 		n.follow = v->follow;
 		n.voice = v->voice;
+		n.conv = v->conv;
 		if (memcmp(&n, v, sizeof n) != 0) {
 			*v = n;
 			return true;
@@ -69,6 +73,7 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	memset(&n, 0, sizeof n);
 	n.on = v->on;
 	n.voice = true;
+	n.conv = v->conv;
 	n.valid = st.units != 0;
 	n.call_state = st.state;
 	n.call_nac = st.nac;
@@ -89,6 +94,7 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.system_unit = v->system_unit;
 	n.system_cc_hz = v->system_cc_hz;
 	n.system_uplink_hz = v->system_uplink_hz;
+	n.system_voice_hz = v->system_voice_hz;
 	n.boost = p25_voice_agc();
 	if (memcmp(&n, v, sizeof n) != 0) {
 		*v = n;

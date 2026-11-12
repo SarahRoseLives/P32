@@ -28,6 +28,14 @@ msgstr "No"
 msgid " ago"
 msgstr " atrás"
 
+#: core/ui/ui_app.c
+msgid "OK Menu  * P25"
+msgstr "OK Menú  * P25"
+
+#: core/ui/ui_app.c
+msgid "OK Menu  Hold OK P25"
+msgstr "OK Menú  Mantén OK P25"
+
 #: core/ui/ui_app.c core/ui/ui_screens.c
 msgid "OK Menu  * Quick"
 msgstr "OK Menú  * Rápido"
@@ -291,6 +299,10 @@ msgstr "Marcado rápido "
 #: core/ui/ui_app.c
 msgid " is empty: set it in qdmr"
 msgstr " vacío: defínelo en qdmr"
+
+#: core/ui/ui_app.c
+msgid "P25: FM channels only"
+msgstr "P25: solo canales FM"
 
 #: core/ui/ui_app.c
 msgid "Reply ended"
@@ -3227,6 +3239,10 @@ msgstr "ROAM"
 #: core/ui/ui_screens.c
 msgid "Step "
 msgstr "Paso "
+
+#: core/ui/ui_screens.c
+msgid "P25 conventional"
+msgstr "P25 convencional"
 
 #: core/ui/ui_screens.c
 msgid "P25 trunking"

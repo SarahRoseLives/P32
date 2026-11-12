@@ -68,8 +68,8 @@ void settings_defaults(settings_t *s)
 	s->p25.wacn = 0xBEEF0;
 	s->p25.unit_id = 2;
 	s->p25.sys = 0x123;
-	s->p25.nac = 0x123;
-	s->p25.tg = 256;
+	s->p25.nac = 0x293;
+	s->p25.tg = 1;
 	s->p25.rfss = 1;
 	s->p25.site = 1;
 	s->p25.band_auto = 1;

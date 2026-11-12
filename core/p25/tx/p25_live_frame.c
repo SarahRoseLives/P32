@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 The RadioFoundry Authors
-// Ported from DM32-Multimode for P32 conventional P25 TX.
+// Ported from a GPL-3.0-or-later P25 reference implementation for conventional P25 TX.
 // Fixed-storage adaptation of pinned OP25 imbe_unpack/header_encode/interleave.
 // Reference and provenance: research/references/boatbod/op25, UPSTREAMS.json.
 #include "p25_live_frame.h"

@@ -236,14 +236,18 @@ typedef struct {
 	uint32_t frames;	// control-channel bursts decoded since it started
 	uint32_t voice_hz;	// the last grant's downlink voice channel (IdenUp band plan applied)
 	uint32_t voice_tx_hz;	// the last grant's subscriber transmit channel
+	uint8_t voice_id;	// the last grant's IDEN
+	bool voice_grant;	// a group voice grant has been seen
 	uint32_t source;	// the last grant's source unit
 	uint32_t grants;	// grants seen (a change means a new grant)
 	uint16_t system_tg;	// the configured system's talkgroup
 	uint16_t system_unit;	// our configured unit ID
 	uint32_t system_cc_hz;	// the configured control-channel downlink
 	uint32_t system_uplink_hz;	// the configured control-channel uplink
+	uint32_t system_voice_hz;	// the voice channel to use when the grant is missed
 	bool follow;		// follow voice grants from the control channel
 	bool voice;		// the voice receiver, not the control-channel monitor
+	bool conv;		// conventional P25 voice on the current channel (not trunking)
 	bool boost;		// the voice level processing is on
 	uint8_t call_state;	// voice: p25_receive_class (0 wait, 1 clear, 2 encrypted, 3 unsupported, 4 bad)
 	uint16_t call_nac, call_group;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 The RadioFoundry Authors
-// Ported from DM32-Multimode for P32 conventional P25 TX.
+// Ported from a GPL-3.0-or-later P25 reference implementation for conventional P25 TX.
 // Generated from pinned GPL-2.0-or-later OP25 p25craft.py; see THIRD_PARTY.md.
 // Generator: scripts/generate-p25-channel.py; do not edit.
 // Reference SHA256: 27079a321f75bda5db8d3ef6dd30d65992dbf8b6c73a2c608b43f3f745e9e2d9

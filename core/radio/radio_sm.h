@@ -271,6 +271,9 @@ typedef struct {
 	bool p25;			// the P25 control-channel monitor has the receiver (CONFIG_P25)
 #if CONFIG_P25 || CONFIG_P25_VOICE
 	bool p25_voice;		// the P25 voice receiver has the receiver (CONFIG_P25_VOICE)
+	bool p25_conv;		// conventional P25 voice mode on the current channel
+	bool p25_conv_tx;	// conventional P25 PTT is keyed
+	bool p25_conv_restart;	// main poll: restart the conventional receiver after TX drains
 	bool p25_follow;		// the P25 monitor follows voice grants (CONFIG_P25 + CONFIG_P25_VOICE)
 	uint32_t p25_cc_hz;		// the control channel to return to
 	uint32_t p25_voice_hz;		// the voice channel of the call being followed

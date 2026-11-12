@@ -858,9 +858,19 @@ static void draw_place(const radio_view_t *v, const ui_state_t *s)
 		bool tx = v->state == RS_TX && v->vfo;
 		sb_init(&b, buf, sizeof buf);
 #if CONFIG_P25_TX && CONFIG_P25
-		if (v->p25.on) {
-			uint32_t hz = v->state == RS_TX && v->p25.system_uplink_hz != 0 ? v->p25.system_uplink_hz :
-				(v->p25.system_cc_hz != 0 ? v->p25.system_cc_hz : v->ch.rx_hz);
+		if (v->p25.conv) {
+			// Conventional P25 is on this channel: RX until PTT keys the TX frequency.
+			uint32_t hz = v->state == RS_TX && v->ch.tx_hz != 0 ? v->ch.tx_hz : v->ch.rx_hz;
+			sb_freq(&b, hz);
+		} else if (v->p25.on) {
+			uint32_t hz;
+			if (v->state == RS_TX && v->p25.voice_grant && v->p25.voice_hz != 0) {
+				hz = v->p25.voice_hz;	// the granted voice channel, not the control-channel uplink
+			} else if (v->state == RS_TX && v->p25.system_uplink_hz != 0) {
+				hz = v->p25.system_uplink_hz;
+			} else {
+				hz = v->p25.system_cc_hz != 0 ? v->p25.system_cc_hz : v->ch.rx_hz;
+			}
 			sb_freq(&b, hz);
 		} else
 #endif
@@ -912,7 +922,7 @@ static void draw_talk(const radio_view_t *v)
 		char buf[40], fit[40];
 		sbuf_t b;
 		sb_init(&b, buf, sizeof buf);
-		sb_str(&b, TR("P25 trunking"));
+		sb_str(&b, v->p25.conv ? TR("P25 conventional") : TR("P25 trunking"));
 		if (v->p25.system_tg != 0) {
 			sb_str(&b, " TG ");
 			sb_u32(&b, v->p25.system_tg, 1);

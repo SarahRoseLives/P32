@@ -38,6 +38,10 @@ bool p25_tsbk_parse(const uint8_t tsbk[12], p25_cc_t *cc)
 			-(int32_t)(off & 0xFFu) * 250000;
 		cc->iden_valid = (uint8_t)(cc->iden_valid | (1u << id));
 		cc->freq_hz = cc->base_hz[id];
+		if (cc->voice_grant && cc->voice_id == id) {
+			cc->voice_hz = cc->base_hz[id] + (uint32_t)cc->vch * cc->spacing_hz[id];
+			cc->voice_tx_hz = (uint32_t)((int32_t)cc->voice_hz + cc->offset_hz[id]);
+		}
 		return true;
 	}
 	case 0x00: {		// Group Voice Grant: channel, options, talkgroup and source
@@ -47,6 +51,8 @@ bool p25_tsbk_parse(const uint8_t tsbk[12], p25_cc_t *cc)
 		cc->vch = (uint16_t)(ch & 0xFFFu);
 		cc->tg = (uint16_t)((a >> 24) & 0xFFFFu);
 		cc->source = (uint32_t)(a & 0xFFFFFFu);
+		cc->voice_id = (uint8_t)id;
+		cc->voice_grant = true;
 		cc->voice_hz = (cc->iden_valid & (1u << id)) != 0
 			? cc->base_hz[id] + (uint32_t)cc->vch * cc->spacing_hz[id] : 0u;
 		cc->voice_tx_hz = cc->voice_hz != 0

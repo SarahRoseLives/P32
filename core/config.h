@@ -243,6 +243,9 @@
 #ifndef CONFIG_P25_TX
 #define CONFIG_P25_TX			0
 #endif
+#ifndef CONFIG_P25_STAR
+#define CONFIG_P25_STAR			0
+#endif
 #ifndef CONFIG_STUB_ENTRY
 #define CONFIG_STUB_ENTRY		CONFIG_HOSTLINK
 #endif

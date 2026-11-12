@@ -112,6 +112,13 @@ static bool start_cfg(uint8_t variant)
 	stream_len = 0;
 	type_info = phy_state = last_list = 0;
 	memset(&last, 0, sizeof last);
+	// Keep the learned IdenUp band plans across a restart, but not a stale grant from the previous call.
+	band.voice_grant = false;
+	band.voice_id = 0;
+	band.vch = 0;
+	band.source = 0;
+	band.voice_hz = 0;
+	band.voice_tx_hz = 0;
 	decoded_blocks = 0;
 	frames = 0;
 	on = false;						// no capture until the set-up is complete
@@ -502,6 +509,8 @@ static bool last_cc(hal_p25_cc_t *out)
 				}
 				last.voice_hz = cc.voice_hz;
 				last.voice_tx_hz = cc.voice_tx_hz;
+				last.voice_id = cc.voice_id;
+				last.voice_grant = cc.voice_grant;
 				last.source = cc.source;
 				last.grants = cc.grant_seq;
 			}

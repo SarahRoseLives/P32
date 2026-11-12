@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Copyright (c) 2026 DM32 P25 research contributors
+// Copyright (c) 2026 The P25 research contributors
 // Copyright (c) 2026 The RadioFoundry Authors
-// Conventional P25 transmit framing and timing (core/p25/tx). Ported from DM32-Multimode tests/test_p25_tx.c. The
+// Conventional P25 transmit framing and timing (core/p25/tx). Ported from a GPL-3.0-or-later P25 reference implementation tests/test_p25_tx.c. The
 // stream is rebuilt from p25_test_vectors.h: a 240-byte 0x77 preamble, the HDU, 28 alternating LDU1/LDU2 pairs, the
 // TDU, then an explicit 0x77 tail. No fixture file is read at runtime.
 #include <stdio.h>

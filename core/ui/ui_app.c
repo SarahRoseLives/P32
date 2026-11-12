@@ -62,7 +62,11 @@ static char home_hint[32];
 // The hint's keys part, in the language in use: the quick settings key, or holding OK on a radio without it
 static const char *home_hint_keys(void)
 {
+#if CONFIG_P25_STAR
+	return has_quick_key ? TR("OK Menu  * P25") : TR("OK Menu  Hold OK P25");
+#else
 	return has_quick_key ? TR("OK Menu  * Quick") : TR("OK Menu  Hold OK Quick");
+#endif
 }
 #if CONFIG_HOTSPOT
 static bool hs_diag;	// hotspot mode: the diagnostics page instead of the Hotspot screen
@@ -1105,6 +1109,19 @@ bool ui_home_key(const input_event_t *ev)
 		}
 		return true;
 	}
+#if CONFIG_P25_STAR && CONFIG_P25_VOICE
+	if (ev->action == ACT_QUICK && press) {
+		// Home: * switches the current FM channel between analog FM and conventional P25. Long * still locks the keys.
+		if (view->p25.conv) {
+			radio_req_p25_voice(false);
+		} else if (view->ch.mode == RADIO_MODE_FM) {
+			radio_req_p25_voice(true);
+		} else {
+			ui_toast(TR("P25: FM channels only"));
+		}
+		return true;
+	}
+#endif
 	if (ev->gesture == GESTURE_LONG) {
 		if (ev->action == ACT_SELECT) {
 			if (!has_quick_key)
