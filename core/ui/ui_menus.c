@@ -1603,6 +1603,24 @@ static bool ced_into;			// saving the copy puts it in zone ze_zone at ced_into_p
 static uint16_t ced_into_pos;
 #endif
 
+// The VFO is the quickest front-panel entry: make an unsaved channel at the first free number from what is tuned.
+bool ui_fpp_new_channel(void)
+{
+#if CONFIG_CHANNEL_EDIT
+	uint16_t number = codeplug_free_channel();
+	if (number == 0) {
+		ui_toast(TR("No free channel number"));
+		return false;
+	}
+	ced_from_current = true;
+	ui_push(SCR_CHANNEL, number);
+	return true;
+#else
+	ui_toast(TR("Channel editing unavailable"));
+	return false;
+#endif
+}
+
 // The channel the radio is on, 0 in the VFO or when its zone can't be read
 static uint16_t chlist_current(void)
 {

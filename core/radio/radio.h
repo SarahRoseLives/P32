@@ -245,12 +245,14 @@ typedef struct {
 	uint32_t system_cc_hz;	// the configured control-channel downlink
 	uint32_t system_uplink_hz;	// the configured control-channel uplink
 	uint32_t system_voice_hz;	// the voice channel to use when the grant is missed
+	uint16_t system_nac;	// the configured P25 NAC
 	bool follow;		// follow voice grants from the control channel
 	bool voice;		// the voice receiver, not the control-channel monitor
 	bool conv;		// conventional P25 voice on the current channel (not trunking)
 	bool boost;		// the voice level processing is on
 	uint8_t call_state;	// voice: p25_receive_class (0 wait, 1 clear, 2 encrypted, 3 unsupported, 4 bad)
 	uint16_t call_nac, call_group;
+	uint32_t call_source;
 	uint32_t units, voices;	// voice: validated frames and decoded voice payloads
 	uint32_t underruns, overflows;	// voice: audio blocks without a frame, frames dropped from a full PCM ring
 	uint32_t repeated, muted, resets;	// voice-policy repeats, mutes, codec resets

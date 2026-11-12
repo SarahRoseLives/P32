@@ -1126,6 +1126,10 @@ bool ui_home_key(const input_event_t *ev)
 		if (ev->action == ACT_SELECT) {
 			if (!has_quick_key)
 				ui_push(SCR_QUICK, 0);	// few-key boards: long SELECT is QUICK
+#if CONFIG_CHANNEL_LIST
+			else if (view->vfo)
+				ui_fpp_new_channel();	// VFO -> local channel editor at the first free number
+#endif
 			else
 				ui_try_save_channel();
 			return true;

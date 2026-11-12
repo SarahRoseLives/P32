@@ -39,6 +39,7 @@ typedef struct {
 	uint32_t voices;	// decoded voice payloads
 	uint32_t corrected;	// Golay/Hamming corrections summed
 	uint16_t nac, group;	// the call's NAC and talkgroup (when known)
+	uint32_t source;	// the call's source unit (when known)
 	uint8_t state;		// p25_receive_class: 0 wait, 1 clear, 2 encrypted, 3 unsupported, 4 bad
 	uint32_t underruns;	// audio blocks with no queued frame
 	uint32_t overflows;	// voice frames dropped because the PCM ring was full

@@ -98,6 +98,8 @@ void ui_go_home(void);
 void ui_toast(const char *text);
 // Save temporary channel changes and tell the user why a save cannot start
 bool ui_try_save_channel(void);
+// Long SELECT on a VFO: open the channel editor on an unsaved copy, at the first free channel number
+bool ui_fpp_new_channel(void);
 void ui_dirty(void);
 // The focused row changed: tell the radio what PTT would talk to now
 void ui_focus_changed(void);

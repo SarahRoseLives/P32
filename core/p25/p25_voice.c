@@ -394,6 +394,7 @@ void p25_voice_stats(p25_voice_stats_t *out)
 	out->corrected = v.corrected;
 	out->nac = v.call.nac;
 	out->group = v.call.group;
+	out->source = v.call.source;
 	out->state = (uint8_t)v.call.state;
 	out->underruns = v.underruns;
 	out->overflows = v.overflows;

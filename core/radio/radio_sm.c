@@ -4141,6 +4141,7 @@ static bool p25conv_rx_start(radio_sm_t *sm)
 	sm->view.p25.voice = true;
 	sm->view.p25.system_tg = tg;
 	sm->view.p25.system_unit = (uint16_t)unit;
+	sm->view.p25.system_nac = nac;
 	sm->view.state = RS_IDLE;
 	outputs(sm);
 	changed(sm);
@@ -4784,6 +4785,7 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 	memset(&sm->view.p25, 0, sizeof sm->view.p25);
 	sm->view.p25.system_tg = pst.p25.tg;
 	sm->view.p25.system_unit = (uint16_t)pst.p25.unit_id;
+	sm->view.p25.system_nac = pst.p25.nac;
 	sm->view.p25.system_cc_hz = pst.p25.cc_hz;
 	sm->view.p25.system_uplink_hz = pst.p25.uplink_hz != 0 ? pst.p25.uplink_hz : cc_hz;
 	sm->p25_affiliated = 0;
@@ -4876,6 +4878,7 @@ static void p25v_enter(radio_sm_t *sm, uint32_t now_ms)
 	sm->view.p25.voice = true;
 	sm->view.p25.system_tg = tg;
 	sm->view.p25.system_unit = (uint16_t)unit;
+	sm->view.p25.system_nac = nac;
 	sm->view.state = RS_IDLE;
 	outputs(sm);
 	changed(sm);

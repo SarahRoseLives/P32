@@ -28,7 +28,7 @@ msgstr "No"
 msgid " ago"
 msgstr " fa"
 
-#: core/ui/ui_app.c
+#: core/ui/ui_app.c core/ui/ui_instrument.c
 msgid "OK Menu  * P25"
 msgstr "OK Menu  * P25"
 
@@ -1124,6 +1124,134 @@ msgstr "Impostazioni > Posizione"
 msgid "Up Down page  Back"
 msgstr "Su Giù pagina  Indietro"
 
+#: core/ui/ui_instrument.c
+msgid "STEP "
+msgstr "PASSO "
+
+#: core/ui/ui_instrument.c
+msgid "CLEAR VOICE"
+msgstr "VOCE CHIARA"
+
+#: core/ui/ui_instrument.c
+msgid "ENCRYPTED"
+msgstr "CIFRATA"
+
+#: core/ui/ui_instrument.c
+msgid "UNSUPPORTED"
+msgstr "NON SUPPORTATA"
+
+#: core/ui/ui_instrument.c
+msgid "BAD SIGNAL"
+msgstr "SEGNALE SCARSO"
+
+#: core/ui/ui_instrument.c
+msgid "WAIT FOR CALL"
+msgstr "ATTENDO CHIAMATA"
+
+#: core/ui/ui_instrument.c
+msgid "CALL"
+msgstr "CHIAMATA"
+
+#: core/ui/ui_instrument.c
+msgid "VFO FREQUENCY"
+msgstr "FREQUENZA VFO"
+
+#: core/ui/ui_instrument.c
+msgid "TRANSMITTING"
+msgstr "TRASMISSIONE"
+
+#: core/ui/ui_instrument.c
+msgid "CONVENTIONAL CALL"
+msgstr "CHIAMATA CONVENZIONALE"
+
+#: core/ui/ui_instrument.c
+msgid "TRUNKED CALL"
+msgstr "CHIAMATA TRUNKING"
+
+#: core/ui/ui_instrument.c
+msgid "P25 TRUNKED"
+msgstr "P25 TRUNKING"
+
+#: core/ui/ui_instrument.c
+msgid "P25 CONVENTIONAL"
+msgstr "P25 CONVENZIONALE"
+
+#: core/ui/ui_instrument.c
+msgid "ANALOG FM"
+msgstr "FM ANALOGICA"
+
+#: core/ui/ui_instrument.c
+msgid "OK TUNE  BACK CANCEL"
+msgstr "OK SINTONIZZA  INDIETRO ANNULLA"
+
+#: core/ui/ui_instrument.c
+msgid "TG "
+msgstr "TG "
+
+#: core/ui/ui_instrument.c
+msgid "UID "
+msgstr "UID "
+
+#: core/ui/ui_instrument.c
+msgid "TONE "
+msgstr "TONO "
+
+#: core/ui/ui_instrument.c
+msgid "POWER "
+msgstr "POTENZA "
+
+#: core/ui/ui_instrument.c
+msgid "NAC "
+msgstr "NAC "
+
+#: core/ui/ui_instrument.c
+msgid "SYS "
+msgstr "SIS "
+
+#: core/ui/ui_instrument.c
+msgid "CC "
+msgstr "CC "
+
+#: core/ui/ui_instrument.c
+msgid "ON AIR"
+msgstr "IN ARIA"
+
+#: core/ui/ui_instrument.c
+msgid "RECEIVING"
+msgstr "RICEZIONE"
+
+#: core/ui/ui_instrument.c
+msgid "CARRIER"
+msgstr "PORTANTE"
+
+#: core/ui/ui_instrument.c core/ui/ui_screens.c
+msgid "READY"
+msgstr "PRONTO"
+
+#: core/ui/ui_instrument.c
+msgid "RELEASE PTT"
+msgstr "RILASCIA PTT"
+
+#: core/ui/ui_instrument.c
+msgid "RSSI "
+msgstr ""
+
+#: core/ui/ui_instrument.c
+msgid "Release PTT"
+msgstr "Rilascia PTT"
+
+#: core/ui/ui_instrument.c
+msgid "PTT Reply  BACK"
+msgstr "PTT Rispondi  INDIETRO"
+
+#: core/ui/ui_instrument.c
+msgid "TYPE FREQ  HOLD OK PROG"
+msgstr "DIGITA FREQ  TIENI OK PROG"
+
+#: core/ui/ui_instrument.c
+msgid "OK Menu  * FM"
+msgstr "OK Menu  * FM"
+
 #: core/ui/ui_menus.c
 msgid "Last caller"
 msgstr "Ultimo chiamante"
@@ -1543,6 +1671,14 @@ msgstr "OK vai  0-9 cerca  Indietro"
 #: core/ui/ui_menus.c
 msgid "Empty zone"
 msgstr "Zona vuota"
+
+#: core/ui/ui_menus.c
+msgid "No free channel number"
+msgstr "Nessun numero di canale libero"
+
+#: core/ui/ui_menus.c
+msgid "Channel editing unavailable"
+msgstr "Modifica canali non disponibile"
 
 #: core/ui/ui_menus.c
 msgid "New from current"
@@ -3631,10 +3767,6 @@ msgstr "TX NET"
 #: core/ui/ui_screens.c
 msgid "RX RF"
 msgstr "RX RF"
-
-#: core/ui/ui_screens.c
-msgid "READY"
-msgstr "PRONTO"
 
 #: core/ui/ui_screens.c
 msgid "No frequency yet"

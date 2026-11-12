@@ -51,6 +51,7 @@ bool radio_p25_publish(radio_p25_view_t *v)
 		n.system_cc_hz = v->system_cc_hz;
 		n.system_uplink_hz = v->system_uplink_hz;
 		n.system_voice_hz = v->system_voice_hz;
+		n.system_nac = v->system_nac;
 		n.follow = v->follow;
 		n.voice = v->voice;
 		n.conv = v->conv;
@@ -78,6 +79,7 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.call_state = st.state;
 	n.call_nac = st.nac;
 	n.call_group = st.group;
+	n.call_source = st.source;
 	n.units = st.units;
 	n.voices = st.voices;
 	n.underruns = st.underruns;
@@ -95,6 +97,7 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.system_cc_hz = v->system_cc_hz;
 	n.system_uplink_hz = v->system_uplink_hz;
 	n.system_voice_hz = v->system_voice_hz;
+	n.system_nac = v->system_nac;
 	n.boost = p25_voice_agc();
 	if (memcmp(&n, v, sizeof n) != 0) {
 		*v = n;

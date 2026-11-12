@@ -19,12 +19,26 @@ the code is laid out, who owns the data behind each screen, and how the UI is te
 |---|---|
 | `gfx.c`, `fonts.c`, `fmt.c` | drawing in a viewport inside the display's safe-area insets, fonts, number / text formatting |
 | `ui_screens.c` | drawing only: status strip, title, hint row, lists, Home, call screens, Quick tiles, banners, emergency |
+| `ui_instrument.c` | optional large-panel Home (`CONFIG_UI_INSTRUMENT`): one channel instrument for analog FM, conventional P25 and trunked P25, with the same frame in RX and TX |
 | `ui_app.c` | behavior without the RTOS: the navigation stack, global keys, Home and Quick keys, filters, Recent, events, banners |
 | `ui_menus.c` | every list screen and the screen table `ui_scr[]`: Hub, Actions, Compose, Contacts, Messages, Recent, Zones, Zone, the zone editor's (2.2), Channels, Channel, Tools, Settings, Picker, Info, Confirm, Scan, Roaming |
 | `ui_find.c` | type-to-find (T9 word starts, numbers, channel positions) |
 | `ui_svc.h`, `ui_svc_stub.c` | the thin interface to data other packages own, with weak "not in this build" stubs (section 4) |
 | `ui_svc_radio.c`, `ui_svc_data.c`, `ui_svc_storage.c` | the strong implementations on the radio core, the DMR data service and the settings store / codeplug editing |
 | `ui.c` | the UI task: splash (a board-provided 4 bpp bitmap when `board.splash` is set; otherwise the mark, beside the name on a panel too short to stack them (128x64), the name, the two CPS boot text lines from the codeplug, board and version; `ui_draw_splash` in ui_screens.c), 50 ms frame pacing, backlight, status copy for the debug link |
+
+### Instrument Home (`CONFIG_UI_INSTRUMENT`)
+
+On a color panel at least 220 px wide and 300 px high, this switch replaces the stacked Home with one instrument. A
+four-pixel mode rail runs down the left; the top line carries state, mode, signal and battery; the center carries the
+frequency or talkgroup; the technical deck carries the mode's numbers; activity and the soft-key hint stay at the
+bottom. RX and TX are the same frame with a green or amber accent.
+
+The switch is off by default and falls back to the standard Home on smaller panels, on a 1 bpp panel and while the
+Large text setting is on. It is a visual layer over the existing radio state: it does not add a channel model or local
+programming. On a VFO, typing digits stays in the instrument and shows the typed frequency; OK tunes it, BACK cancels.
+Long SELECT opens the existing unsaved-channel editor at the first free number. The channel list, menus and the rest
+of FPP keep their existing navigation until those screens are ported.
 
 `ui_app.c` and `ui_menus.c` never call the RTOS. The firmware drives them from `ui.c`; the host simulator
 (section 7) drives the same files.

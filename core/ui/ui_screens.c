@@ -5,6 +5,7 @@
 #include <string.h>
 #include "board.h"
 #include "ui_screens.h"
+#include "ui_instrument.h"
 #include "fmt.h"
 #include "i18n.h"
 #include "ui_svc.h"
@@ -1724,6 +1725,10 @@ void ui_draw_home(const radio_view_t *v, const ui_state_t *s)
 		ui_draw_home_dual(v, s);
 		return;
 	}
+#endif
+#if CONFIG_UI_INSTRUMENT
+	if (ui_instrument_home(v, s))
+		return;
 #endif
 #if CONFIG_DMR
 	ui_st_dmr_off = s->dmr_off;
