@@ -170,9 +170,14 @@ IMBE_DIR := core/p25/imbe
 IMBE_UNITY_NAMES := basicop2 math_sub aux_sub dsp_sub dc_rmv pe_lpf pitch_est pitch_ref v_uv_det qnt_sub sa_encode ch_encode encode
 IMBE_SRC := $(filter-out $(IMBE_DIR)/imbe_vocoder.cc $(IMBE_DIR)/encoder_unity.cc $(IMBE_DIR)/imbe_pitch_specialized.cc $(addprefix $(IMBE_DIR)/,$(addsuffix .cc,$(IMBE_UNITY_NAMES))),$(sort $(wildcard $(IMBE_DIR)/*.cc)))
 IMBE_SRC += $(IMBE_DIR)/encoder_unity.cc core/p25/p25_imbe_codec.cpp
+ifneq ($(filter y,$(CONFIG_P25) $(CONFIG_P25_VOICE)),)
+ APP_SRC += core/p25/p25_demod.c core/p25/p25_rx.c
+endif
 ifeq ($(CONFIG_P25_VOICE),y)
- APP_SRC += core/p25/p25_imbe.c core/p25/p25_voice.c core/p25/p25_demod.c core/p25/p25_rx.c \
-	core/p25/p25_call.c
+ APP_SRC += core/p25/p25_imbe.c core/p25/p25_voice.c core/p25/p25_call.c
+endif
+ifeq ($(CONFIG_P25),y)
+ APP_SRC += core/p25/p25_cc_rx.c
 endif
 # The P25 PHY transmit test engine: the fixed 36-byte block stream and the HR_C7000 hardware path. Off, neither the
 # platform file nor the debug command is built and every other image is unchanged.
@@ -369,7 +374,7 @@ endif
 endif
 $(APP_OBJ) $(TP_OBJ): $(BUILD)/flags
 # The software P25 receive path runs at -O3 like the reference (the rest of the app is -Os)
-$(BUILD)/core/p25/p25_demod.o $(BUILD)/core/p25/p25_rx.o $(BUILD)/core/p25/p25_call.o: CFLAGS_APP += -O3
+$(BUILD)/core/p25/p25_demod.o $(BUILD)/core/p25/p25_rx.o $(BUILD)/core/p25/p25_call.o $(BUILD)/core/p25/p25_cc_rx.o: CFLAGS_APP += -O3
 $(BUILD)/core/hostlink/build_info.o: CFLAGS_APP += -DRFOUNDRY_FEATURES_OFF=\"$(RFOUNDRY_OFF)\" -DRFOUNDRY_PRESET=\"$(RFOUNDRY_PRESET)\"
 $(VERSION_OBJ): $(BUILD)/version
 $(VERSION_OBJ): CFLAGS_APP += -DRFOUNDRY_GIT=\"$(RFOUNDRY_VERSION)\" -DRFOUNDRY_GIT_ID=$(RFOUNDRY_GIT_ID) -DRFOUNDRY_GIT_DIRTY=$(RFOUNDRY_GIT_DIRTY) \

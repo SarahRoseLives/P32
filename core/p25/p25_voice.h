@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "config.h"
+#include "p25/p25_demod.h"
 
 #if CONFIG_P25_VOICE
 #ifdef __cplusplus
@@ -25,6 +26,8 @@ void p25_voice_set_agc(bool on);
 bool p25_voice_agc(void);
 void p25_voice_stop(void);
 bool p25_voice_running(void);
+// The shared demodulator context; the control-channel receiver uses it while voice is stopped.
+p25_demod *p25_voice_demod(void);
 
 typedef struct {
 	uint32_t samples;	// 8 kHz discriminator samples pushed through the demodulator

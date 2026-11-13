@@ -4274,9 +4274,11 @@ static void test_factory_reset(void)
 	CHECK(settings_flush());
 	n_ev = 0;
 	CHECK(ui_svc_factory_reset());
-	sim_flash_cut_after(493);	// the 452-byte settings records (492 write bytes) go in, the native erase fails
+	// The settings go in, the native area's erase fails. Simulate that with a bad native range: a byte-budget cut
+	// cannot say which flash operation it lands on now that the settings record is three pages.
+	sim_flash_bad_range(reset_map.native_addr, reset_map.native_size);
 	storage_job_poll();
-	sim_flash_power_on();
+	sim_flash_bad_range(0, 0);
 	CHECK(n_ev == 1 && strstr(last_ev.text, "native") != NULL);
 	sim_flash.map = NULL;
 	storage_init();			// back to no flash for anything after

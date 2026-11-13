@@ -27,6 +27,11 @@ static int rssi_bars(int16_t dbm)
 	return 0;
 }
 
+static int view_bars(const radio_view_t *v)
+{
+	return v->ch.p25 && (v->p25.out_of_range || v->p25.no_control) ? 0 : rssi_bars(v->rssi_dbm);
+}
+
 static void hex(sbuf_t *b, uint32_t v, int digits)
 {
 	static const char d[] = "0123456789ABCDEF";
@@ -114,7 +119,7 @@ static void draw_rail(const radio_view_t *v, radio_state_t st)
 	gfx_icon_battery(right - bat_w, y + 2, bat_w, bat_h, pct, ui_col.dim, ui_col.fg);
 	right -= bat_w + 5;
 	int sig_w = 12;
-	gfx_icon_bars(right - sig_w, y + 3, sig_w, th - 5, 4, rssi_bars(v->rssi_dbm), ui_col.fg, ui_col.line);
+	gfx_icon_bars(right - sig_w, y + 3, sig_w, th - 5, 4, view_bars(v), ui_col.fg, ui_col.line);
 }
 
 static void draw_eyebrow(const radio_view_t *v)
@@ -241,7 +246,7 @@ static void draw_display(const radio_view_t *v, radio_state_t st, const ui_state
 		hex(&b, v->p25.call_nac, 3);
 	} else if (trunk(v)) {
 		sb_str(&b, TR("SYS "));
-		hex(&b, v->p25.sys, 3);
+		hex(&b, v->p25.system_sys, 3);
 		sb_str(&b, "  ");
 		sb_str(&b, TR("CC "));
 		sb_freq(&b, v->p25.system_cc_hz);
@@ -262,6 +267,13 @@ static void draw_display(const radio_view_t *v, radio_state_t st, const ui_state
 		sb_str(&b, ui_power_name(v->power));
 	}
 
+	if (trunk(v) && (v->p25.out_of_range || v->p25.no_control)) {
+		str_copy(main, sizeof main, TR("OUT OF RANGE"));
+		str_copy(label, sizeof label, TR("P25 TRUNKED"));
+		str_copy(sub, sizeof sub, TR("NO CONTROL CHANNEL"));
+		freq = false;
+		mc = ui_col.warn;
+	}
 	if (st == RS_TX) mc = ui_col.tx;
 	else if (call_active(v)) mc = ui_col.rx;
 
@@ -285,13 +297,16 @@ static void draw_activity(const radio_view_t *v, radio_state_t st, int y)
 {
 	const ui_layout_t *L = &ui_layout;
 	int w = gfx_width();
-	const char *word = st == RS_TX ? TR("ON AIR") : call_active(v) ? TR("RECEIVING") :
+	bool oos = trunk(v) && (v->p25.out_of_range || v->p25.no_control);
+	const char *word = oos ? TR("OUT OF RANGE") : st == RS_TX ? TR("ON AIR") : call_active(v) ? TR("RECEIVING") :
 		st == RS_RX ? TR("CARRIER") : TR("READY");
 	const char *right;
 	char rbuf[24], lbuf[48];
 	sbuf_t b;
 
-	if (st == RS_TX) {
+	if (oos) {
+		right = "";	// the large word and the line below already say why; a long right label would overlap it
+	} else if (st == RS_TX) {
 		sb_init(&b, rbuf, sizeof rbuf);
 		sb_str(&b, TR("RELEASE PTT"));
 		right = rbuf;
@@ -319,7 +334,7 @@ static void draw_activity(const radio_view_t *v, radio_state_t st, int y)
 	gfx_hline(CONTENT_X, y, w - CONTENT_X - CONTENT_R, ui_col.line);
 	y += 5;
 	gfx_fill(CONTENT_X, y + 3, 4, 4, st == RS_TX ? ui_col.tx : state_color(st));
-	gfx_text(L->tiny, CONTENT_X + 8, y, lbuf, st == RS_TX ? ui_col.tx : ui_col.fg);
+	gfx_text(L->tiny, CONTENT_X + 8, y, lbuf, oos ? ui_col.warn : st == RS_TX ? ui_col.tx : ui_col.fg);
 	int rw = gfx_text_width(L->tiny, right);
 	gfx_text(L->tiny, w - CONTENT_R - rw, y, right, ui_col.dim);
 	gfx_hline(CONTENT_X, y + L->tiny->h + 3, w - CONTENT_X - CONTENT_R, ui_col.line);
@@ -331,7 +346,7 @@ static void draw_meter(const radio_view_t *v, radio_state_t st, int y)
 	int w = gfx_width(), n = 13, bw = 3, gap = 2;
 	int x0 = CONTENT_X;
 	color_t c = st == RS_TX ? ui_col.tx : ui_col.rx;
-	int lit = st == RS_TX ? 9 : rssi_bars(v->rssi_dbm) * 3;
+	int lit = st == RS_TX ? 9 : view_bars(v) * 3;
 	if (call_active(v) && v->p25.peak != 0) {
 		lit = ((unsigned)v->p25.peak * (unsigned)n + 16383u) / 32768u;
 		if (lit > n) lit = n;
@@ -363,7 +378,7 @@ static void draw_deck(const radio_view_t *v, radio_state_t st, int y)
 		str_copy(l2, sizeof l2, "SYSTEM");
 		str_copy(l3, sizeof l3, "UNIT");
 		sb_init(&b, v1, sizeof v1); sb_freq(&b, v->p25.system_cc_hz);
-		sb_init(&b, v2, sizeof v2); hex(&b, v->p25.sys, 3);
+		sb_init(&b, v2, sizeof v2); hex(&b, v->p25.system_sys, 3);
 		sb_init(&b, v3, sizeof v3); sb_u32(&b, v->p25.system_unit, 1);
 	} else if (conv(v)) {
 		str_copy(l1, sizeof l1, "NAC");
@@ -401,8 +416,8 @@ bool ui_instrument_home(const radio_view_t *v, const ui_state_t *s)
 {
 	int w = gfx_width(), h = gfx_height();
 	if (w < 220 || h < 300 || gfx_bpp() == 1 || s->large_text) return false;
-	if (v->ch.mode == RADIO_MODE_DMR) return false;
-	if (!p25(v) && v->ch.mode != RADIO_MODE_FM) return false;
+	if (CONFIG_DMR && v->ch.mode == RADIO_MODE_DMR) return false;
+	if (!p25(v) && CONFIG_DMR && v->ch.mode != RADIO_MODE_FM) return false;
 
 	radio_state_t st = visible_state(v);
 	int sub_y = 0;

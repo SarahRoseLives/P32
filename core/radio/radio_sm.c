@@ -52,6 +52,9 @@
 #if CONFIG_P25_VOICE
 #include "p25/p25_voice.h"		// the voice receiver
 #endif
+#if CONFIG_P25
+#include "p25/p25_cc_rx.h"		// continuous control-channel receiver
+#endif
 #if CONFIG_P25_TX
 #include "p25/p25_tx_voice.h"		// the live voice transmitter owns the PCM stream too
 #endif
@@ -59,6 +62,16 @@
 #define sm_p25_voice(s)		((s)->p25_voice)
 #else
 #define sm_p25_voice(s)		false
+#endif
+
+#if CONFIG_P25 || CONFIG_P25_VOICE
+// The system the trunking receiver follows: the selected settings slot, clamped to a record from before the list.
+static const settings_p25_t *p25_active_system(const settings_t *st)
+{
+	uint8_t i = st->p25_active;
+	if (i >= st->p25_count) i = 0;
+	return settings_p25_get(st, i);
+}
 #endif
 #if CONFIG_SFR_CWID
 static void cw_cancel(radio_sm_t *sm);
@@ -117,6 +130,46 @@ static void changed(radio_sm_t *sm)
 	step_update(sm);	// every change that can move the width comes here
 	sm->serial++;
 }
+
+#if CONFIG_P25
+#define P25_CC_STALE_MS		3000u	// decoded CC held through short NID gaps
+#define P25_CARRIER_STALE_MS	2000u	// raw PHY blocks: the control channel's carrier
+// The control channel has advanced within P25_CC_STALE_MS. A trunked monitor can otherwise keep an old valid flag
+// when the site disappears, which would show signal and let PTT key the uplink.
+static bool p25_cc_fresh(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (sm->view.p25.frames != sm->p25_cc_frames) {
+		sm->p25_cc_frames = sm->view.p25.frames;
+		sm->p25_cc_ms = now_ms != 0 ? now_ms : 1;
+	}
+	return sm->p25_cc_ms != 0 && now_ms - sm->p25_cc_ms < P25_CC_STALE_MS;
+}
+
+// Raw PHY blocks keep arriving while the NID is unreadable: that is a control channel with a decode problem, not
+// an out-of-range radio. OOR follows this timer; PTT follows the decoded CC.
+static bool p25_carrier_fresh(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (sm->view.p25.activity != sm->p25_activity) {
+		sm->p25_activity = sm->view.p25.activity;
+		sm->p25_activity_ms = now_ms != 0 ? now_ms : 1;
+	}
+	return sm->p25_activity_ms != 0 && now_ms - sm->p25_activity_ms < P25_CARRIER_STALE_MS;
+}
+
+static void p25_cc_update(radio_sm_t *sm, uint32_t now_ms)
+{
+	bool carrier = p25_carrier_fresh(sm, now_ms);
+	bool cc = p25_cc_fresh(sm, now_ms);
+	bool oos = !carrier;
+	bool noc = carrier && !cc;
+	if (sm->view.p25.out_of_range != oos || sm->view.p25.no_control != noc) {
+		sm->view.p25.out_of_range = oos;
+		sm->view.p25.no_control = noc;
+		changed(sm);
+	}
+}
+
+#endif
 
 void radio_settings_default(radio_settings_t *s)
 {
@@ -536,12 +589,21 @@ static bool listen_band(uint32_t hz)
 #if CONFIG_P25
 static void p25_enter(radio_sm_t *sm, uint32_t now_ms);
 static void p25_stop(radio_sm_t *sm, uint32_t now_ms);
+static void p25_teardown(radio_sm_t *sm);
 static bool p25call_leave(radio_sm_t *sm, uint32_t now_ms);
+#endif
+#if CONFIG_P25_VOICE
+static bool p25conv_rx_start(radio_sm_t *sm);
+static void p25conv_teardown(radio_sm_t *sm);
 #endif
 
 static void tune(radio_sm_t *sm, uint32_t now_ms)
 {
 	sm->retune_pending = sm->retune_due = false;	// this tune is the one they wait for
+#if CONFIG_P25
+	bool no_p25_auto = sm->p25_no_auto;
+	sm->p25_no_auto = false;
+#endif
 #if CONFIG_SFR_CWID
 	cw_cancel(sm);		// the repeater's ID: the board is set up for the channel below
 #endif
@@ -589,6 +651,12 @@ static void tune(radio_sm_t *sm, uint32_t now_ms)
 		dmr_begin(sm);		// after set_mode(DMR): the modem only starts in DMR mode
 	}
 #if CONFIG_P25
+#if CONFIG_P25_VOICE
+	// A trunked target must not inherit a conventional P25 receiver: stop it before trying to start the monitor.
+	if (sm->view.ch.p25 && sm->p25_conv) {
+		p25conv_teardown(sm);
+	}
+#endif
 	if (sm->p25 && !sm->view.ch.p25) {
 		// Leaving a trunked channel: send Unit De-Registration before tuning the next channel.
 		if (sm->p25_affiliated && p25call_leave(sm, now_ms)) {
@@ -600,18 +668,37 @@ static void tune(radio_sm_t *sm, uint32_t now_ms)
 		return;
 	}
 	if (!sm->view.vfo && sm->view.ch.p25) {
+		// Always restart the monitor for this channel: the previous channel may have left it on another system.
+		if (sm->p25) p25_teardown(sm);
 		settings_t *pst = settings_begin();
-		pst->p25.tg = sm->view.ch.p25_tg;
-		pst->p25.valid = 1;
+		uint8_t si = sm->view.ch.p25_system;
+		if (pst->p25_count == 0) pst->p25_count = 1;
+		if (si >= pst->p25_count) si = 0;
+		pst->p25_active = si;
+		settings_p25_t *sys = settings_p25_mut(pst, si);
+		sys->tg = sm->view.ch.p25_tg;
+		sys->valid = 1;
 		settings_end(now_ms);
-		if (!sm->p25) {
+		if (!sm->p25 && !no_p25_auto) {
 			p25_enter(sm, now_ms);
+			if (!sm->p25) sm->view.p25.out_of_range = true;
 		}
 		sm->view.p25.valid = false;
 		sm->p25_affiliated = 0;
 		sm->p25_boot_affil = true;	// talkgroup/channel selection affiliates before PTT
 	} else if (sm->p25 && !sm->view.ch.p25) {
-		p25_stop(sm, now_ms);
+		p25_teardown(sm);
+	}
+#endif
+#if CONFIG_P25_VOICE
+	// A stored conventional P25 memory is a mode of its own: selecting it starts its receiver, and leaving it stops
+	// that receiver without needing the star key. A quick P25 change on an analog channel is not a stored profile
+	// (p25_conv_auto stays false), so stopping it there does not start it again.
+	if (sm->p25_conv && (!sm->view.ch.p25_conv || !sm->p25_conv_auto)) {
+		p25conv_teardown(sm);
+	}
+	if (!sm->view.vfo && sm->view.ch.p25_conv && sm->p25_conv_auto && !sm->p25_conv) {
+		(void)p25conv_rx_start(sm);
 	}
 #endif
 	outputs(sm);
@@ -660,6 +747,9 @@ static void set_channel(radio_sm_t *sm, uint16_t pos, const channel_t *ch)
 	sm->base_mode = sm->view.ch.mode;
 	sm->base_cc = sm->view.ch.color_code;
 	sm->base_ts = sm->view.ch.timeslot;
+#if CONFIG_P25_VOICE
+	sm->p25_conv_auto = sm->view.ch.p25_conv;
+#endif
 	clear_temporary(sm);
 	apply_tot(sm);
 }
@@ -3746,6 +3836,7 @@ static void roger_cancel(radio_sm_t *sm)
 
 #if CONFIG_P25_TX && CONFIG_P25
 static void p25_enter(radio_sm_t *sm, uint32_t now_ms);
+static bool p25call_start_probe(radio_sm_t *sm);
 
 // --- P25 trunked PTT (docs/spec/p25.md 8.1, 10): request, grant, permit and voice ---------------------------------
 // The monitor owns the receiver while the P25 screen is open. PTT stops its probe, sends unit registration, group
@@ -3761,20 +3852,14 @@ enum { P25CALL_IDLE, P25CALL_BOOT_AFFIL, P25CALL_BOOT_WAIT, P25CALL_AFFIL, P25CA
 #define P25CALL_PERMIT_MS	400u	// the local talk-permit beep has finished
 #define P25CALL_DRAIN_MS		3000u
 
-static void p25call_start_probe(radio_sm_t *sm)
+static bool p25call_start_probe(radio_sm_t *sm)
 {
+	p25_cc_rx_stop();	// a retune while the discriminator task is running leaves it without a fresh route
 	if (board.radio != NULL && board.radio->rx != NULL && sm->p25_cc_hz != 0) {
 		board.radio->rx(sm->p25_cc_hz, sm->view.ch.bw, NULL);
 	}
-	if (board.radio->audio_to_modem_data != NULL) {
-		board.radio->audio_to_modem_data(true);
-	} else if (board.radio->audio_to_modem != NULL) {
-		board.radio->audio_to_modem(true);
-	}
-	if (board.p25_probe != NULL && board.p25_probe->start != NULL) {
-		(void)board.p25_probe->start();
-	}
-	// The probe's last block is cleared on start; clear the shown grant too so an earlier call cannot match this one.
+	bool started = p25_cc_rx_start();
+	// The receiver starts empty; clear the shown grant too so an earlier call cannot match this one.
 	sm->view.p25.valid = false;
 	sm->view.p25.opcode = 0;
 	sm->view.p25.tg = 0;
@@ -3786,11 +3871,20 @@ static void p25call_start_probe(radio_sm_t *sm)
 	sm->view.p25.source = 0;
 	sm->view.p25.grants = 0;
 	sm->p25_grant_seen = 0;
+	return started;
 }
 
 static void p25call_restore(radio_sm_t *sm, uint32_t now_ms)
 {
 	p25call_start_probe(sm);
+	// The affiliation burst stopped the monitor. Give the restarted receiver its settle time before the missing-CC
+	// display, instead of flashing OUT OF RANGE between the affiliation and the next control-channel frame.
+	sm->p25_cc_frames = sm->view.p25.frames;
+	sm->p25_cc_ms = now_ms != 0 ? now_ms : 1;
+	sm->p25_activity = 0;
+	sm->p25_activity_ms = now_ms != 0 ? now_ms : 1;
+	sm->view.p25.out_of_range = false;
+	sm->view.p25.no_control = false;
 	sm->p25_call = P25CALL_IDLE;
 	sm->view.state = RS_IDLE;
 	sm->view.tx_deny = TXDENY_NONE;
@@ -3817,14 +3911,14 @@ static bool p25call_send_affiliate(void)
 {
 	settings_t st;
 	settings_read(&st);
-	return p25_cc_affiliate_start(&st.p25);
+	return p25_cc_affiliate_start(p25_active_system(&st));
 }
 
 static bool p25call_send_vch(void)
 {
 	settings_t st;
 	settings_read(&st);
-	return p25_cc_voice_request_start(&st.p25);
+	return p25_cc_voice_request_start(p25_active_system(&st));
 }
 
 static void p25call_down(radio_sm_t *sm, uint32_t now_ms)
@@ -3832,6 +3926,7 @@ static void p25call_down(radio_sm_t *sm, uint32_t now_ms)
 	settings_t st;
 
 	settings_read(&st);
+	const settings_p25_t *sys = p25_active_system(&st);
 	if (sm->view.ch.rx_only) {
 		deny(sm, TXDENY_RX_ONLY);
 		return;
@@ -3844,7 +3939,11 @@ static void p25call_down(radio_sm_t *sm, uint32_t now_ms)
 		deny(sm, TXDENY_BATTERY);
 		return;
 	}
-	if (board.p25_tx == NULL || board.p25_probe == NULL || !st.p25.valid) {
+	if (!p25_cc_fresh(sm, now_ms)) {
+		deny(sm, TXDENY_OUT_OF_RANGE);
+		return;
+	}
+	if (board.p25_tx == NULL || board.p25_probe == NULL || !sys->valid) {
 		deny(sm, TXDENY_MODE);
 		return;
 	}
@@ -3871,18 +3970,14 @@ static void p25call_down(radio_sm_t *sm, uint32_t now_ms)
 	// CC uplink, which is not the traffic channel.
 	sm->p25_call_voice_hz = 0;
 	sm->p25_tot = false;
-	sm->p25_call_unit = st.p25.unit_id;
-	sm->p25_call_nac = st.p25.nac;
-	sm->p25_call_tg = st.p25.tg;
+	sm->p25_call_unit = sys->unit_id;
+	sm->p25_call_nac = sys->nac;
+	sm->p25_call_tg = sys->tg;
 	sm->p25_retries = 0;
+	sm->p25_grant_beeped = false;
 
 	// The PHY transmitter refuses while the receive probe owns the modem. The monitor's RF route goes with it.
-	board.p25_probe->stop();
-	if (board.radio->audio_to_modem_data != NULL) {
-		board.radio->audio_to_modem_data(false);
-	} else if (board.radio->audio_to_modem != NULL) {
-		board.radio->audio_to_modem(false);
-	}
+	p25_cc_rx_stop();
 	bool started = affiliate ? p25call_send_affiliate() : p25call_send_vch();
 	if (!started) {
 		p25call_restore(sm, now_ms);
@@ -3925,16 +4020,11 @@ static void p25call_timeout(radio_sm_t *sm, uint32_t now_ms)
 static void p25call_boot(radio_sm_t *sm, uint32_t now_ms)
 {
 	if (!sm->p25_boot_affil || sm->p25_affiliated || sm->p25_call != P25CALL_IDLE ||
-	    !sm->view.p25.valid) {
+	    !sm->view.p25.valid || !p25_cc_fresh(sm, now_ms)) {
 		return;		// no decoded CC yet: stay unaffiliated until the site is heard
 	}
 	sm->p25_boot_affil = false;
-	board.p25_probe->stop();
-	if (board.radio->audio_to_modem_data != NULL) {
-		board.radio->audio_to_modem_data(false);
-	} else if (board.radio->audio_to_modem != NULL) {
-		board.radio->audio_to_modem(false);
-	}
+	p25_cc_rx_stop();
 	if (!p25call_send_affiliate()) {
 		p25call_restore(sm, now_ms);
 		return;
@@ -3988,12 +4078,7 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 		break;
 	case P25CALL_AFFIL_WAIT:
 		if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
-			board.p25_probe->stop();
-			if (board.radio->audio_to_modem_data != NULL) {
-				board.radio->audio_to_modem_data(false);
-			} else if (board.radio->audio_to_modem != NULL) {
-				board.radio->audio_to_modem(false);
-			}
+			p25_cc_rx_stop();
 			if (!p25call_send_vch()) {
 				p25call_restore(sm, now_ms);
 				beep(sm, BEEP_TX_DENY);
@@ -4019,40 +4104,37 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 		if (radio_p25_publish(&sm->view.p25)) {
 			changed(sm);
 		}
+		p25_cc_update(sm, now_ms);
 		const radio_p25_view_t *p = &sm->view.p25;
 		// The grant's opcode may have been followed by the IdenUp we were waiting for; the grant's source, group and
 		// channel stay in the view. Accept the grant for our unit (the site may echo a different talkgroup) and hold
 		// it while its IdenUp is still missing, rather than retrying on the control-channel uplink.
 		bool grant = p->valid && p->voice_grant &&
 			(p->source == 0u || p->source == sm->p25_call_unit);
+		if (grant && !sm->p25_grant_beeped) {
+			// The grant itself is the permit instant. Beep before waiting for an IdenUp that names the voice
+			// channel: that wait is what made the chirp arrive late in a call.
+			sm->p25_grant_beeped = true;
+			beep(sm, BEEP_TX_PERMIT);
+			changed(sm);
+		}
 		if (grant && p->voice_hz == 0) {
 			changed(sm);	// wait for the grant's IdenUp; the probe is still running
 		} else if (grant) {
 			uint32_t hz = p->voice_hz;	// the system's granted voice channel
 			sm->p25_call_tg = p->tg != 0 ? p->tg : sm->p25_call_tg;
-			board.p25_probe->stop();
-			if (board.radio->audio_to_modem_data != NULL) {
-				board.radio->audio_to_modem_data(false);
-			} else if (board.radio->audio_to_modem != NULL) {
-				board.radio->audio_to_modem(false);
-			}
+			p25_cc_rx_stop();
 			sm->p25_call_voice_hz = hz;
 			sm->p25_call = P25CALL_PERMIT;
 			sm->p25_call_deadline_ms = now_ms + P25CALL_PERMIT_MS;
 			sm->view.state = RS_TX;
 			sm->tx_start_ms = now_ms;
 			sm->view.tx_elapsed_ms = 0;
-			beep(sm, BEEP_TX_PERMIT);
 			changed(sm);
 		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
 			if (sm->p25_retries < P25CALL_RETRIES) {
 				sm->p25_retries++;
-				board.p25_probe->stop();
-				if (board.radio->audio_to_modem_data != NULL) {
-					board.radio->audio_to_modem_data(false);
-				} else if (board.radio->audio_to_modem != NULL) {
-					board.radio->audio_to_modem(false);
-				}
+				p25_cc_rx_stop();
 				if (!p25call_send_vch()) {
 					p25call_restore(sm, now_ms);
 					beep(sm, BEEP_TX_DENY);
@@ -4130,14 +4212,9 @@ static bool p25call_leave(radio_sm_t *sm, uint32_t now_ms)
 	if (sm->p25_call != P25CALL_IDLE) {
 		p25call_abort(sm, now_ms);
 	}
-	board.p25_probe->stop();
-	if (board.radio->audio_to_modem_data != NULL) {
-		board.radio->audio_to_modem_data(false);
-	} else if (board.radio->audio_to_modem != NULL) {
-		board.radio->audio_to_modem(false);
-	}
+	p25_cc_rx_stop();
 	settings_read(&st);
-	if (!p25_cc_deregister_start(&st.p25)) {
+	if (!p25_cc_deregister_start(p25_active_system(&st))) {
 		return false;
 	}
 	sm->p25_call = P25CALL_DEREG;
@@ -4162,13 +4239,8 @@ static bool p25call_power_off(radio_sm_t *sm, uint32_t now_ms)
 		p25call_abort(sm, now_ms);
 	}
 	settings_read(&st);
-	board.p25_probe->stop();
-	if (board.radio->audio_to_modem_data != NULL) {
-		board.radio->audio_to_modem_data(false);
-	} else if (board.radio->audio_to_modem != NULL) {
-		board.radio->audio_to_modem(false);
-	}
-	if (!p25_cc_deregister_start(&st.p25)) {
+	p25_cc_rx_stop();
+	if (!p25_cc_deregister_start(p25_active_system(&st))) {
 		p25call_restore(sm, now_ms);
 		return false;
 	}
@@ -4212,8 +4284,9 @@ static void p25call_release(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_P25_TX && CONFIG_P25_VOICE
 // A settings record written by another firmware can leave the appended P25 fields outside their protocol widths.
 // Conventional P25 then uses the system defaults instead of refusing to transmit or building an invalid LDU.
-static void p25conv_values(const settings_p25_t *p, const channel_t *ch, uint16_t *nac, uint16_t *tg, uint32_t *unit)
+static void p25conv_values(const settings_t *st, const channel_t *ch, uint16_t *nac, uint16_t *tg, uint32_t *unit)
 {
+	const settings_p25_t *p = p25_active_system(st);
 	if (ch != NULL && ch->p25_conv) {
 		*nac = ch->p25_nac != 0 ? ch->p25_nac : 0x293u;
 		*tg = ch->p25_tg != 0 ? ch->p25_tg : 1u;
@@ -4242,7 +4315,7 @@ static bool p25conv_rx_start(radio_sm_t *sm)
 	}
 	uint16_t nac, tg;
 	uint32_t unit;
-	p25conv_values(&st.p25, &sm->view.ch, &nac, &tg, &unit);
+	p25conv_values(&st, &sm->view.ch, &nac, &tg, &unit);
 	(void)nac;
 	sm->p25_voice = true;
 	sm->p25_conv = true;
@@ -4258,11 +4331,8 @@ static bool p25conv_rx_start(radio_sm_t *sm)
 	return true;
 }
 
-static void p25conv_stop(radio_sm_t *sm, uint32_t now_ms)
+static void p25conv_teardown(radio_sm_t *sm)
 {
-	if (!sm->p25_conv) {
-		return;
-	}
 	if (sm->p25_conv_tx) {
 		p25_tx_voice_stop();
 		if (board.p25_tx != NULL && board.p25_tx->stop != NULL) {
@@ -4277,6 +4347,15 @@ static void p25conv_stop(radio_sm_t *sm, uint32_t now_ms)
 	sm->p25_conv_restart = false;
 	sm->p25_voice = false;
 	memset(&sm->view.p25, 0, sizeof sm->view.p25);
+}
+
+static void p25conv_stop(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (!sm->p25_conv) {
+		return;
+	}
+	sm->p25_conv_auto = false;
+	p25conv_teardown(sm);
 	tune(sm, now_ms);
 	changed(sm);
 }
@@ -4341,7 +4420,7 @@ static void p25conv_down(radio_sm_t *sm, uint32_t now_ms)
 	}
 	uint16_t nac, tg;
 	uint32_t unit;
-	p25conv_values(&st.p25, &sm->view.ch, &nac, &tg, &unit);
+	p25conv_values(&st, &sm->view.ch, &nac, &tg, &unit);
 	hz = sm->view.ch.tx_hz != 0 ? sm->view.ch.tx_hz : sm->view.ch.rx_hz;
 	dlog("p25cv down hz=%u tx=%u band=%u rx_only=%u", (unsigned)hz, board.p25_tx != NULL,
 	     (unsigned)board_in_band(hz, true), sm->view.ch.rx_only);
@@ -4433,10 +4512,22 @@ static void ptt_down(radio_sm_t *sm, uint32_t now_ms)
 		return;
 	}
 #endif
+#if CONFIG_P25
+	if (sm->view.ch.p25 && !sm->p25) {
+		deny(sm, TXDENY_OUT_OF_RANGE);	// a trunked memory with no monitor/site must never key the FM path
+		return;
+	}
+#endif
 #if CONFIG_P25_TX && CONFIG_P25
 	if (sm->p25) {
 		p25call_down(sm, now_ms);
 		return;		// the P25 monitor's channel is the system, not the FM channel under it
+	}
+#endif
+#if CONFIG_P25_VOICE
+	if (sm->view.ch.p25_conv && !sm->p25_conv) {
+		deny(sm, TXDENY_OUT_OF_RANGE);	// conventional P25 did not start: do not key FM in its place
+		return;
 	}
 #endif
 	end_reception(sm, now_ms);
@@ -4858,7 +4949,8 @@ static void hotspot_leave(radio_sm_t *sm, uint32_t now_ms)
 // decoded control channel shown on its screen. Entered only from idle: it takes the receiver from the channel ---
 static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 {
-	if (sm->p25 || sm->p25_conv || sm->p25_voice || board.p25_probe == NULL || board.p25_probe->last_cc == NULL) {
+	if (sm->p25 || sm->p25_conv || sm->p25_voice || board.p25_probe == NULL ||
+	    board.p25_probe->audio_start == NULL || board.p25_probe->audio_read == NULL) {
 		return;
 	}
 	if (sm->ptt || sm->hotspot || sm->view.state == RS_TX || sm->view.state == RS_TX_DENIED) {
@@ -4875,36 +4967,33 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 	uint32_t cc_hz = sm->view.ch.rx_hz;
 	settings_t pst;
 	settings_read(&pst);
-	if (pst.p25.cc_hz != 0 && pst.p25.uplink_hz != 0) {
-		cc_hz = pst.p25.cc_hz;	// an explicit monitor follows the configured system, even if an older record left valid unset
+	const settings_p25_t *sys = p25_active_system(&pst);
+	if (sys->cc_hz != 0 && sys->uplink_hz != 0) {
+		cc_hz = sys->cc_hz;	// an explicit monitor follows the configured system, even if an older record left valid unset
 	}
 	if (cc_hz != sm->view.ch.rx_hz && board.radio->rx != NULL) {
 		board.radio->rx(cc_hz, sm->view.ch.bw, NULL);
 	}
-	// The RF chip's discriminator to the modem (the board's data receive table, wide enough for the 4FSK)
-	if (board.radio->audio_to_modem_data != NULL) {
-		board.radio->audio_to_modem_data(true);
-	} else if (board.radio->audio_to_modem != NULL) {
-		board.radio->audio_to_modem(true);
-	} else {
-		return;
-	}
-	if (!board.p25_probe->start()) {
-		if (board.radio->audio_to_modem_data != NULL) {
-			board.radio->audio_to_modem_data(false);
-		} else {
-			board.radio->audio_to_modem(false);
-		}
+	// The software receiver takes the discriminator continuously; the chip PHY test capture is not used here.
+	if (!p25_cc_rx_start()) {
 		return;
 	}
 	memset(&sm->view.p25, 0, sizeof sm->view.p25);
-	sm->view.p25.system_tg = pst.p25.tg;
-	sm->view.p25.system_unit = (uint16_t)pst.p25.unit_id;
-	sm->view.p25.system_nac = pst.p25.nac;
-	sm->view.p25.system_cc_hz = pst.p25.cc_hz;
-	sm->view.p25.system_uplink_hz = pst.p25.uplink_hz != 0 ? pst.p25.uplink_hz : cc_hz;
+	sm->view.p25.system_tg = sys->tg;
+	sm->view.p25.system_unit = (uint16_t)sys->unit_id;
+	sm->view.p25.system_nac = sys->nac;
+	sm->view.p25.system_sys = sys->sys;
+	sm->view.p25.system_wacn = sys->wacn;
+	sm->view.p25.system_cc_hz = sys->cc_hz;
+	sm->view.p25.system_uplink_hz = sys->uplink_hz != 0 ? sys->uplink_hz : cc_hz;
 	sm->p25_affiliated = 0;
 	sm->p25 = true;
+	sm->p25_cc_ms = 0;
+	sm->p25_cc_frames = 0;
+	sm->p25_activity = 0;
+	sm->p25_activity_ms = 0;
+	sm->view.p25.out_of_range = true;
+	sm->view.p25.no_control = false;
 	sm->p25_voice = false;
 	sm->p25_follow = true;
 	sm->p25_cc_hz = cc_hz;
@@ -4920,7 +5009,7 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 	changed(sm);
 }
 
-static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
+static void p25_teardown(radio_sm_t *sm)
 {
 	if (!sm->p25) {
 		return;
@@ -4941,17 +5030,27 @@ static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
 		sm->view.p25.voice = false;
 	}
 #endif
-	board.p25_probe->stop();
-	if (board.radio->audio_to_modem_data != NULL) {
-		board.radio->audio_to_modem_data(false);
-	} else if (board.radio->audio_to_modem != NULL) {
-		board.radio->audio_to_modem(false);
-	}
+	p25_cc_rx_stop();
 	sm->p25 = false;
 	sm->p25_leave = false;
+	sm->p25_cc_ms = 0;
+	sm->p25_cc_frames = 0;
+	sm->p25_activity = 0;
+	sm->p25_activity_ms = 0;
 	sm->view.p25.on = false;
 	sm->view.p25.valid = false;
+	sm->view.p25.out_of_range = false;
+	sm->view.p25.no_control = false;
 	sm->p25_boot_affil = false;
+}
+
+static void p25_stop(radio_sm_t *sm, uint32_t now_ms)
+{
+	if (!sm->p25) {
+		return;
+	}
+	p25_teardown(sm);
+	sm->p25_no_auto = true;	// this tune must not start the monitor again
 	tune(sm, now_ms);	// the channel again (restores the RF chip's mode too)
 	changed(sm);
 }
@@ -4984,7 +5083,7 @@ static void p25v_enter(radio_sm_t *sm, uint32_t now_ms)
 	}
 	uint16_t nac, tg;
 	uint32_t unit;
-	p25conv_values(&st.p25, &sm->view.ch, &nac, &tg, &unit);
+	p25conv_values(&st, &sm->view.ch, &nac, &tg, &unit);
 	(void)nac;
 	memset(&sm->view.p25, 0, sizeof sm->view.p25);
 	sm->p25_voice = true;
@@ -5002,6 +5101,7 @@ static void p25v_enter(radio_sm_t *sm, uint32_t now_ms)
 
 static void p25v_stop(radio_sm_t *sm, uint32_t now_ms)
 {
+	sm->p25_conv_auto = false;
 	if (!sm->p25_voice && !sm->p25_conv) {
 		return;
 	}
@@ -6209,12 +6309,14 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 	case RREQ_P25_CONV: {
 		bool on = req->arg != 0;
 		sm->view.ch.p25_conv = on;
+		sm->p25_conv_auto = on && !sm->view.vfo;
 		if (on) {
 			if (sm->view.ch.p25_nac == 0 || sm->view.ch.p25_tg == 0) {
 				settings_t st;
 				settings_read(&st);
-				if (sm->view.ch.p25_nac == 0) sm->view.ch.p25_nac = st.p25.nac;
-				if (sm->view.ch.p25_tg == 0) sm->view.ch.p25_tg = st.p25.tg;
+				const settings_p25_t *sys = p25_active_system(&st);
+				if (sm->view.ch.p25_nac == 0) sm->view.ch.p25_nac = sys->nac;
+				if (sm->view.ch.p25_tg == 0) sm->view.ch.p25_tg = sys->tg;
 			}
 		}
 		if (sm->view.vfo) {
@@ -6236,7 +6338,7 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 		sm->view.ch.p25_conv = true;
 		if (sm->view.vfo) sm->vfo_ch.p25_nac = sm->view.ch.p25_nac;
 		if (sm->p25_conv) {
-			p25conv_stop(sm, now_ms);
+			p25conv_teardown(sm);
 			(void)p25conv_rx_start(sm);
 		}
 		if (!sm->view.vfo) {
@@ -6250,11 +6352,20 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 			break;
 		}
 		sm->view.ch.p25_tg = (uint16_t)req->arg;
-		sm->view.ch.p25_conv = true;
 		if (sm->view.vfo) sm->vfo_ch.p25_tg = sm->view.ch.p25_tg;
-		if (sm->p25_conv) {
-			p25conv_stop(sm, now_ms);
-			(void)p25conv_rx_start(sm);
+		if (sm->view.ch.p25) {
+			// A trunked channel's talkgroup lives in its system; leave the channel trunked.
+			settings_t *st = settings_begin();
+			uint8_t si = st->p25_active;
+			if (si >= st->p25_count) si = 0;
+			settings_p25_mut(st, si)->tg = (uint16_t)req->arg;
+			settings_end(now_ms);
+		} else {
+			sm->view.ch.p25_conv = true;
+			if (sm->p25_conv) {
+				p25conv_teardown(sm);
+				(void)p25conv_rx_start(sm);
+			}
 		}
 		if (!sm->view.vfo) {
 			sm->view.temp |= RADIO_TEMP_MODE;
@@ -6262,6 +6373,45 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 		}
 		changed(sm);
 		break;
+	case RREQ_P25_PROFILE: {
+		int8_t sys = (int8_t)req->arg;
+		if (sys < -1 || sys >= SETTINGS_P25_SYSTEMS) break;
+		bool was_trunk = sm->p25, was_conv = sm->p25_conv;
+		if (sys >= 0) {
+			// A system is a trunked profile: selecting it turns this memory/VFO into a trunked channel.
+			sm->view.ch.p25 = true;
+			sm->view.ch.p25_conv = false;
+			sm->view.ch.p25_system_set = false;
+			sm->view.ch.p25_system = (uint8_t)sys;
+			sm->p25_conv_auto = false;
+			if (sm->view.vfo) {
+				sm->vfo_ch.p25 = true;
+				sm->vfo_ch.p25_conv = false;
+				sm->vfo_ch.p25_system = (uint8_t)sys;
+			}
+			settings_t *st = settings_begin();
+			st->p25_active = (uint8_t)sys;
+			settings_end(now_ms);
+			if (was_conv) p25conv_teardown(sm);
+			if (was_trunk) p25_stop(sm, now_ms);
+			if (!sm->p25) (void)p25_enter(sm, now_ms);
+		} else {
+			// CNV is the conventional path again, with the channel's own NAC/TG.
+			sm->view.ch.p25 = false;
+			sm->view.ch.p25_conv = true;
+			sm->view.ch.p25_system_set = false;
+			sm->p25_conv_auto = false;
+			if (sm->view.vfo) {
+				sm->vfo_ch.p25 = false;
+				sm->vfo_ch.p25_conv = true;
+			}
+			if (was_trunk) p25_stop(sm, now_ms);
+			if (was_conv) p25conv_teardown(sm);
+			if (!sm->p25_conv) (void)p25conv_rx_start(sm);
+		}
+		changed(sm);
+		break;
+	}
 #endif
 #if CONFIG_DMR_ROAMING
 	case RREQ_ROAM:
@@ -6759,12 +6909,13 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 				if (board.radio->rx != NULL) {
 					board.radio->rx(sm->p25_cc_hz, sm->view.ch.bw, NULL);
 				}
-				if (board.radio->audio_to_modem_data != NULL) {
-					board.radio->audio_to_modem_data(true);
-				} else if (board.radio->audio_to_modem != NULL) {
-					board.radio->audio_to_modem(true);
+				if (p25_cc_rx_start()) {
+					sm->view.p25.valid = false;
+					sm->p25_cc_ms = 0;
+					sm->p25_cc_frames = 0;
+					sm->p25_activity = 0;
+					sm->p25_activity_ms = 0;
 				}
-				board.p25_probe->start();
 				sm->p25_grant_seen = 0;
 				changed(sm);
 			}
@@ -6774,6 +6925,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 		if (radio_p25_publish(&sm->view.p25)) {
 			changed(sm);
 		}
+		p25_cc_update(sm, now_ms);
 #if CONFIG_P25_VOICE
 		sm->view.p25.follow = sm->p25_follow;
 		if (sm->p25_follow && sm->view.p25.valid && sm->view.p25.opcode == 0x00 &&
@@ -6783,7 +6935,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 			uint16_t tg = sm->view.p25.tg;
 
 			sm->p25_grant_seen = sm->view.p25.grants;
-			board.p25_probe->stop();
+			p25_cc_rx_stop();
 			if (board.radio->rx != NULL) {
 				board.radio->rx(hz, RADIO_BW_12K5, NULL);
 			}
@@ -6796,12 +6948,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 				if (board.radio->rx != NULL) {
 					board.radio->rx(sm->p25_cc_hz, sm->view.ch.bw, NULL);
 				}
-				if (board.radio->audio_to_modem_data != NULL) {
-					board.radio->audio_to_modem_data(true);
-				} else if (board.radio->audio_to_modem != NULL) {
-					board.radio->audio_to_modem(true);
-				}
-				board.p25_probe->start();
+				p25_cc_rx_start();
 			}
 			changed(sm);
 		}

@@ -42,7 +42,7 @@ Screens consume only these. Each board maps physical inputs to them (`boards/<ra
 | Action | Meaning everywhere | Required? |
 |---|---|---|
 | `NAV_UP`, `NAV_DOWN` | Move focus; on Home and in value editors, change the value (channel, frequency, level) | yes |
-| `NAV_LEFT`, `NAV_RIGHT` | Change the focused value / switch tabs. If absent, screens fall back to `NAV_UP`/`NAV_DOWN` after `SELECT` | optional |
+| `NAV_LEFT`, `NAV_RIGHT` | Change the focused value / switch tabs. In the 3x3 quick grid, move focus one column left or right. If absent, screens fall back to `NAV_UP`/`NAV_DOWN` after `SELECT` | optional |
 | `SELECT` | Do or open the focused thing. Long: make it permanent (save) | yes |
 | `BACK` | Back one level; on Home clear temporary state. Long: Home | yes |
 | `QUICK` | Quick settings for the current context. Long: key lock (on Home) | strongly recommended; fallback long `SELECT` |
@@ -71,7 +71,7 @@ Home answers four questions at a glance (P2, P5): **Where am I** (zone, channel)
 
 Regions, top to bottom, the same on every display class (sizes differ):
 
-1. **Status strip**: state pill (TX red / RX green / scan / hotspot / idle), USB network word (IP, with link arrows once the computer has it up), RSSI, battery %, GPS fix, unread messages, lock, privacy. Drawn on every screen; on small displays a page's title takes the strip's place and the battery is left to Home.
+1. **Status strip**: state pill (TX red / RX green / scan / hotspot / idle), the mode word, RSSI and battery. On the large-panel instrument build the menus use the same row as Home: a rectangular state pill, colored mode, signal bars and battery icon (no percentage, unread count or lock); small displays keep the generic strip, and a page's title takes its place.
 2. **Place**: zone name (small) and channel number + name (large). In VFO: the frequency (large) and "VFO".
 3. **Talk target**: "PTT →" + TG or contact name and number (large), with chips: mode, TS, CC (DMR) or tone and bandwidth (FM), power. Temporary fields have a dot; reply window shows a countdown.
 4. **Activity**: idle = the last heard station (name, callsign, TG, time ago). RX = the current caller big (name, callsign, ID, TG, talker alias, RSSI bar, distance if a position is known). TX = timer and target.
@@ -102,7 +102,7 @@ Large-text mode (accessibility, or chosen by the user) shows only the status str
 
 ---
 
-## 4. Hub: six top-level destinations
+## 4. Hub: top-level destinations
 
 `SELECT` on Home opens the Hub. Items are numbered; digits pick directly. Order is fixed so muscle memory works.
 
@@ -115,6 +115,7 @@ Large-text mode (accessibility, or chosen by the user) shows only the status str
 | 5 | **Channels** | Every channel by number; New channel from current settings (first row); a channel's settings, edited in place and saved (ui.md 2.1) |
 | 6 | **Tools** | Scan, Position (GPS), Hotspot, USB network, Single frequency repeater, ID lookup, Signal meter, DTMF, APRS, Registration (ARS), Battery |
 | 7 | **Settings** | Grouped by intent (below), with search |
+| 8 | **P25 systems** | Stored P25 systems on a radio with the P25 probe: edit one or add a new one. A trunked channel picks one; a conventional memory can stay CNV (its own NAC/TG) or switch to a system |
 
 Each Tools item keeps its number on every radio and build, so a key path such as `SELECT`, `6`, `7` (Diagnostics) is
 the same everywhere. An item a radio may not have goes last (Battery, 9, on a mobile), so commonly used items have no
@@ -138,13 +139,13 @@ Contacts, Recent and Messages are the "people" side, Zones, Channels and Tools t
 | 6 | Privacy on/off (TX freq in the VFO) | VOX on/off |
 | 7 | Dual watch (On / Off; a zone scan is in Tools > Scan) | Dual watch (On / Off; a zone scan is in Tools > Scan) |
 | 8 | Talk target | Bandwidth 12.5/25 kHz |
-| 9 | Brightness | Brightness; on a P25-only build, P25/FM on a channel |
+| 9 | Brightness | Brightness; on a P25-only build, P25/FM on a channel or the CNV/system profile on the P25 VFO |
 | 0 | All settings | All settings |
 
-- Toggle tiles change on one press; cycle tiles (power, timeslot, bandwidth) advance one value per press; value tiles (CC, squelch, tone, brightness) open an inline editor (`NAV_UP`/`NAV_DOWN` or digits, `SELECT` or `QUICK` to close).
+- Toggle tiles change on one press; cycle tiles (power, timeslot, bandwidth) advance one value per press; value tiles (CC, squelch, tone, brightness) open an inline editor (`NAV_UP`/`NAV_DOWN` or digits, `SELECT` or `QUICK` to close). In the 3x3 grid, Up / Down move a row and Left / Right a column (wrapping at the edges); while an editor is open, all four change the value. On 128x64 the numbered list keeps Up / Down and the encoder.
 - Every change is temporary on a channel (dot on Home). Long `SELECT` on a tile makes it permanent. In VFO, changes apply to the VFO directly.
 - Tile 4 depends on where you are. On a channel it is "To VFO": the channel's settings in effect now (temporary changes included) become the VFO's own and the VFO opens ("Copied to VFO"); the channel is unchanged, and a channel the VFO can't hold is refused with a toast. In the VFO, tile 4 is Mode (FM / DMR), kept like the VFO's other settings. A channel has no temporary mode change.
-- On a P25-only build, tile 4 in the VFO is Mode and selects FM / conventional P25; on a channel tile 9 is P25/FM. Both start conventional P25 using the channel's NAC and talkgroup, or the system values when it has none, and turn it off again. While P25 is on, tile 3 is NAC (three hexadecimal digits, Up / Down or digits) and tile 6 is the talkgroup (decimal). `QUICK` on Home opens the same grid; P25 needs the P25 probe.
+- On a P25-only build, tile 4 in the VFO is Mode and selects FM / conventional P25; on a channel tile 9 is P25/FM. Both start conventional P25 using the channel's NAC and talkgroup, or the system values when it has none, and turn it off again. While P25 is on, tile 3 is NAC (three hexadecimal digits, Up / Down or digits) and tile 6 is the talkgroup (decimal). In the P25 VFO, tile 9 is CNV or a stored system: CNV stays conventional, a system switches to that trunked mode. `QUICK` on Home opens the same grid; P25 needs the P25 probe.
 - In the VFO, the tile that is Monitor on FM (5) and Privacy on DMR (6) is TX freq ("TXFreq" on a tile): the VFO's split, its TX frequency against RX ("Off", "+600k", "-5M"). Up / Down walk a line out from Off at once, Up +, Down -, through the band's usual offsets most common first and stopping at the ends (2 m 600 kHz, then 1 MHz; 1.25 m 1.6 MHz; 70 cm 5, 7.6, then 1.6 MHz, from the ARRL, IARU Region 1, RSGB and WIA band plans), skipping a TX outside RX's transmit band; a typed split goes to the first offset its way. While it edits, the hint row says what Up / Down and the digits do, and while digits are typed shows the whole TX frequency so far ("TX 147.02___"; the tile says "TX"). Any other split is typed: digits type a TX frequency, OK sets it (refused outside the transmit bands: "Can't transmit there"), BACK takes a digit back. Monitor stays on its key; privacy is for channels.
 - Home shows a split VFO's TX frequency: on FM after PTT→; on DMR in the top row ("VFO  TX 147.120"), or as the offset among the chips on displays without that row. While transmitting, the large frequency is the TX frequency, in the TX color; the DMR call screen has a "TX 147.120 MHz" line under the target.
 - Each tile shows its current value. The voice prompt reads "Power, high" etc.
@@ -298,7 +299,7 @@ The layouts are the 128x64 ones of section 7.3. Which matrix position is which k
 | Find | digits on Home | 1 |
 | Caller actions | `CONTEXT` | 1 |
 | Hub | `SELECT` | 1 |
-| Contacts / Messages / Recent / Zones / Channels / Tools / Settings | Hub | 2 |
+| Contacts / Messages / Recent / Zones / Channels / Tools / Settings / P25 systems | Hub | 2 |
 | Item actions (contact, message, channel) | from a list | 3 |
 | A zone's list (channels, Add channel, Zone options) | `CONTEXT` in Zones | 3 |
 | Channel actions, Add channel picker, Zone options | a zone's list | 4 |

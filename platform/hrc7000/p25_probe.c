@@ -12,6 +12,7 @@
 
 #include <string.h>
 #include "platform.h"
+#include "hal_time.h"
 #include "board.h"
 #include "p25_probe.h"
 #include "dmr_glue.h"
@@ -46,7 +47,11 @@ static uint16_t stream_len;
 // heavy for the interrupt) and then clears the capture so the next burst fills it again
 static hal_p25_cc_t last;
 static p25_cc_t band;	// accumulated IdenUp band plans (the capture decodes one TSBK at a time)
-static uint32_t decoded_blocks, frames;
+static uint32_t decoded_blocks, frames, activity;
+// A sync that yields only part of the 7-slot capture never fills `stream`, so last_cc cannot decode or reset it.
+// Discard such a capture after this long without another block, or the monitor stays stuck until a full restart.
+static uint32_t last_seen_blocks, partial_ms;
+#define P25_PARTIAL_MS 120u
 
 // Only PHY_RX (project bit 11) writes a block. PHY_RDY (bit 12) is the slot clock and PHY_RECV_ABNORMAL (bit 16)
 // fires on its own; taking their stale RX RAM was the "block that never changes" (bench 2026-11-04)
@@ -68,6 +73,7 @@ static void probe_isr(uint32_t list)
 	}
 	last_list = list;
 	blocks++;
+	activity++;
 	// The PHY receive test mode can raise its interrupts continuously when no sync is found. Stop after a few blocks
 	// so the storm can never starve the host link; `stop` and `start` capture another burst
 	if (blocks >= 32) {
@@ -121,6 +127,8 @@ static bool start_cfg(uint8_t variant)
 	band.voice_tx_hz = 0;
 	decoded_blocks = 0;
 	frames = 0;
+	last_seen_blocks = 0;
+	partial_ms = hal_millis();
 	on = false;						// no capture until the set-up is complete
 
 	hrc7000_wr(modem, C7_WORK_MODE, C7_WORK_MODE_FM);	// reset the state machine, then PHY receive
@@ -473,6 +481,24 @@ static bool last_cc(hal_p25_cc_t *out)
 
 	hrc_irq_restore(irq);
 
+	uint32_t now = hal_millis();
+	if (b != last_seen_blocks) {
+		last_seen_blocks = b;
+		partial_ms = now;
+	}
+	if (!full && b != 0 && (uint32_t)(now - partial_ms) > P25_PARTIAL_MS) {
+		// No block arrived after a partial capture; clearing it lets the next sync start a fresh one.
+		irq = hrc_irq_save();
+		stream_len = 0;
+		blocks = 0;
+		decoded_blocks = 0;
+		last_seen_blocks = 0;
+		if (modem != NULL) {
+			hrc7000_wr(modem, C7_SYS_INTERP_MASK, saved.sys_mask | PHY_BITS);
+		}
+		hrc_irq_restore(irq);
+	}
+
 	if (full && b != decoded_blocks) {
 		uint16_t nac = 0;
 		uint8_t duid = 0;
@@ -527,6 +553,7 @@ static bool last_cc(hal_p25_cc_t *out)
 	}
 	*out = last;
 	out->blocks = frames;
+	out->activity = activity;
 	return last.valid;
 }
 

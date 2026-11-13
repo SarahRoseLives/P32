@@ -136,13 +136,17 @@ typedef struct {
 // Quick settings tiles. The position of each depends on the mode (information-architecture.md 5): ui_quick_kind()
 enum {
 	QT_POWER, QT_SQUELCH, QT_TONE, QT_MODE, QT_MONITOR, QT_VOX, QT_SCAN, QT_BANDWIDTH, QT_BRIGHTNESS,
-	QT_TIMESLOT, QT_CC, QT_HEAR_ALL, QT_PRIVACY, QT_TALK_TO, QT_P25, QT_P25_NAC, QT_P25_TG,
+	QT_TIMESLOT, QT_CC, QT_HEAR_ALL, QT_PRIVACY, QT_TALK_TO, QT_P25, QT_P25_NAC, QT_P25_TG, QT_P25_PROFILE,
 	QT_TO_VFO,		// on a DMR channel, in place of QT_MODE: copy the channel to the VFO
 	QT_SPLIT,		// in the VFO, in place of QT_MONITOR (FM) / QT_PRIVACY (DMR): the TX frequency or offset
 
 };
 // The tile kind at position 0..8 (keys 1..9) for this channel or the VFO
 uint8_t ui_quick_kind(int pos, const radio_view_t *v);
+// The instrument-style status row used by Quick and large-panel menu screens; returns the content start
+int ui_instrument_top(const radio_view_t *v, radio_state_t st, const ui_state_t *s);
+// True when quick settings are the 3x3 grid (else the 128x64 numbered list)
+bool ui_quick_is_grid(void);
 // True when a contact name only repeats its ID ("TG 201" for talkgroup 201): Home then shows the ID once
 bool ui_name_is_id(const char *name, uint32_t id, bool private_call);
 

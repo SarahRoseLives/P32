@@ -38,6 +38,7 @@ typedef enum {
 	SCR_P25,			// the P25 control-channel monitor (CONFIG_P25)
 	SCR_P25_VOICE,		// the P25 voice receiver (CONFIG_P25_VOICE)
 	SCR_P25_SYS,		// the P25 trunking system's settings (CONFIG_P25)
+	SCR_P25_SYS_LIST,	// the systems to choose from (arg 1: picker for a channel)
 	SCR_COUNT
 } ui_scr_t;
 

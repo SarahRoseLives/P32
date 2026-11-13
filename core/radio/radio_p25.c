@@ -10,6 +10,9 @@
 #include "board.h"
 #include "hal_p25.h"
 #include "radio/radio_p25.h"
+#if CONFIG_P25
+#include "p25/p25_cc_rx.h"
+#endif
 #if CONFIG_P25_VOICE
 #include "p25/p25_voice.h"
 #endif
@@ -19,16 +22,24 @@ bool radio_p25_publish(radio_p25_view_t *v)
 {
 	hal_p25_cc_t cc;
 
-	if (board.p25_probe == NULL || board.p25_probe->last_cc == NULL) {
+	bool valid = p25_cc_rx_last(&cc);
+	if (!valid) {
+		// The carrier can be present while the NID is unreadable. Publish that activity, but keep the last decoded
+		// fields so the UI can say "no control channel" instead of pretending the radio is out of range.
+		if (v->activity != cc.activity) {
+			v->activity = cc.activity;
+			return true;
+		}
 		return false;
 	}
-	bool valid = board.p25_probe->last_cc(&cc);
-	if (valid) {
+	{
 		radio_p25_view_t n;
 
 		memset(&n, 0, sizeof n);	// a fresh struct so a padding byte never reads as a change
 		n.on = v->on;
 		n.valid = true;
+		n.out_of_range = v->out_of_range;
+		n.no_control = v->no_control;
 		n.opcode = cc.opcode;
 		n.nac = cc.nac;
 		n.duid = cc.duid;
@@ -40,6 +51,7 @@ bool radio_p25_publish(radio_p25_view_t *v)
 		n.vch = cc.vch;
 		n.freq_hz = cc.freq_hz;
 		n.frames = cc.blocks;
+		n.activity = cc.activity;
 		n.voice_hz = cc.voice_hz;
 		n.voice_tx_hz = cc.voice_tx_hz;
 		n.voice_id = cc.voice_id;
@@ -52,6 +64,8 @@ bool radio_p25_publish(radio_p25_view_t *v)
 		n.system_uplink_hz = v->system_uplink_hz;
 		n.system_voice_hz = v->system_voice_hz;
 		n.system_nac = v->system_nac;
+		n.system_sys = v->system_sys;
+		n.system_wacn = v->system_wacn;
 		n.follow = v->follow;
 		n.voice = v->voice;
 		n.conv = v->conv;
@@ -76,6 +90,9 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.voice = true;
 	n.conv = v->conv;
 	n.valid = st.units != 0;
+	n.out_of_range = v->out_of_range;
+	n.no_control = v->no_control;
+	n.activity = v->activity;
 	n.call_state = st.state;
 	n.call_nac = st.nac;
 	n.call_group = st.group;
@@ -98,6 +115,8 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.system_uplink_hz = v->system_uplink_hz;
 	n.system_voice_hz = v->system_voice_hz;
 	n.system_nac = v->system_nac;
+	n.system_sys = v->system_sys;
+	n.system_wacn = v->system_wacn;
 	n.boost = p25_voice_agc();
 	if (memcmp(&n, v, sizeof n) != 0) {
 		*v = n;

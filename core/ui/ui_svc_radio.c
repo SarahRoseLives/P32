@@ -135,15 +135,6 @@ bool ui_svc_mode(uint8_t mode)
 }
 #endif
 
-uint8_t ui_svc_vfo_copy(const radio_view_t *v)
-{
-	radio_vfo_copy_t r = radio_vfo_copy_check(&v->ch, v->vfo);
-	if (r == VFO_COPY_OK) {
-		radio_req_vfo_copy();
-	}
-	return (uint8_t)r;
-}
-
 bool ui_svc_hear_all(bool on)
 {
 	radio_req_dmr_hear_all(on);
@@ -179,6 +170,15 @@ bool ui_svc_privacy(bool on)
 }
 #endif
 #endif
+
+uint8_t ui_svc_vfo_copy(const radio_view_t *v)
+{
+	radio_vfo_copy_t r = radio_vfo_copy_check(&v->ch, v->vfo);
+	if (r == VFO_COPY_OK) {
+		radio_req_vfo_copy();
+	}
+	return (uint8_t)r;
+}
 
 #if CONFIG_DMR_ROAMING
 bool ui_svc_roam(uint8_t cmd)

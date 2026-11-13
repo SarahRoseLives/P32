@@ -18,6 +18,9 @@ void debuglink_view_p25(const radio_view_t *v, dl_text_t *t)
 		(unsigned)v->p25.voice_tx_hz, v->p25.voice_id, v->p25.voice_grant);
 	dl_text(t, "p25.system_cc_hz=%u\np25.system_uplink_hz=%u\np25.system_tg=%u\np25.system_unit=%u\n",
 		(unsigned)v->p25.system_cc_hz, (unsigned)v->p25.system_uplink_hz, v->p25.system_tg, v->p25.system_unit);
+	dl_text(t, "p25.activity=%u\np25.system_sys=%x\np25.system_wacn=%x\np25.out_of_range=%u\np25.no_control=%u\n",
+		(unsigned)v->p25.activity, v->p25.system_sys, (unsigned)v->p25.system_wacn, v->p25.out_of_range,
+		v->p25.no_control);
 #else
 	(void)v;
 	dl_text(t, "p25.built=0\n");

@@ -28,7 +28,7 @@ _Static_assert(SETTINGS_PAGES <= SETTINGS_PAGES_MAX, "settings_t outgrew its pag
 _Static_assert(sizeof(settings_t) % 4 == 0, "settings_t has tail padding");
 _Static_assert(offsetof(settings_t, dual_b) == SETTINGS_PAGE_BYTES, "page 1 starts at its first field");
 _Static_assert(offsetof(settings_t, ref_trim_ppb) % 2 == 0, "ref_trim_ppb is aligned");
-_Static_assert(sizeof(settings_t) == 452, "settings_t changed size: update docs/spec/settings-store.md 3 and this");
+_Static_assert(sizeof(settings_t) == 636, "settings_t changed size: update docs/spec/settings-store.md 3 and this");
 
 static settings_t live;			// under the quick lock
 static settings_t saved;		// what the newest record holds (or the defaults)
@@ -75,6 +75,8 @@ void settings_defaults(settings_t *s)
 	s->p25.band_auto = 1;
 	s->p25.valid = 1;
 	s->p25.nac = 0x123;
+	s->p25_count = 1;
+	s->p25_active = 0;
 	strcpy(s->p25.name, "SITE 1");
 }
 
@@ -263,6 +265,12 @@ settings_load_t settings_init(void)
 	// A record from before the FPP save set the flag still has a usable system if its control and uplink are set.
 	if (!live.p25.valid && live.p25.cc_hz != 0u && live.p25.uplink_hz != 0u) {
 		live.p25.valid = 1;
+	}
+	if (live.p25_count == 0u || live.p25_count > SETTINGS_P25_SYSTEMS) {
+		live.p25_count = 1;	// an older record has only p25
+	}
+	if (live.p25_active >= live.p25_count) {
+		live.p25_active = 0;
 	}
 	storage_unlock();
 	saved = live;

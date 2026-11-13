@@ -965,7 +965,7 @@ static void copy_to_vfo(void)
 		ui_toast(TR("Already in VFO"));
 		break;
 	case VFO_COPY_NO_MODE:
-		ui_toast(view->ch.mode == RADIO_MODE_DMR ? TR("VFO: no DMR in this build") : TR("VFO: no FM in this build"));
+		ui_toast((CONFIG_DMR && view->ch.mode == RADIO_MODE_DMR) ? TR("VFO: no DMR in this build") : TR("VFO: no FM in this build"));
 		break;
 	case VFO_COPY_OUT_OF_BAND:
 		ui_toast(TR("VFO: frequency outside its bands"));
@@ -1398,6 +1398,9 @@ static void quick_activate(int tile)
 		ui_st.p25_edit_typed = false;
 		ui_st.quick_edit = true;
 		break;
+	case QT_P25_PROFILE:
+		ui_push(SCR_P25_SYS_LIST, 2);
+		break;
 #endif
 	case QT_TO_VFO:
 		copy_to_vfo();
@@ -1511,11 +1514,29 @@ bool ui_quick_key(const input_event_t *ev)
 	bool press = ev->gesture == GESTURE_PRESS;
 	int d = digit_of(ev);
 	uint8_t kind = ui_quick_kind(ui_st.quick_focus, view);
+	bool grid = ui_quick_is_grid();
+	if (grid && (ev->action == ACT_NAV_LEFT || ev->action == ACT_NAV_RIGHT) &&
+			(ev->gesture == GESTURE_PRESS || ev->gesture == GESTURE_REPEAT || ev->gesture == GESTURE_LONG)) {
+		int8_t dir = ev->action == ACT_NAV_RIGHT ? 1 : -1;
+		if (ui_st.quick_edit)
+			quick_change(kind, dir);
+		else {
+			uint8_t row = ui_st.quick_focus / 3u, col = ui_st.quick_focus % 3u;
+			col = (uint8_t)((col + 3u + dir) % 3u);
+			ui_st.quick_focus = (uint8_t)(row * 3u + col);
+		}
+		dirty = true;
+		return true;
+	}
 	if (is_nav(ev)) {
 		for (int i = steps(ev); i > 0; i--) {
 			if (ui_st.quick_edit)
 				quick_change(kind, nav_dir(ev));
-			else
+			else if (grid && ev->action != ACT_ENC_STEP) {
+				uint8_t row = ui_st.quick_focus / 3u, col = ui_st.quick_focus % 3u;
+				row = (uint8_t)((row + 3u - focus_dir(ev)) % 3u);
+				ui_st.quick_focus = (uint8_t)(row * 3u + col);
+			} else
 				ui_st.quick_focus = (uint8_t)((ui_st.quick_focus + UI_QUICK_TILES - focus_dir(ev)) % UI_QUICK_TILES);
 		}
 		dirty = true;

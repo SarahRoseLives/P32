@@ -59,7 +59,7 @@ static uint8_t nid_mul(uint8_t a,uint8_t b) {
  unsigned i=nid_log[a]+nid_log[b];return nid_exp[i>=63?i-63:i];
 }
 static bool nid_duid_supported(unsigned duid) {
- return duid==0 || duid==3 || duid==5 || duid==10 || duid==15;
+ return duid==0 || duid==3 || duid==5 || duid==7 || duid==10 || duid==15;
 }
 bool p25_rx_nid_decode(uint64_t nid,uint16_t *nac,uint8_t *duid,unsigned *corrected) {
  if(!nac || !duid || !corrected)return false;
@@ -135,6 +135,7 @@ bool p25_rx_push(p25_rx *r,uint8_t dibit) {
   switch(r->duid) {
    case 0:r->expected=396;break;
    case 3:r->expected=72;break;
+   case 7:r->expected=180;break; // control channel: FSW + NID + TSBK + status symbols
    case 5:case 10:r->expected=864;break;
    case 15:r->expected=216;break;
    default:++r->bad_nid;r->symbols=0;return false;

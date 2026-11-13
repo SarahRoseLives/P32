@@ -1257,6 +1257,10 @@ msgid "Zones"
 msgstr "Zonas"
 
 #: core/ui/ui_menus.c
+msgid "P25 systems"
+msgstr "Sistemas P25"
+
+#: core/ui/ui_menus.c
 msgid " new"
 msgstr " nuevos"
 
@@ -1269,7 +1273,7 @@ msgid "Channels: not in this build"
 msgstr "Canales: no disponible"
 
 #: core/ui/ui_menus.c
-msgid "1-7 open  Back"
+msgid "1-8 open  Back"
 msgstr "1-7 abrir  Atrás"
 
 #: core/ui/ui_menus.c
@@ -1507,6 +1511,14 @@ msgstr "{OK ir  # canales  0-9 buscar|OK ir  # canales}"
 #: core/ui/ui_menus.c
 msgid "No zones"
 msgstr "Sin zonas"
+
+#: core/ui/ui_menus.c
+msgid "System 1"
+msgstr "Sistema 1"
+
+#: core/ui/ui_menus.c
+msgid "System"
+msgstr "Sistema"
 
 #: core/ui/ui_menus.c
 msgid "Couldn't save now: try again"
@@ -1791,6 +1803,10 @@ msgstr "Ahorro batería"
 #: core/ui/ui_menus.c
 msgid "P25 trunked"
 msgstr "P25 troncal"
+
+#: core/ui/ui_menus.c
+msgid "P25 system"
+msgstr "Sistema P25"
 
 #: core/ui/ui_menus.c core/ui/ui_screens.c
 msgid "P25 conventional"
@@ -2701,10 +2717,6 @@ msgid "P25 voice"
 msgstr "Voz P25"
 
 #: core/ui/ui_menus.c
-msgid "P25 system"
-msgstr "Sistema P25"
-
-#: core/ui/ui_menus.c
 msgid "Dual watch"
 msgstr "Doble escucha"
 
@@ -3263,6 +3275,26 @@ msgstr "Escaneo detenido aquí"
 #: core/ui/ui_menus.c
 msgid "Edit scan lists in qdmr"
 msgstr "Edita listas de escaneo en qdmr"
+
+#: core/ui/ui_menus.c
+msgid "Own NAC/TG"
+msgstr "NAC/TG propios"
+
+#: core/ui/ui_menus.c
+msgid "New system"
+msgstr "Sistema nuevo"
+
+#: core/ui/ui_menus.c
+msgid "Four systems at most"
+msgstr "Cuatro sistemas como máximo"
+
+#: core/ui/ui_menus.c
+msgid "SYSTEM "
+msgstr "SISTEMA "
+
+#: core/ui/ui_menus.c
+msgid "{OK edit  Back|OK choose  Back}"
+msgstr "{OK editar  Atrás|OK elegir  Atrás}"
 
 #: core/ui/ui_menus.c
 msgid "WACN is 5 hex digits"
@@ -3849,11 +3881,15 @@ msgid "{Talkgroup|TG}"
 msgstr "{Grupo de voz|TG}"
 
 #: core/ui/ui_screens.c
+msgid "{System|SYS}"
+msgstr "{Sistema|SYS}"
+
+#: core/ui/ui_screens.c
 msgid "{Copy to VFO|To VFO}"
 msgstr "{Copiar a VFO|A VFO}"
 
 #: core/ui/ui_screens.c
-msgid "{TX freq|TXFreq}"
+msgid "{TX freq|TX}"
 msgstr "{Frec TX|FrecTX}"
 
 #: core/ui/ui_screens.c
@@ -3863,6 +3899,10 @@ msgstr "Tono TX"
 #: core/ui/ui_screens.c
 msgid "Tone RX"
 msgstr "Tono RX"
+
+#: core/ui/ui_screens.c
+msgid "SYS"
+msgstr "SYS"
 
 #: core/ui/ui_screens.c
 msgid "Copy"

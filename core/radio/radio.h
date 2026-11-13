@@ -26,7 +26,7 @@ typedef enum {
 typedef enum {
 	TXDENY_NONE, TXDENY_RX_ONLY, TXDENY_BAND, TXDENY_TIMEOUT, TXDENY_NO_FREQ, TXDENY_MODE,
 	TXDENY_NO_CODEC, TXDENY_NO_DMR, TXDENY_BUSY, TXDENY_NO_REPEATER, TXDENY_REJECTED, TXDENY_HOTSPOT, TXDENY_NO_ID,
-	TXDENY_INHIBIT, TXDENY_BATTERY, TXDENY_AM, TXDENY_BCAST, TXDENY_SFR_RPT, TXDENY_NOT_AFFIL,
+	TXDENY_INHIBIT, TXDENY_BATTERY, TXDENY_AM, TXDENY_BCAST, TXDENY_SFR_RPT, TXDENY_NOT_AFFIL, TXDENY_OUT_OF_RANGE,
 } tx_deny_t;
 
 // Busy channel lockout (FM): CARRIER refuses PTT while anything is heard on the channel; WRONG_TONE only while a
@@ -225,6 +225,8 @@ typedef struct {
 typedef struct {
 	bool on;
 	bool valid;
+	bool out_of_range;	// a trunked channel with no carrier: no PHY blocks from the control channel
+	bool no_control;	// carrier present but no fresh decoded control channel
 	uint8_t opcode;		// the last TSBK's opcode
 	uint16_t nac;
 	uint8_t duid;
@@ -234,6 +236,7 @@ typedef struct {
 	uint16_t tg, vch;
 	uint32_t freq_hz;
 	uint32_t frames;	// control-channel bursts decoded since it started
+	uint32_t activity;	// PHY receive blocks captured since it started (carrier activity)
 	uint32_t voice_hz;	// the last grant's downlink voice channel (IdenUp band plan applied)
 	uint32_t voice_tx_hz;	// the last grant's subscriber transmit channel
 	uint8_t voice_id;	// the last grant's IDEN
@@ -246,6 +249,8 @@ typedef struct {
 	uint32_t system_uplink_hz;	// the configured control-channel uplink
 	uint32_t system_voice_hz;	// the voice channel to use when the grant is missed
 	uint16_t system_nac;	// the configured P25 NAC
+	uint16_t system_sys;	// the configured system ID, shown before a CC decodes
+	uint32_t system_wacn;	// the configured WACN
 	bool follow;		// follow voice grants from the control channel
 	bool voice;		// the voice receiver, not the control-channel monitor
 	bool conv;		// conventional P25 voice on the current channel (not trunking)
@@ -422,6 +427,7 @@ void radio_req_p25_voice(bool on);		// the voice receiver: 1 enter (from idle, t
 void radio_req_p25_conv(bool on);		// the current channel is a conventional P25 memory
 void radio_req_p25_nac(uint16_t nac);		// its NAC for now
 void radio_req_p25_tg(uint16_t tg);		// its talkgroup for now
+void radio_req_p25_profile(int8_t system);	// -1 CNV, else the stored P25 system slot
 #endif
 void radio_req_reload(void);			// the settings' preferences changed (squelch, master power, DMR ID)
 // FM bandwidth and sub-audio. On a channel these are temporary changes (P7); in the VFO they change the VFO itself.

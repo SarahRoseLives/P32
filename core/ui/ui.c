@@ -144,6 +144,10 @@ static void ui_task(void *arg)
 			gfx_frame_begin();
 			ui_app_draw();
 			gfx_flush();
+			// A full frame can outlast FRAME_MIN_MS while the radio is transmitting (the fast refresh keeps dirty
+			// set). Without a yield the UI task would redraw back to back and starve the idle task, whose feed is
+			// the watchdog's: this is the three-second hang seen after a long P25 TX frame.
+			vTaskDelay(1);
 		} else if (!have_fb) {
 			dirty = false;
 		}

@@ -160,7 +160,7 @@ static void test_settings_basic(void)
 	CHECK(st.dirty && st.saves == 0);
 	settings_poll(4500);
 	settings_get_stats(&st);
-	CHECK(!st.dirty && st.saves == 1 && st.seq == 2);	// page 1 is record 1, page 0 record 2
+	CHECK(!st.dirty && st.saves == 1 && st.seq == SETTINGS_PAGES);	// pages 2, 1, 0 are records 1, 2, 3
 	// No change, no save
 	settings_begin();
 	settings_end(5000);
@@ -171,7 +171,7 @@ static void test_settings_basic(void)
 	boot();
 	settings_get_stats(&st);
 	settings_read(&s);
-	CHECK(st.load == SETTINGS_LOADED && st.seq == 2);
+	CHECK(st.load == SETTINGS_LOADED && st.seq == SETTINGS_PAGES);
 	CHECK(s.vfo_rx_hz == 146520000 && s.squelch == 4 && strcmp(s.radio_name, "N0CALL") == 0);
 	CHECK(s.accent == (SETTINGS_AUDIO_NO_NOISE_REDUCTION | SETTINGS_AUDIO_AGC | 3u));
 
@@ -203,14 +203,14 @@ static void test_settings_wear(void)
 		CHECK(settings_flush());
 	}
 	settings_get_stats(&st);
-	CHECK(st.saves == 1000 && st.seq == 2000 && st.failures == 0);
+	CHECK(st.saves == 1000 && st.seq == 1000 * SETTINGS_PAGES && st.failures == 0);
 	uint32_t lo = 0xFFFFFFFFu, hi = 0;
 	for (unsigned k = 0; k < sectors; k++) {
 		uint32_t e = sim_flash_erases(map.settings_addr + k * STORAGE_SECTOR);
 		lo = e < lo ? e : lo;
 		hi = e > hi ? e : hi;
 	}
-	CHECK(hi - lo <= 1 && lo >= 14);	// 2000 records (two pages a save) / 16 per sector = 125 over 8 sectors
+	CHECK(hi - lo <= 1 && lo >= 14);	// 3000 records (three pages a save) / 16 per sector = 188 over 8 sectors
 	printf("settings wear: 1000 saves, %u..%u erases per sector over %u sectors\n", lo, hi, sectors);
 	boot();
 	settings_read(&s);
@@ -324,7 +324,7 @@ static void test_settings_versions(void)
 			settings_end(1);
 			CHECK(settings_flush());
 			settings_get_stats(&st);
-			CHECK(st.seq == 7 && st.sector == 3 && st.slot == 2);	// page 1 at slot 1, page 0 at 2
+			CHECK(st.seq == 8 && st.sector == 3 && st.slot == 3);	// pages 2, 1, 0 at slots 1, 2, 3
 		} else {
 			CHECK(st.load == SETTINGS_DEFAULTS && s.squelch == SETTINGS_UNSET8);
 		}
@@ -335,16 +335,16 @@ static void test_settings_versions(void)
 	settings_begin()->squelch = 1;
 	settings_end(1);
 	settings_flush();
-	// (slot 0: the ownership mark storage_init wrote on the blank ring, slots 1 and 2: the record's pages)
-	sim_flash_data[map.settings_addr + 3 * 256 + 7] = 0x12;	// junk in slot 3
+	// (slot 0: the ownership mark storage_init wrote on the blank ring, slots 1, 2 and 3: the record's pages)
+	sim_flash_data[map.settings_addr + 4 * 256 + 7] = 0x12;	// junk in slot 4
 	boot();
 	settings_get_stats(&st);
-	CHECK(st.load == SETTINGS_LOADED && st.skipped == 1 && st.slot == 2);
+	CHECK(st.load == SETTINGS_LOADED && st.skipped == 1 && st.slot == 3);
 	settings_begin()->squelch = 2;
 	settings_end(2);
 	CHECK(settings_flush());
 	settings_get_stats(&st);
-	CHECK(st.slot == 5);
+	CHECK(st.slot == 7);
 	// No flash map: RAM only
 	sim_flash.map = NULL;
 	CHECK(!storage_init());
@@ -643,7 +643,7 @@ static void test_settings_pages(void)
 	settings_t s, pl;
 	settings_stats_t st;
 
-	CHECK(SETTINGS_PAGES == 2);
+	CHECK(SETTINGS_PAGES == 3);
 	sim_flash_create(FLASH_SIZE, &map);
 	boot();
 	settings_t *w = settings_begin();
@@ -668,7 +668,7 @@ static void test_settings_pages(void)
 	boot();
 	settings_read(&s);
 	settings_get_stats(&st);
-	CHECK(st.load == SETTINGS_UPGRADED && st.seq == 3 && s.squelch == 2 && s.vfo2_rx_hz == 446006250u);
+	CHECK(st.load == SETTINGS_LOADED && st.seq == 3 && s.squelch == 2 && s.vfo2_rx_hz == 446006250u);
 	// and the next save of this firmware writes both again
 	settings_begin()->vfo2_rx_hz = 147000000u;
 	settings_end(2);
@@ -676,18 +676,21 @@ static void test_settings_pages(void)
 	boot();
 	settings_read(&s);
 	settings_get_stats(&st);
-	CHECK(st.load == SETTINGS_LOADED && st.seq == 5 && s.squelch == 2 && s.vfo2_rx_hz == 147000000u);
+	CHECK(st.load == SETTINGS_LOADED && st.seq == 6 && s.squelch == 2 && s.vfo2_rx_hz == 147000000u);
 
 	// A page 1 newer than page 0 is not the set's
 	settings_defaults(&pl);
 	pl.squelch = 1;
 	pl.vfo2_rx_hz = 440000000u;
 	sim_flash_create(FLASH_SIZE, &map);
-	put_record(&map, 1, 0, 10, SETTINGS_LAYOUT | (1u << SETTINGS_PAGE_SHIFT), sizeof pl - SETTINGS_PAGE_BYTES,
+	put_record(&map, 1, 0, 10, SETTINGS_LAYOUT | (1u << SETTINGS_PAGE_SHIFT), SETTINGS_PAGE_BYTES,
 		   (const uint8_t *)&pl + SETTINGS_PAGE_BYTES, true, true);
 	put_record(&map, 1, 1, 11, SETTINGS_LAYOUT, SETTINGS_PAGE_BYTES, &pl, true, true);
+	pl.vfo2_rx_hz = 440000000u;
+	put_record(&map, 1, 3, 9, SETTINGS_LAYOUT | (2u << SETTINGS_PAGE_SHIFT), sizeof pl - 2 * SETTINGS_PAGE_BYTES,
+		   (const uint8_t *)&pl + 2 * SETTINGS_PAGE_BYTES, true, true);
 	pl.vfo2_rx_hz = 450000000u;
-	put_record(&map, 1, 2, 12, SETTINGS_LAYOUT | (1u << SETTINGS_PAGE_SHIFT), sizeof pl - SETTINGS_PAGE_BYTES,
+	put_record(&map, 1, 2, 12, SETTINGS_LAYOUT | (1u << SETTINGS_PAGE_SHIFT), SETTINGS_PAGE_BYTES,
 		   (const uint8_t *)&pl + SETTINGS_PAGE_BYTES, true, true);
 	boot();
 	settings_read(&s);
@@ -698,7 +701,7 @@ static void test_settings_pages(void)
 	settings_end(3);
 	CHECK(settings_flush());
 	settings_get_stats(&st);
-	CHECK(st.seq == 14 && st.sector == 1 && st.slot == 4);
+	CHECK(st.seq == 15 && st.sector == 1 && st.slot == 6);
 	boot();
 	settings_read(&s);
 	CHECK(s.squelch == 3 && s.vfo2_rx_hz == 440000000u);
@@ -708,7 +711,7 @@ static void test_settings_pages(void)
 	settings_defaults(&pl);
 	pl.vfo2_rx_hz = 445000000u;
 	sim_flash_create(FLASH_SIZE, &map);
-	put_record(&map, 0, 0, 1, SETTINGS_LAYOUT | (1u << SETTINGS_PAGE_SHIFT), sizeof pl - SETTINGS_PAGE_BYTES,
+	put_record(&map, 0, 0, 1, SETTINGS_LAYOUT | (1u << SETTINGS_PAGE_SHIFT), SETTINGS_PAGE_BYTES,
 		   (const uint8_t *)&pl + SETTINGS_PAGE_BYTES, true, true);
 	for (uint32_t i = 1; i < 8u * 16u; i++) {
 		pl.squelch = (uint8_t)(i % 10u);
@@ -722,7 +725,7 @@ static void test_settings_pages(void)
 	settings_end(4);
 	CHECK(settings_flush());
 	settings_get_stats(&st);
-	CHECK(st.sector == 1 && st.slot == 1 && st.failures == 0);
+	CHECK(st.sector == 1 && st.slot == 2 && st.failures == 0);
 	boot();
 	settings_read(&s);
 	settings_get_stats(&st);
@@ -804,6 +807,11 @@ static void test_settings_layout(void)
 		{ offsetof(settings_t, zone_jrn_count), 274 },
 		{ offsetof(settings_t, zone_jrn_kind), 276 },
 		{ offsetof(settings_t, p25), 392 },		// appended after zs_import
+		{ offsetof(settings_t, p25_alt[0]), 452 },
+		{ offsetof(settings_t, p25_alt[1]), 512 },
+		{ offsetof(settings_t, p25_alt[2]), 572 },
+		{ offsetof(settings_t, p25_count), 632 },
+		{ offsetof(settings_t, p25_active), 633 },
 	};
 	for (unsigned i = 0; i < sizeof(offs) / sizeof(offs[0]); i++) {
 		if (offs[i].got != offs[i].want) {
@@ -894,7 +902,7 @@ static void test_settings_bad_records(void)
 			settings_end(1);
 			CHECK(settings_flush());
 			settings_get_stats(&st);
-			CHECK(st.seq == 43 && st.sector == 2 && st.slot == 3);
+	CHECK(st.seq == 44 && st.sector == 2 && st.slot == 4);
 		}
 		CHECK(sim_flash_violations() == 0);
 	}
@@ -917,7 +925,7 @@ static void test_settings_bad_records(void)
 	boot();
 	settings_read(&s);
 	settings_get_stats(&st);
-	CHECK(st.seq == 3 && s.squelch == 1);
+	CHECK(st.seq == 4 && s.squelch == 1);
 
 	// A ring with no free slot and nothing valid (every slot torn): the save erases a sector and works
 	sim_flash_create(FLASH_SIZE, &map);
@@ -954,14 +962,14 @@ static void test_settings_worn_sector(void)
 
 	sim_flash_create(FLASH_SIZE, &map_two);
 	boot();
-	// Sector 0 full but one slot: the ownership mark and 7 saves of two pages
+	// Sector 0 full but one slot: the ownership mark and 7 saves of three pages
 	for (uint32_t i = 1; i <= 7; i++) {
 		settings_begin()->vfo_rx_hz = 440000000u + i;
 		settings_end(i);
 		CHECK(settings_flush());
 	}
 	settings_get_stats(&st);
-	CHECK(st.sector == 0 && st.slot == 14);
+	CHECK(st.sector == 1 && st.slot == 5);
 	sim_flash_bad_range(map_two.settings_addr + STORAGE_SECTOR, STORAGE_SECTOR);
 	// Saves fail while sector 1 doesn't program; each one walks past 4 of its slots (the first erases sector 1).
 	// From the second on, a power cut is armed at the first flash operation of the save: the one that would
@@ -1091,6 +1099,34 @@ static void test_write_across_sectors(void)
 	CHECK(sim_flash_violations() == 0);
 }
 
+// Several P25 systems: the first slot is p25, the others p25_alt; count and active survive a save
+static void test_p25_systems(void)
+{
+	settings_t s;
+	settings_stats_t st;
+
+	sim_flash_create(FLASH_SIZE, &map);
+	boot();
+	settings_t *w = settings_begin();
+	w->p25_count = 3;
+	w->p25_active = 2;
+	settings_p25_mut(w, 0)->cc_hz = 438800000u;
+	strcpy(settings_p25_mut(w, 0)->name, "ONE");
+	settings_p25_mut(w, 1)->cc_hz = 439000000u;
+	strcpy(settings_p25_mut(w, 1)->name, "TWO");
+	settings_p25_mut(w, 2)->cc_hz = 439200000u;
+	strcpy(settings_p25_mut(w, 2)->name, "THREE");
+	settings_end(1);
+	CHECK(settings_flush());
+	boot();
+	settings_read(&s);
+	settings_get_stats(&st);
+	CHECK(st.load == SETTINGS_LOADED && s.p25_count == 3 && s.p25_active == 2);
+	CHECK(settings_p25_get(&s, 0)->cc_hz == 438800000u && strcmp(settings_p25_get(&s, 0)->name, "ONE") == 0);
+	CHECK(settings_p25_get(&s, 1)->cc_hz == 439000000u && strcmp(settings_p25_get(&s, 1)->name, "TWO") == 0);
+	CHECK(settings_p25_get(&s, 2)->cc_hz == 439200000u && strcmp(settings_p25_get(&s, 2)->name, "THREE") == 0);
+}
+
 int main(void)
 {
 	test_journal_basic();
@@ -1104,6 +1140,7 @@ int main(void)
 	test_settings_layout();
 	test_crash_bits();
 	test_settings_pages();
+	test_p25_systems();
 	test_settings_gateway_upgrade();
 	test_settings_bad_records();
 	test_settings_worn_sector();

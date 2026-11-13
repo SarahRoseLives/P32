@@ -53,6 +53,8 @@ typedef struct {
 	// low nibble.
 	bool p25;
 	bool p25_conv;
+	bool p25_system_set;	// P25 conventional with a system profile: use that system's NAC/TG/unit
+	uint8_t p25_system;	// index into settings_t.p25 / p25_alt (trunked, or conventional with set)
 	uint16_t p25_tg;
 	uint16_t p25_nac;
 } channel_t;

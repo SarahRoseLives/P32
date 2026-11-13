@@ -60,14 +60,22 @@ void item_num_set(ui_item_t *it, uint16_t n)
 
 // ======================= Hub =======================
 
-enum { HUB_LAST_CALLER, HUB_CONTACTS, HUB_MESSAGES, HUB_RECENT, HUB_ZONES, HUB_CHANNELS, HUB_TOOLS, HUB_SETTINGS };
+enum { HUB_LAST_CALLER, HUB_CONTACTS, HUB_MESSAGES, HUB_RECENT, HUB_ZONES, HUB_CHANNELS, HUB_TOOLS, HUB_SETTINGS,
+       HUB_P25_SYS };
 
 static bool hub_has_last(void)
 {
 	return !ui_has_action(ACT_CONTEXT);	// few-key boards: "Last caller" stands in for CONTEXT (7.5)
 }
 
-static uint16_t hub_count(void) { return hub_has_last() ? 8 : 7; }
+static uint16_t hub_count(void)
+{
+	uint16_t n = hub_has_last() ? 8 : 7;	// Last caller (0), Contacts..Settings (1..7)
+#if CONFIG_P25
+	n++;					// P25 systems is 8
+#endif
+	return n;
+}
 
 static uint8_t hub_entry(uint16_t i)
 {
@@ -77,7 +85,8 @@ static uint8_t hub_entry(uint16_t i)
 static void hub_item(uint16_t i, ui_item_t *it)
 {
 	static const char *const names[] = { TRN("Last caller"), TRN("Contacts"), TRN("Messages"), TRN("Recent"),
-					     TRN("Zones"), TRN("Channels"), TRN("Tools"), TRN("Settings") };
+					     TRN("Zones"), TRN("Channels"), TRN("Tools"), TRN("Settings"),
+					     TRN("P25 systems") };
 	uint8_t e = hub_entry(i);
 	str_copy(it->label, sizeof it->label, tr(names[e]));
 	item_num(it, e);
@@ -100,7 +109,13 @@ static void hub_item(uint16_t i, ui_item_t *it)
 static void hub_select(uint16_t i, bool hold)
 {
 	static const uint8_t scr[] = { SCR_RECENT, SCR_CONTACTS, SCR_MESSAGES, SCR_RECENT, SCR_ZONES, SCR_CHANNELS,
-				       SCR_TOOLS, SCR_SETTINGS };
+				       SCR_TOOLS, SCR_SETTINGS,
+#if CONFIG_P25
+				       SCR_P25_SYS_LIST
+#else
+				       SCR_SETTINGS
+#endif
+				     };
 	(void)hold;
 	uint8_t e = hub_entry(i);
 	if (e == HUB_LAST_CALLER) {
@@ -121,7 +136,7 @@ static void hub_select(uint16_t i, bool hold)
 }
 
 static const ui_scr_def_t hub_screen = {
-	.name = "hub", .flags = SF_LIST | SF_NUMBERED | SF_FIELD, .hint = TRN("1-7 open  Back"),
+	.name = "hub", .flags = SF_LIST | SF_NUMBERED | SF_FIELD, .hint = TRN("1-8 open  Back"),
 	.count = hub_count, .item = hub_item, .select = hub_select,
 };
 
@@ -907,15 +922,33 @@ static const ui_scr_def_t channels_screen = {
 // A channel row's value: its RX frequency and what it talks to, the talkgroup on DMR ("TG3113", "ID3101234" for a
 // private contact) or "FM". The whole name comes first; where both don't fit beside it, the frequency and the bare
 // number, then the talkgroup alone (text alternates)
+#if CONFIG_P25
+static void p25_system_name(uint8_t idx, char *buf, size_t len)
+{
+	static settings_t st;
+	settings_read(&st);
+	if (st.p25_count == 0 || idx >= st.p25_count) {
+		str_copy(buf, len, TR("System 1"));
+		return;
+	}
+	const settings_p25_t *sys = settings_p25_get(&st, idx);
+	if (sys->name[0] != 0) {
+		str_copy(buf, len, sys->name);
+	} else {
+		str_copy(buf, len, TR("System"));
+	}
+}
+#endif
+
 static void sb_channel_row(sbuf_t *b, const channel_t *ch)
 {
 	char what[16];
+	const char *tag = ch->p25_conv ? "CNV" : ch->p25 ? "TRK" :
+		(CONFIG_DMR && ch->mode == RADIO_MODE_DMR) ? "DMR" : radio_am_channel(ch) ? "AM" : "FM";
 	uint8_t prefix = 0;	// "TG" / "ID": left out in the middle form
 	sbuf_t wb;
 	sb_init(&wb, what, sizeof what);
 	if (ch->p25 || ch->p25_conv) {
-		sb_str(&wb, "P25");
-		prefix = 3;
 		sb_u32(&wb, ch->p25_tg, 1);
 	} else
 #if CONFIG_DMR
@@ -929,8 +962,10 @@ static void sb_channel_row(sbuf_t *b, const channel_t *ch)
 	} else
 #endif
 	{
-		sb_str(&wb, ch->mode == RADIO_MODE_DMR ? "DMR" : radio_am_channel(ch) ? "AM" : "FM");
+		// The family tag already says FM / AM.
 	}
+	sb_str(b, tag);
+	sb_chr(b, ' ');
 	sb_str(b, TEXT_ALT_OPEN);
 	sb_freq(b, ch->rx_hz);
 	sb_chr(b, ' ');
@@ -1752,7 +1787,8 @@ static const ui_scr_def_t chlist_screen = {
 
 enum { CE_NAME, CE_NUMBER, CE_MODE, CE_RX, CE_TX, CE_POWER, CE_RX_ONLY, CE_BW, CE_RX_TONE, CE_TX_TONE, CE_VOX,
        CE_CC, CE_TS, CE_CONTACT, CE_LIST, CE_ID, CE_DMO, CE_BEEP, CE_ALIAS1, CE_ALIAS2, CE_TOT, CE_SCAN, CE_ECO,
-       CE_P25, CE_P25_CONV, CE_P25_TG, CE_P25_NAC, CE_ZONES, CE_GO, CE_SHARE, CE_SAVE, CE_SAVE_NEW, CE_COUNT,
+       CE_P25, CE_P25_SYS, CE_P25_CONV, CE_P25_TG, CE_P25_NAC, CE_ZONES, CE_GO, CE_SHARE, CE_SAVE, CE_SAVE_NEW,
+       CE_COUNT,
        CE_NONE = 0xFF };
 
 static channel_t ced_ch;		// what the screen shows (the working copy when editing)
@@ -1793,8 +1829,8 @@ static const struct { uint8_t off, len, bit; } ced_fields[CE_ZONES] = {
 	[CE_BEEP] = CE_FIELD(no_beep), [CE_ALIAS1] = { offsetof(channel_t, alias_tx), 1, CODEPLUG_ALIAS_TS1_TEXT },
 	[CE_ALIAS2] = { offsetof(channel_t, alias_tx), 1, CODEPLUG_ALIAS_TS2_TEXT }, [CE_TOT] = CE_FIELD(tot_s),
 	[CE_SCAN] = CE_FIELD(scan_skip), [CE_ECO] = CE_FIELD(no_eco),
-	[CE_P25] = CE_FIELD(p25), [CE_P25_CONV] = CE_FIELD(p25_conv), [CE_P25_TG] = CE_FIELD(p25_tg),
-	[CE_P25_NAC] = CE_FIELD(p25_nac),
+	[CE_P25] = CE_FIELD(p25), [CE_P25_SYS] = CE_FIELD(p25_system), [CE_P25_CONV] = CE_FIELD(p25_conv),
+	[CE_P25_TG] = CE_FIELD(p25_tg), [CE_P25_NAC] = CE_FIELD(p25_nac),
 };
 
 // Whether row r differs from what is stored (the dot), or for CE_COUNT, any row
@@ -1813,6 +1849,8 @@ static bool ced_changed(uint8_t r)
 	const uint8_t *a = (const uint8_t *)&ced_ch + ced_fields[r].off, *b = (const uint8_t *)&ced_orig + ced_fields[r].off;
 	if (r == CE_NAME)
 		return strcmp((const char *)a, (const char *)b) != 0;	// the bytes past the end may differ
+	if (r == CE_P25_SYS)
+		return ced_ch.p25_system_set != ced_orig.p25_system_set || ced_ch.p25_system != ced_orig.p25_system;
 	if (r == CE_RX_TONE || r == CE_TX_TONE)
 		return !tone_same((const subtone_t *)a, (const subtone_t *)b);
 	if (ced_fields[r].bit != 0)
@@ -1867,12 +1905,13 @@ static void ced_build(void)
 		bool dmr_only = r >= CE_CC && r <= CE_ALIAS2;
 		if ((fm_only && dmr) || (dmr_only && !dmr) || (r == CE_MODE && !CONFIG_DMR))
 			continue;
-		if ((r == CE_P25 || r == CE_P25_CONV || r == CE_P25_TG || r == CE_P25_NAC) && dmr)
+		if ((r == CE_P25 || r == CE_P25_SYS || r == CE_P25_CONV || r == CE_P25_TG || r == CE_P25_NAC) && dmr)
 			continue;
 		if (r == CE_P25 && !CONFIG_P25) continue;
+		if (r == CE_P25_SYS && !(CONFIG_P25 && (ced_ch.p25 || ced_ch.p25_conv))) continue;
 		if (r == CE_P25_CONV && !CONFIG_P25) continue;
-		if (r == CE_P25_TG && !(CONFIG_P25 && (ced_ch.p25 || ced_ch.p25_conv))) continue;
-		if (r == CE_P25_NAC && !(CONFIG_P25 && ced_ch.p25_conv)) continue;
+		if (r == CE_P25_TG && !(CONFIG_P25 && (ced_ch.p25 || (ced_ch.p25_conv && !ced_ch.p25_system_set)))) continue;
+		if (r == CE_P25_NAC && !(CONFIG_P25 && ced_ch.p25_conv && !ced_ch.p25_system_set)) continue;
 		if ((r == CE_ZONES || r == CE_GO || r == CE_SHARE || r == CE_SAVE_NEW) && fresh)
 			continue;
 		if (r == CE_SHARE && !CONFIG_ZONE_SHARE)
@@ -2013,8 +2052,8 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 		TRN("RX only"), TRN("Bandwidth"), TRN("RX CTCSS/DCS"), TRN("TX CTCSS/DCS"), "VOX", TRN("Color code"),
 		TRN("Timeslot"), TRN("TX contact"), TRN("RX group list"), TRN("Own ID"), TRN("Direct mode"),
 		TRN("Talk permit beeps"), TRN("Talker alias TS1"), TRN("Talker alias TS2"), TRN("TX time-out"), TRN("Scan"),
-		TRN("Battery saver"), TRN("P25 trunked"), TRN("P25 conventional"), TRN("P25 talkgroup"),
-		TRN("P25 NAC"), TRN("Zones"), TRN("Tune to this ch"),
+		TRN("Battery saver"), TRN("P25 trunked"), TRN("P25 system"), TRN("P25 conventional"),
+		TRN("P25 talkgroup"), TRN("P25 NAC"), TRN("Zones"), TRN("Tune to this ch"),
 		TRN(GLYPH_SHARE " Share channel to..."), TRN("Save"), TRN("Save as new channel") };
 	const channel_t *ch = &ced_ch;
 	if (i >= ced_n)
@@ -2055,7 +2094,7 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 		sb_u32(&b, ced_num, 1);
 		break;
 	case CE_MODE:
-		sb_str(&b, ch->mode == RADIO_MODE_DMR ? "DMR" : "FM");
+		sb_str(&b, (CONFIG_DMR && ch->mode == RADIO_MODE_DMR) ? "DMR" : "FM");
 		break;
 	case CE_RX:
 		sb_freq(&b, ch->rx_hz);
@@ -2163,6 +2202,16 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 	case CE_P25:
 		sb_onoff(&b, ch->p25);
 		break;
+	case CE_P25_SYS: {
+		char name[SETTINGS_NAME_LEN + 1];
+		if (ch->p25_conv && !ch->p25_system_set) {
+			sb_str(&b, "CNV");
+		} else {
+			p25_system_name(ch->p25_system, name, sizeof name);
+			sb_str(&b, name);
+		}
+		break;
+	}
 	case CE_P25_CONV:
 		sb_onoff(&b, ch->p25_conv);
 		break;
@@ -2569,19 +2618,27 @@ static void chinfo_select(uint16_t i, bool hold)
 	case CE_ECO: c->no_eco = !c->no_eco; break;
 	case CE_P25:
 		c->p25 = !c->p25;
-		if (c->p25) c->p25_conv = false;
+		if (c->p25) {
+			c->p25_conv = false;
+			c->p25_system_set = false;
+		}
 		ced_build();
+		break;
+	case CE_P25_SYS:
+		ui_push(SCR_P25_SYS_LIST, c->p25_conv ? 3 : 1);
 		break;
 	case CE_P25_CONV:
 #if CONFIG_P25
 		c->p25_conv = !c->p25_conv;
 		if (c->p25_conv) {
 			c->p25 = false;
+			c->p25_system_set = false;
 			if (c->p25_nac == 0 || c->p25_tg == 0) {
-				settings_t st;
+				static settings_t st;
 				settings_read(&st);
-				if (c->p25_nac == 0) c->p25_nac = st.p25.nac;
-				if (c->p25_tg == 0) c->p25_tg = st.p25.tg;
+				const settings_p25_t *sys = settings_p25_get(&st, st.p25_active < st.p25_count ? st.p25_active : 0);
+				if (c->p25_nac == 0) c->p25_nac = sys->nac;
+				if (c->p25_tg == 0) c->p25_tg = sys->tg;
 			}
 		}
 		ced_build();
@@ -4707,7 +4764,7 @@ void ui_crash_tick(uint32_t now_ms)
 // user guide) is the same everywhere. The one a radio may not have (Battery) is last, so no radio has a gap; a build
 // without diagnostics skips 7
 enum { T_SCAN, T_POSITION, T_HOTSPOT, T_USB_NET, T_SFR, T_ROAM, T_DIAG, T_APRS, T_BATTERY, T_ZONE_OFFER,
-       T_P25, T_P25_VOICE, T_P25_SYS, T_COUNT };
+       T_P25, T_P25_VOICE, T_COUNT };
 
 // A tool this build or radio doesn't have is left out of the list (Battery, Supply on a radio that measures its DC
 // input instead, is left out where the radio measures neither)
@@ -4723,13 +4780,6 @@ static bool tool_shown(uint16_t i)
 	if (i == T_P25_VOICE) {
 #if CONFIG_P25_VOICE
 		return board.p25_probe != NULL && board.p25_probe->audio_start != NULL;
-#else
-		return false;
-#endif
-	}
-	if (i == T_P25_SYS) {
-#if CONFIG_P25
-		return board.p25_probe != NULL;	// the systems a radio with the P25 probe stores
 #else
 		return false;
 #endif
@@ -4778,8 +4828,7 @@ static void tools_item(uint16_t row, ui_item_t *it)
 {
 	static const char *const names[] = { TRN("Scan"), TRN("Position"), TRN("Hotspot"), TRN("USB network"),
 					     TRN("Single-freq repeater"), TRN("Roaming"), TRN("Diagnostics"), "APRS",
-					     TRN("Battery"), TRN("Zones/Chs Received"), "P25", TRN("P25 voice"),
-					     TRN("P25 system") };
+					     TRN("Battery"), TRN("Zones/Chs Received"), "P25", TRN("P25 voice") };
 	uint16_t i = tools_row(row);
 	if (i >= T_COUNT)
 		return;
@@ -4884,7 +4933,6 @@ static void tools_select(uint16_t row, bool hold)
 	case T_P25_VOICE: ui_push(SCR_P25_VOICE, 0); break;
 #endif
 #if CONFIG_P25
-	case T_P25_SYS: ui_push(SCR_P25_SYS, 0); break;
 #endif
 	case T_ZONE_OFFER: ui_push(SCR_OFFER, 0); break;
 	default: break;
@@ -5839,10 +5887,12 @@ enum {
 #if CONFIG_P25_TX
 	P25S_TEST,
 #endif
-	P25S_BASE, P25S_SPACING, P25S_OFFSET, P25S_COUNT
+	P25S_BASE, P25S_SPACING, P25S_OFFSET,
+	P25S_NAME, P25S_COUNT
 };
 
 static settings_p25_t p25s;		// the copy on screen
+static uint8_t p25s_index;		// which settings slot the editor opened
 static uint8_t p25s_edit_row = P25S_COUNT;	// the row whose number is being typed
 static uint32_t p25s_edit_val;
 static uint8_t p25s_edit_len;
@@ -5852,24 +5902,156 @@ static char p25s_text[6];		// five hex digits and a NUL
 
 static void p25s_load(void)
 {
-	settings_t st;
+	static settings_t st;
 	settings_read(&st);
-	p25s = st.p25;
+	if (st.p25_count == 0) st.p25_count = 1;
+	if (p25s_index >= st.p25_count) p25s_index = 0;
+	p25s = *settings_p25_get(&st, p25s_index);
 }
 
 static void p25s_save(void)
 {
 	settings_t *st = settings_begin();
+	if (st->p25_count == 0) st->p25_count = 1;
+	if (p25s_index >= st->p25_count) p25s_index = 0;
 	p25s.valid = 1;		// saving the FPP form makes it a usable system
-	st->p25 = p25s;
+	*settings_p25_mut(st, p25s_index) = p25s;
+	if (st->p25_active >= st->p25_count) st->p25_active = p25s_index;
 	settings_end(hal_millis());
 }
+
+// The system list: Tools > P25 system opens it to manage systems. The channel editor opens it with mode 1 (a trunked
+// channel's system), mode 3 (a conventional channel's CNV/system profile), or mode 2 from the Quick VFO profile tile.
+enum { P25L_MANAGE, P25L_TRUNK, P25L_PROFILE, P25L_CONV_EDIT };
+static uint8_t p25l_mode;
+
+static void p25l_enter(void)
+{
+	p25l_mode = (uint8_t)ui_frame()->arg;
+	if (p25l_mode > P25L_CONV_EDIT) p25l_mode = P25L_MANAGE;
+}
+
+static uint16_t p25l_count(void)
+{
+	static settings_t st;
+	settings_read(&st);
+	if (st.p25_count == 0) return 1;
+	uint16_t n = st.p25_count;
+	if (p25l_mode == P25L_PROFILE || p25l_mode == P25L_CONV_EDIT) n++;
+	if (p25l_mode == P25L_MANAGE) n++;
+	return n;
+}
+
+static void p25l_item(uint16_t i, ui_item_t *it)
+{
+	static settings_t st;
+	settings_read(&st);
+	if (st.p25_count == 0) st.p25_count = 1;
+	uint8_t off = (p25l_mode == P25L_PROFILE || p25l_mode == P25L_CONV_EDIT) ? 1u : 0u;
+	if (off && i == 0) {
+		str_copy(it->label, sizeof it->label, "CNV");
+		str_copy(it->value, sizeof it->value, TR("Own NAC/TG"));
+		return;
+	}
+	uint16_t si = (uint16_t)(i - off);
+	if (p25l_mode == P25L_MANAGE && si >= st.p25_count) {
+		str_copy(it->label, sizeof it->label, TR("New system"));
+		return;
+	}
+	if (si >= st.p25_count) return;
+	item_num(it, (uint16_t)(si + 1u));
+	const settings_p25_t *sys = settings_p25_get(&st, (uint8_t)si);
+	sbuf_t b;
+	sb_init(&b, it->label, sizeof it->label);
+	sb_str(&b, sys->name[0] ? sys->name : TR("System"));
+	sb_init(&b, it->value, sizeof it->value);
+	sb_freq(&b, sys->cc_hz);
+	if ((uint8_t)si == st.p25_active)
+		it->flags |= UI_ITEM_TEMP;
+}
+
+static void p25l_select(uint16_t i, bool hold)
+{
+	(void)hold;
+	static settings_t st;
+	settings_read(&st);
+	if (st.p25_count == 0) st.p25_count = 1;
+	uint8_t off = (p25l_mode == P25L_PROFILE || p25l_mode == P25L_CONV_EDIT) ? 1u : 0u;
+	if (off && i == 0) {
+		if (p25l_mode == P25L_PROFILE) {
+			radio_req_p25_profile(-1);
+			ui_pop();
+		} else {
+			ced_ch.p25 = false;
+			ced_ch.p25_conv = true;
+			ced_ch.p25_system_set = false;
+			ui_pop();
+			ui_dirty();
+		}
+		return;
+	}
+	i = (uint16_t)(i - off);
+	if (p25l_mode == P25L_MANAGE && i >= st.p25_count) {
+		if (st.p25_count >= SETTINGS_P25_SYSTEMS) {
+			ui_toast(TR("Four systems at most"));
+			return;
+		}
+		settings_t *w = settings_begin();
+		uint8_t n = w->p25_count;
+		settings_p25_t *sys = settings_p25_mut(w, n);
+		*sys = *settings_p25_get(w, w->p25_active);
+		sys->valid = 1;
+		sbuf_t b;
+		sb_init(&b, sys->name, sizeof sys->name);
+		sb_str(&b, TR("SYSTEM "));
+		sb_u32(&b, n + 1u, 1);
+		w->p25_count = (uint8_t)(n + 1u);
+		w->p25_active = n;
+		settings_end(hal_millis());
+		p25s_index = n;
+	} else {
+		if (p25l_mode == P25L_PROFILE) {
+			radio_req_p25_profile((int8_t)i);
+			ui_pop();
+			return;
+		}
+		if (p25l_mode == P25L_CONV_EDIT) {
+			ced_ch.p25 = true;
+			ced_ch.p25_conv = false;
+			ced_ch.p25_system_set = false;
+			ced_ch.p25_system = (uint8_t)i;
+			ui_pop();
+			ui_dirty();
+			return;
+		}
+		if (p25l_mode == P25L_TRUNK) {
+			ced_ch.p25 = true;
+			ced_ch.p25_conv = false;
+			ced_ch.p25_system = (uint8_t)i;
+			ui_pop();
+			ui_dirty();
+			return;
+		}
+		settings_t *w = settings_begin();
+		w->p25_active = (uint8_t)i;
+		settings_end(hal_millis());
+		p25s_index = (uint8_t)i;
+	}
+	p25s_load();
+	ui_push(SCR_P25_SYS, 0);
+}
+
+static const ui_scr_def_t p25list_screen = {
+	.name = "p25syslist", .flags = SF_LIST | SF_NUMBERED | SF_FIELD, .prefix = TRN("P25 systems"),
+	.hint = TRN(TEXT_ALT_OPEN "OK edit  Back" TEXT_ALT_NEXT "OK choose  Back" TEXT_ALT_CLOSE),
+	.count = p25l_count, .item = p25l_item, .select = p25l_select, .enter = p25l_enter,
+};
 
 static bool p25s_is_hex(uint16_t row) { return row == P25S_NAC || row == P25S_WACN || row == P25S_SYS; }
 
 static bool p25s_is_num(uint16_t row)
 {
-	return (row <= P25S_UNIT && !p25s_is_hex(row)) || row >= P25S_BASE;
+	return (row <= P25S_UNIT && !p25s_is_hex(row)) || (row >= P25S_BASE && row < P25S_NAME);
 }
 
 static uint32_t p25s_max(uint16_t row)
@@ -5953,7 +6135,7 @@ static void p25s_text_begin(uint16_t row)
 
 static uint16_t p25s_count(void)
 {
-	return p25s.band_auto ? P25S_BASE : P25S_COUNT;
+	return p25s.band_auto ? P25S_NAME + 1u : P25S_COUNT;
 }
 
 static void p25s_item(uint16_t i, ui_item_t *it)
@@ -5966,6 +6148,7 @@ static void p25s_item(uint16_t i, ui_item_t *it)
 		[P25S_TEST] = TRN("Send CC test"),
 #endif
 		[P25S_BASE] = TRN("Base"), [P25S_SPACING] = TRN("Spacing"), [P25S_OFFSET] = TRN("Offset"),
+		[P25S_NAME] = TRN("Name"),
 	};
 	str_copy(it->label, sizeof it->label, tr(labels[i]));
 	char buf[24];
@@ -6034,6 +6217,9 @@ static void p25s_item(uint16_t i, ui_item_t *it)
 		}
 		sb_str(&b, " Hz");
 		break;
+	case P25S_NAME:
+		str_copy(it->value, sizeof it->value, p25s.name);
+		return;
 	default:
 		break;
 	}
@@ -6072,12 +6258,23 @@ static void p25s_commit(uint16_t row)
 	ui_toast(TR("Saved"));
 }
 
+static void p25s_name_kept(void)
+{
+	p25s_save();
+	ui_toast(TR("Saved"));
+}
+
 static bool p25s_key(const input_event_t *ev)
 {
 	bool press = ev->gesture == GESTURE_PRESS || ev->gesture == GESTURE_LONG;
 	uint16_t row = ui_frame()->focus;
 	if (row >= p25s_count())
 		return false;
+	if (ev->action == ACT_SELECT && press && row == P25S_NAME) {
+		ui_text_open_as(p25s.name, SETTINGS_NAME_LEN, TRN("Name"));
+		text_done = p25s_name_kept;
+		return true;
+	}
 	if (ev->action >= ACT_DIGIT_0 && ev->action <= ACT_DIGIT_9 && press) {
 		if (!p25s_is_num(row))
 			return true;	// NAC and WACN are typed in their text entry, OK opens it
@@ -6286,7 +6483,7 @@ const ui_scr_def_t *const ui_scr[SCR_COUNT] = {
 	[SCR_P25_VOICE] = &p25v_screen,
 #endif
 #if CONFIG_P25
-	[SCR_P25_SYS] = &p25sys_screen,
+	[SCR_P25_SYS] = &p25sys_screen, [SCR_P25_SYS_LIST] = &p25list_screen,
 #endif
 	[SCR_ROAM] = &roam_screen, [SCR_APRS] = &ui_aprs_screen, [SCR_APRS_HEARD] = &ui_aprs_heard_screen,
 	[SCR_APRS_POS] = &ui_aprs_pos_screen, [SCR_ABOUT] = &about_screen,

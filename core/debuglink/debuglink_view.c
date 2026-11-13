@@ -120,6 +120,8 @@ static void channel_section(const radio_view_t *v, dl_text_t *t)
 	dl_text(t, "ch.color_code=%u\nch.timeslot=%u\n", c->color_code, c->timeslot);
 	dl_text(t, "ch.contact=%u\nch.listen_list=%u\n", c->contact, c->listen_list);
 	dl_text(t, "ch.dmr_id=%u\nch.dmo=%u\n", (unsigned)c->dmr_id, c->dmo);
+	dl_text(t, "ch.p25=%u\nch.p25_conv=%u\nch.p25_tg=%u\nch.p25_nac=%u\n", c->p25, c->p25_conv, c->p25_tg,
+		c->p25_nac);
 }
 
 // mtu_lines and ppp_lines are not inlined: net_link_section is, into debuglink_view_section, which is on the host

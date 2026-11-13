@@ -10,6 +10,9 @@
 #include "i18n.h"
 #include "ui_svc.h"
 #include "config.h"
+#if CONFIG_P25
+#include "settings/settings.h"
+#endif
 
 ui_layout_t ui_layout;
 static const font_t *font_largest;	// the large text setting's font (large_font)
@@ -17,6 +20,8 @@ static const font_t *font_largest;	// the large text setting's font (large_font)
 // Colors carry meaning only (P5); every color cue also has a word. On 1 bpp panels everything is ink on paper
 // and pills are inverse video
 ui_colors_t ui_col;
+
+static int ui_instrument_top_height(void);	// list_top needs it before the Quick section defines it
 static uint8_t ui_theme;
 
 static uint8_t ui_accent;	// UI_ACCENT_*
@@ -240,6 +245,14 @@ static uint8_t rssi_bars(int16_t dbm)
 	return 0;
 }
 
+static uint8_t view_rssi_bars(const radio_view_t *v)
+{
+#if CONFIG_P25 || CONFIG_P25_VOICE
+	if (v->ch.p25 && (v->p25.out_of_range || v->p25.no_control)) return 0;
+#endif
+	return rssi_bars(v->rssi_dbm);
+}
+
 // The mode word: AM where an FM channel or the VFO is received in AM (the air band)
 static const char *mode_word(const radio_view_t *v)
 {
@@ -248,7 +261,10 @@ static const char *mode_word(const radio_view_t *v)
 		return "P25";	// the monitor owns the receiver, even on the Home screen
 	}
 #endif
-	return v->ch.mode == RADIO_MODE_DMR ? "DMR" : v->am ? "AM" : "FM";
+#if CONFIG_DMR
+	if (v->ch.mode == RADIO_MODE_DMR) return "DMR";
+#endif
+	return v->am ? "AM" : "FM";
 }
 
 // Status strip (P2): state pill, mode, monitor, lock, unread messages, signal, battery.
@@ -270,10 +286,23 @@ static bool strip_fits(const font_t *f, int lx, int rx, const char *word)
 // view on the UI task's stack (the UI task's deepest path, stack check)
 static int draw_top_as(const radio_view_t *v, radio_state_t st, const ui_state_t *s, const char *prefix, const char *name)
 {
-	ui_strip_draws++;
 	const ui_layout_t *L = &ui_layout;
 	const font_t *f = L->small;
 	int w = gfx_width();
+#if CONFIG_UI_INSTRUMENT
+	if (gfx_width() >= 220 && gfx_height() >= 300) {
+		int y = ui_instrument_top(v, st, s);
+		bool titled = prefix != NULL || name != NULL;
+		if (!titled) {
+			return y;
+		}
+		gfx_fill(0, y, w, f->h + 2, ui_col.bg);
+		ui_draw_title(f, 0, y + 1, w, prefix, name, ui_col.fg);
+		gfx_hline(0, y + f->h + 1, w, ui_col.line);
+		return y + f->h + 2;
+	}
+#endif
+	ui_strip_draws++;
 	int ph = f->h;		// the pill: one text cell high
 	bool titled = prefix != NULL || name != NULL;
 	bool merged = titled && gfx_height() < UI_TALL_PX;
@@ -357,7 +386,7 @@ static int draw_top_as(const radio_view_t *v, radio_state_t st, const ui_state_t
 		}
 		int sw = bh + 4;
 		rx -= sw + f->w / 2;
-		gfx_icon_bars(rx, ty + f->ascent - bh - 1, sw, bh + 1, 4, rssi_bars(v->rssi_dbm), sfg, filled ? ui_col.idle : ui_col.line);
+		gfx_icon_bars(rx, ty + f->ascent - bh - 1, sw, bh + 1, 4, view_rssi_bars(v), sfg, filled ? ui_col.idle : ui_col.line);
 	}
 	// Icons one cell high, drawn from lines: an envelope with the unread count, a padlock while the keys are locked
 	int ih = f->ascent - 2 < 5 ? 5 : f->ascent - 2, iy = ty + f->ascent - ih;
@@ -395,7 +424,7 @@ static int draw_top_as(const radio_view_t *v, radio_state_t st, const ui_state_t
 	const char *mw = mode_word(v);
 #if CONFIG_DUAL_WATCH
 	if (s->dual.on)
-		mw = s->dual.pane[s->dual.sel].mode == RADIO_MODE_DMR ? "DMR" : "FM";
+		mw = (CONFIG_DMR && s->dual.pane[s->dual.sel].mode == RADIO_MODE_DMR) ? "DMR" : "FM";
 #endif
 	int lx = gfx_text(f, x, ty, mw, sfg);
 #if CONFIG_DUAL_WATCH
@@ -860,7 +889,7 @@ static void draw_place(const radio_view_t *v, const ui_state_t *s)
 		}
 		int rw = gfx_text_width(L->small, right);
 		const char *left = v->vfo ? "VFO" : v->zone_name;
-		if (v->vfo && v->ch.mode == RADIO_MODE_DMR && !v->ch.rx_only && v->ch.tx_hz != v->ch.rx_hz) {
+		if (CONFIG_DMR && v->vfo && v->ch.mode == RADIO_MODE_DMR && !v->ch.rx_only && v->ch.tx_hz != v->ch.rx_hz) {
 			// A split VFO on DMR: the talk row names the target, so the TX frequency goes here (FM's talk row
 			// already shows it). A frequency is never cut short: the step gives way, then "VFO"
 			sb_init(&b, buf, sizeof buf);
@@ -973,10 +1002,13 @@ static void draw_talk(const radio_view_t *v)
 	sbuf_t b;
 	sb_init(&b, buf, sizeof buf);
 	color_t c = ui_col.fg;
+#if CONFIG_DMR
 	if (v->ch.mode == RADIO_MODE_DMR) {
 		sb_str(&b, TR("DMR: not in this build"));
 		c = ui_col.warn;
-	} else if (v->ch.rx_only) {
+	} else
+#endif
+	if (v->ch.rx_only) {
 		sb_str(&b, TR("RX only"));
 		c = ui_col.warn;
 	} else if (v->ch.tx_hz == 0) {
@@ -1108,6 +1140,7 @@ static const char *deny_reason(const radio_view_t *v, char *buf, size_t len)
 	case TXDENY_BCAST: sb_str(&b, TR("Broadcast: receive only")); break;
 	case TXDENY_SFR_RPT: sb_str(&b, TR("Repeater channel: PTT off")); break;
 	case TXDENY_NOT_AFFIL: sb_str(&b, TR("Not affiliated yet")); break;
+	case TXDENY_OUT_OF_RANGE: sb_str(&b, TR("OUT OF RANGE")); break;
 	default: sb_str(&b, TR("Not allowed here")); break;
 	}
 	return buf;
@@ -1129,6 +1162,7 @@ static const char *deny_action(const radio_view_t *v)
 	case TXDENY_BCAST: return v->vfo ? TR("Tune out of the band") : TR("Pick another channel");
 	case TXDENY_SFR_RPT: return TR("Pick a user channel to talk");
 	case TXDENY_NOT_AFFIL: return TR("Wait for affiliation");
+	case TXDENY_OUT_OF_RANGE: return TR("No control channel: check system/range");
 	default: return TR("Pick another channel");
 	}
 }
@@ -2344,7 +2378,12 @@ void ui_draw_banner(const ui_state_t *s)
 
 static int list_top(const radio_view_t *v, const ui_state_t *s, const ui_list_t *l, bool draw)
 {
-	int y = draw ? ui_draw_top(v, s, l->prefix, l->name) : ui_layout.strip_h +
+	int strip = ui_layout.strip_h;
+#if CONFIG_UI_INSTRUMENT
+	if (!draw && gfx_width() >= 220 && gfx_height() >= 300)
+		strip = ui_instrument_top_height();
+#endif
+	int y = draw ? ui_draw_top(v, s, l->prefix, l->name) : strip +
 		((l->prefix || l->name) && gfx_height() >= UI_TALL_PX ? ui_layout.small->h + 2 : 0);
 	if (l->header != NULL) {
 		if (draw) {
@@ -2764,7 +2803,7 @@ uint8_t ui_quick_kind(int pos, const radio_view_t *v)
 		QT_POWER, QT_SQUELCH, QT_TONE, QT_MODE, QT_MONITOR, QT_VOX, QT_SCAN, QT_BANDWIDTH, QT_BRIGHTNESS,
 	};
 	static const uint8_t p25_vfo[UI_QUICK_TILES] = {
-		QT_POWER, QT_SQUELCH, QT_P25_NAC, QT_MODE, QT_MONITOR, QT_P25_TG, QT_SCAN, QT_BANDWIDTH, QT_BRIGHTNESS,
+		QT_POWER, QT_SQUELCH, QT_P25_NAC, QT_MODE, QT_MONITOR, QT_P25_TG, QT_SCAN, QT_BANDWIDTH, QT_P25_PROFILE,
 	};
 #else
 	static const uint8_t fm_vfo[UI_QUICK_TILES] = {
@@ -2789,14 +2828,14 @@ uint8_t ui_quick_kind(int pos, const radio_view_t *v)
 	};
 	if (pos < 0 || pos >= UI_QUICK_TILES)
 		return QT_POWER;
-	if (!v->vfo && pos == 3 && v->ch.mode == RADIO_MODE_DMR)
+	if (CONFIG_DMR && !v->vfo && pos == 3 && v->ch.mode == RADIO_MODE_DMR)
 		return QT_TO_VFO;	// a DMR channel's tile 4 copies it to the VFO; the VFO's stays Mode
 	uint8_t kind;
-	if (v->ch.mode == RADIO_MODE_DMR) {
+	if (CONFIG_DMR && v->ch.mode == RADIO_MODE_DMR) {
 		kind = dmr[pos];
 	} else if (v->vfo) {
 #if CONFIG_P25_VOICE
-		kind = v->p25.conv ? p25_vfo[pos] : fm_vfo[pos];
+		kind = (v->p25.conv || v->p25.on) ? p25_vfo[pos] : fm_vfo[pos];
 #else
 		kind = fm_vfo[pos];
 #endif
@@ -2843,8 +2882,9 @@ bool ui_quick_tile(int tile, const radio_view_t *v, const ui_state_t *s, char *l
 		[QT_TALK_TO] = TRN(TEXT_ALT_OPEN "Talk to" TEXT_ALT_NEXT "Talk" TEXT_ALT_CLOSE),
 		[QT_P25] = TRN(TEXT_ALT_OPEN "P25/FM" TEXT_ALT_NEXT "Mode" TEXT_ALT_CLOSE),
 		[QT_P25_NAC] = TRN("NAC"), [QT_P25_TG] = TRN(TEXT_ALT_OPEN "Talkgroup" TEXT_ALT_NEXT "TG" TEXT_ALT_CLOSE),
+		[QT_P25_PROFILE] = TRN(TEXT_ALT_OPEN "System" TEXT_ALT_NEXT "SYS" TEXT_ALT_CLOSE),
 		[QT_TO_VFO] = TRN(TEXT_ALT_OPEN "Copy to VFO" TEXT_ALT_NEXT "To VFO" TEXT_ALT_CLOSE),
-		[QT_SPLIT] = TRN(TEXT_ALT_OPEN "TX freq" TEXT_ALT_NEXT "TXFreq" TEXT_ALT_CLOSE),
+		[QT_SPLIT] = TRN(TEXT_ALT_OPEN "TX freq" TEXT_ALT_NEXT "TX" TEXT_ALT_CLOSE),
 	};
 	uint8_t kind = ui_quick_kind(tile, v);
 	bool editing = s->quick_edit && s->quick_focus == tile;
@@ -2919,7 +2959,18 @@ bool ui_quick_tile(int tile, const radio_view_t *v, const ui_state_t *s, char *l
 	}
 	case QT_P25_TG:
 		sb_u32(&b, editing ? s->p25_tg_edit : (v->ch.p25_tg ? v->ch.p25_tg : 1u), 1);
-		return v->p25.conv;
+		return v->p25.conv || v->ch.p25;
+	case QT_P25_PROFILE:
+		if (!v->ch.p25) {
+			sb_str(&b, "CNV");
+		} else {
+			static settings_t st;
+			settings_read(&st);
+			uint8_t i = v->ch.p25_system;
+			if (i >= st.p25_count) i = 0;
+			sb_str(&b, settings_p25_get(&st, i)->name[0] ? settings_p25_get(&st, i)->name : TR("SYS"));
+		}
+		return v->vfo && (v->p25.conv || v->p25.on);
 #endif
 	case QT_TO_VFO:
 		sb_str(&b, TR("Copy"));
@@ -3034,17 +3085,79 @@ static void __attribute__((noinline)) draw_quick_list(const radio_view_t *v, con
 	ui_draw_list(v, s, &l);
 }
 
+// The Quick grid's accent follows the instrument Home: TX red, RX green, trunked P25 cyan, conventional P25 the
+// theme's focus blue, analog FM green.
+static color_t quick_accent(const radio_view_t *v)
+{
+	if (v->state == RS_TX || v->state == RS_TX_DENIED)
+		return v->state == RS_TX ? ui_col.tx : ui_col.warn;
+	if (v->state == RS_RX)
+		return ui_col.rx;
+#if CONFIG_P25 || CONFIG_P25_VOICE
+	if (v->p25.voice)
+		return ui_col.rx;
+	if (v->p25.on && !v->p25.conv)
+		return ui_col.priv;
+	if (v->p25.conv)
+		return ui_col.focus;
+#endif
+	return ui_col.rx;
+}
+
+static color_t quick_on_accent(color_t accent)
+{
+	// The filled state pill's rule: dark ink on the light accents, white on TX red and the focus blue.
+	return accent == ui_col.tx || accent == ui_col.focus ? ui_col.pill_fg : ui_col.pill_dark_fg;
+}
+
+// The instrument Home's top bar: state pill, colored mode, signal and battery icon. Used by Quick and every titled
+// menu on a large instrument panel, so they all surface the same radio status. It is taller than the generic strip
+// (the pill is a 16 px cell at y = 5), so list rows must start below it.
+static int ui_instrument_top_height(void)
+{
+	int bottom = 5 + ui_layout.tiny->h + 2 + 2;
+	return bottom > ui_layout.strip_h ? bottom : ui_layout.strip_h;
+}
+
+int ui_instrument_top(const radio_view_t *v, radio_state_t st, const ui_state_t *s)
+{
+	const ui_layout_t *L = &ui_layout;
+	int w = gfx_width(), y = 5, th = L->tiny->h + 2;
+#if CONFIG_P25 || CONFIG_P25_VOICE
+	bool voice = v->p25.voice, conv = v->p25.conv, trunk = v->p25.on;
+#else
+	bool voice = false, conv = false, trunk = false;
+#endif
+	const char *state = st == RS_TX ? "TX" : st == RS_TX_DENIED ? TR("NO TX") :
+		st == RS_RX || voice ? "RX" : "IDLE";
+	color_t sc = st == RS_TX ? ui_col.tx : st == RS_TX_DENIED ? ui_col.warn :
+		st == RS_RX || voice ? ui_col.rx : ui_col.idle;
+	const char *mode = conv ? "P25 CNV" : trunk ? "P25 TRK" : v->am ? "AM" : "FM";
+	int sw = gfx_text_width(L->tiny, state) + 7;
+	ui_strip_draws++;
+	gfx_fill(14, y, sw, th, sc);
+	gfx_text(L->tiny, 17, y + 1, state, ui_col.pill_fg);
+	int x = 14 + sw + 5;
+	gfx_text(L->tiny, x, y + 1, mode, quick_accent(v));
+	int right = w - 10;
+	int bat_w = 18, bat_h = th - 4;
+	uint8_t pct = v->battery_pct > 100u ? 100u : v->battery_pct;
+	gfx_icon_battery(right - bat_w, y + 2, bat_w, bat_h, pct, ui_col.dim, ui_col.fg);
+	right -= bat_w + 5;
+	gfx_icon_bars(right - 12, y + 3, 12, th - 5, 4, view_rssi_bars(v), ui_col.fg, ui_col.line);
+	return ui_instrument_top_height();
+}
+
 static void __attribute__((noinline)) draw_quick_tiles(const radio_view_t *v, const ui_state_t *s)
 {
 	const ui_layout_t *L = &ui_layout;
 	int w = gfx_width(), h = gfx_height();
-	const char *name = v->vfo ? "VFO" : v->ch.name;
 	char label[24];	// a tile's label, and the hint's text after the tiles (one buffer: the ui task's stack is tight)
 	const char *split_hint = quick_split_hint(v, s, label, sizeof label);
 
 	gfx_clear(ui_col.bg);
-	// Title row keeps the state pill (P2)
-	int top = ui_draw_top(v, s, TR("Quick"), name);
+	int top = ui_instrument_top(v, v->state, s);
+	color_t accent = quick_accent(v);
 	int bottom = h;
 	if (s->toast != NULL || split_hint != NULL || h >= UI_TALL_PX)
 		bottom = L->hint_y;
@@ -3066,8 +3179,8 @@ static void __attribute__((noinline)) draw_quick_tiles(const radio_view_t *v, co
 		if (gfx_bpp() == 1 && !ok)
 			fg = ui_col.fg;
 		if (focus) {
-			bg = s->quick_edit ? ui_col.warn : ui_col.focus;
-			fg = gfx_bpp() == 1 ? ui_col.bg : s->quick_edit ? ui_col.pill_dark_fg : ui_col.focus_fg;
+			bg = s->quick_edit ? ui_col.warn : accent;
+			fg = gfx_bpp() == 1 ? ui_col.bg : s->quick_edit ? ui_col.pill_dark_fg : quick_on_accent(accent);
 			gfx_fill(x0 + 1, y0 + 1, x1 - x0 - 1, y1 - y0 - 1, bg);
 		}
 		gfx_rect(x0, y0, x1 - x0 + 1, y1 - y0 + 1, ui_col.line);
@@ -3106,9 +3219,14 @@ static void __attribute__((noinline)) draw_quick_tiles(const radio_view_t *v, co
 		ui_draw_hint(TR("0 All settings  Hold OK save"), false);
 }
 
+bool ui_quick_is_grid(void)
+{
+	return gfx_width() >= 150;
+}
+
 void ui_draw_quick(const radio_view_t *v, const ui_state_t *s)
 {
-	if (gfx_width() < 150)
+	if (!ui_quick_is_grid())
 		draw_quick_list(v, s);
 	else
 		draw_quick_tiles(v, s);

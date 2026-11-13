@@ -8,6 +8,7 @@
 #include "p25/p25_bch.h"
 #include "p25/p25_cc_tx.h"
 #include "p25/p25_tsbk.h"
+#include "p25/p25_rx.h"
 
 static int failures;
 
@@ -84,8 +85,29 @@ static void expect_bytes(const char *name, const uint8_t got[P25_CC_TSBK_BYTES],
 	}
 }
 
+// The control-channel frame must also survive the continuous software receiver's framer, including DUID 7.
+static void rx_round_trip(void)
+{
+	uint8_t tsbk[P25_CC_TSBK_BYTES] = { 0 };
+	uint8_t frame[P25_CC_FRAME_DIBITS];
+	p25_rx rx;
+	bool complete = false;
+
+	p25_tsbk_build(tsbk, 0x3d, 0);
+	p25_cc_build_frame_dibits(frame, 0x123u, tsbk);
+	p25_rx_init(&rx);
+	for (int i = 0; i < P25_CC_FRAME_DIBITS; i++) {
+		complete = p25_rx_push(&rx, frame[i]) || complete;
+	}
+	CHECK(complete);
+	CHECK(rx.nac == 0x123u);
+	CHECK(rx.duid == 7u);
+	CHECK(rx.bad_nid == 0u);
+}
+
 int main(void)
 {
+	rx_round_trip();
 	static const uint8_t net_status_want[P25_CC_TSBK_BYTES] = {
 		0xBB, 0x00, 0x00, 0xBE, 0xEF, 0x00, 0x01, 0x00, 0x00, 0x00, 0xB5, 0xA7,
 	};

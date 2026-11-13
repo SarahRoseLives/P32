@@ -153,6 +153,9 @@ static void on_frame(const p25_rx *f, void *ctx)
 	p25_receive_event event;
 
 	(void)ctx;
+	if (f->duid == 7u) {
+		return;		// a control-channel frame from a nearby system, not voice
+	}
 	bool valid = p25_call_decode(f->frame, f->duid, &meta);
 
 	if (v.filter) {
@@ -376,6 +379,11 @@ void p25_voice_stop(void)
 bool p25_voice_running(void)
 {
 	return v.running;
+}
+
+p25_demod *p25_voice_demod(void)
+{
+	return &v.demod;
 }
 
 void p25_voice_stats(p25_voice_stats_t *out)

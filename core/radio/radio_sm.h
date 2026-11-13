@@ -153,6 +153,7 @@ typedef enum {
 	RREQ_P25_CONV,		// P25 conventional channel profile (CONFIG_P25_VOICE): arg 1 on, 0 off
 	RREQ_P25_NAC,		// P25 conventional NAC for now: arg 0..0xFFF
 	RREQ_P25_TG,		// P25 conventional talkgroup for now: arg 0..0xFFFF
+	RREQ_P25_PROFILE,	// P25 conventional system profile: arg -1 CNV, 0..3 system
 	RREQ_P25_FOLLOW,		// P25 monitor follow grants on/off (CONFIG_P25): arg 1 on, 0 off
 } radio_req_type_t;
 
@@ -275,11 +276,18 @@ typedef struct {
 #if CONFIG_P25 || CONFIG_P25_VOICE
 	bool p25_voice;		// the P25 voice receiver has the receiver (CONFIG_P25_VOICE)
 	bool p25_conv;		// conventional P25 voice mode on the current channel
+	bool p25_conv_auto;	// entering this stored channel starts its conventional P25 profile
+	bool p25_no_auto;	// the next tune must not start a trunked channel's monitor
 	bool p25_conv_tx;	// conventional P25 PTT is keyed
 	bool p25_conv_restart;	// main poll: restart the conventional receiver after TX drains
+	bool p25_grant_beeped;	// the current trunked call has played its permit chirp
 	bool p25_follow;		// the P25 monitor follows voice grants (CONFIG_P25 + CONFIG_P25_VOICE)
 	uint32_t p25_cc_hz;		// the control channel to return to
 	uint32_t p25_voice_hz;		// the voice channel of the call being followed
+	uint32_t p25_cc_ms;		// when the control channel last advanced
+	uint32_t p25_cc_frames;		// its frame counter then
+	uint32_t p25_activity;		// raw PHY block counter seen
+	uint32_t p25_activity_ms;		// when it last advanced (carrier present)
 	uint32_t p25_grant_seen;		// grants seen when the monitor last acted
 #if CONFIG_P25_TX
 	uint8_t p25_call;		// P25 PTT call state (radio_sm.c)

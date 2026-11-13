@@ -1300,9 +1300,9 @@ p25TsbkParseTest: p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p2
 
 # P25 Phase 1 trunked control-channel TSBK encoding and CC frame construction (core/p25/p25_cc_tx)
 TESTS   += p25CcTxTest
-p25CcTxTest: p25CcTxTest.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_cc_tx.h $(CORE)/p25/p25_tsbk.c \
+p25CcTxTest: p25CcTxTest.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_cc_tx.h $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_rx.c \
 		$(CORE)/p25/p25_tsbk.h $(CORE)/p25/p25_bch.c $(CORE)/p25/p25_bch.h
-	$(CC) $(CFLAGS) -Werror -o $@ p25CcTxTest.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
+	$(CC) $(CFLAGS) -Werror -o $@ p25CcTxTest.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_rx.c $(CORE)/p25/p25_bch.c
 
 # Conventional P25 transmit framing and timing (core/p25/tx): the 36-byte block stream, boundary pacing and aborts
 TESTS   += p25TxTest

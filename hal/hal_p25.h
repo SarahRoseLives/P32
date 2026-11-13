@@ -24,7 +24,8 @@ typedef struct {
 	uint16_t tg;
 	uint16_t vch;
 	uint32_t freq_hz;	// from an IdenUp
-	uint32_t blocks;	// PHY blocks captured since start
+	uint32_t blocks;	// control-channel bursts decoded since start
+	uint32_t activity;	// PHY receive blocks captured since start (carrier present, even with no decoded NID)
 	uint32_t voice_hz;	// the last grant's downlink voice channel (band plan applied; 0 unknown)
 	uint32_t voice_tx_hz;	// the last grant's subscriber transmit channel (0 unknown)
 	uint8_t voice_id;	// the last grant's IDEN, from the grant or a later IdenUp

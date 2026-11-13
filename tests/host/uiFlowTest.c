@@ -29,7 +29,7 @@ typedef struct {
 #define CALLER	"call:3101234,91,g wait:11000 "
 #define TALK_BACK	"ok 7 3 down down down down down down down down down ok long:back quick 7 ctx 3 5 ok "	// on, and A 3 / B 5
 // Tools > P25 system on a radio with the P25 probe ("p25"): the row after P25 voice
-#define P25_SYS_OPEN	"ok 6 down down down down down down down down down down down ok"
+#define P25_SYS_OPEN	"ok 8 ok"
 
 static const flow_t flows[] = {
 	{ "1 next channel", "", "up", "pos=4", 1, false },
@@ -573,7 +573,7 @@ static const flow_t flows[] = {
 	{ "A stations heard", "", "ok 6 8 up ok", "screen=aprs-heard count=2", 5, false },
 	{ "A not in this build", "aprs:off", "ok 6 8 2", "toast=APRS:_not aprs_auto=0", 4, false },
 	// P25 system (Tools > P25 system, settings_t.p25): a radio with the P25 probe stores the system it will follow
-	{ "P25 system opens", "p25", P25_SYS_OPEN, "screen=p25sys shows=Control_channel", 14, false },
+	{ "P25 system opens", "p25", P25_SYS_OPEN, "screen=p25sys shows=Control_channel", 3, false },
 	{ "P25 system NAC opens text entry", "p25 " P25_SYS_OPEN, "down down ok", "screen=text shows=NAC", 3, false },
 	{ "P25 system manual band plan rows", "p25 " P25_SYS_OPEN,
 	  "down down down down down down down down down ok down", "screen=p25sys shows=Base", 11, false },
@@ -885,7 +885,7 @@ static const flow_t flows_k[] = {
 	  "talk=3100 pos=4 screen=home", 1, false },
 	{ "N encoder: down a list", "ok", "enc+ enc+", "focus=Recent", 2, false },
 	{ "N encoder: back up a list", "ok enc+ enc+", "enc-", "focus=Messages", 1, false },
-	{ "N encoder: wraps up to the last row", "ok", "enc-", "focus=Settings", 1, false },
+	{ "N encoder: wraps up to the last row", "ok", "enc-", "focus=P25_systems", 1, false },
 	{ "N encoder: a number goes up", "ok 7 2 ok", "enc+", "focus=Brightness", 1, false },
 	{ "P auto power off warns", "ok 7 7 down ok long:back", "wait:1741000", "banner=Switching_off poweroff=0", 0,
 	  false },
@@ -917,7 +917,7 @@ static const flow_t flows_f[] = {
 	  "writes=1 toast=Saved_channel_3", 1, true },
 #endif
 	// No programmable keys: the Keys group ends at its three general rows (ui.md 3.1)
-	{ "F no key rows without keys", "ok up ok up up up ok", "down down down", "focus=Long hides=Key_1", 3, false },
+	{ "F no key rows without keys", "ok up up ok up up up ok", "down down down", "focus=Long hides=Key_1", 4, false },
 #if CONFIG_ZONE_EDIT
 	// No CONTEXT: long OK opens a zone's list in Zones and Channel actions in the list (information-architecture 7.5)
 	{ "F 23 move the channel in use down", "", "ok down down down down ok long:ok long:ok down ok",

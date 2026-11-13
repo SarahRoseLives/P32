@@ -18,6 +18,7 @@
 #define SETTINGS_LAYOUT		1	// bumped only when a field changes meaning or moves (old records then reset)
 #define SETTINGS_SAVE_DELAY_MS	2000
 #define SETTINGS_NAME_LEN	16
+#define SETTINGS_P25_SYSTEMS	4	// slots in settings_t.p25 / p25_alt
 #define SETTINGS_PRIVACY_KEYS	4
 #define SETTINGS_UNSET8		0xFFu	// "not set: the radio's default" in an 8-bit field
 #define SETTINGS_ROAM_ZONE_BYTES	10	// roaming zone bits for zones 0..79
@@ -242,10 +243,25 @@ typedef struct {
 	// Zone share: the zones imported last, so the same zone sent again updates its import instead of adding a copy
 	// (docs/spec/zone-share.md 5.4); key 0 = unused, the oldest replaced first
 	settings_zs_import_t zs_import[SETTINGS_ZS_IMPORTS];
-	// The P25 trunking system (CONFIG_P25, docs/spec/p25.md 8.1). Appended at the end so an older record keeps the
-	// defaults; TX and trunking use it later, the Tools screen edits it now
+	// The P25 trunking systems (CONFIG_P25, docs/spec/p25.md 8.1). p25 is slot 0; p25_alt holds the others.
+	// p25_count is 1..SETTINGS_P25_SYSTEMS, p25_active the selected slot. Appended at the end so an older record
+	// keeps the defaults.
 	settings_p25_t p25;
+	settings_p25_t p25_alt[SETTINGS_P25_SYSTEMS - 1];
+	uint8_t p25_count;		// 1..SETTINGS_P25_SYSTEMS
+	uint8_t p25_active;		// 0..p25_count-1
 } settings_t;
+
+// A system slot; idx is 0-based. The first slot is p25, the rest p25_alt.
+static inline settings_p25_t *settings_p25_mut(settings_t *s, uint8_t idx)
+{
+	return idx == 0 ? &s->p25 : &s->p25_alt[idx - 1u];
+}
+
+static inline const settings_p25_t *settings_p25_get(const settings_t *s, uint8_t idx)
+{
+	return idx == 0 ? &s->p25 : &s->p25_alt[idx - 1u];
+}
 
 // Pages: settings_t is stored as records of SETTINGS_PAGE_BYTES each (settings-store.md 2.1). Only the pages its size
 // needs are written, each with its own length, so settings_t grows by appending fields; the record's page field

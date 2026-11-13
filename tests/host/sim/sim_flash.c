@@ -72,6 +72,9 @@ static bool sim_erase(uint32_t addr)
 	if (cut || !in_range(base, SIM_FLASH_SECTOR)) {
 		return false;
 	}
+	if (bad_len != 0 && base < bad_addr + bad_len && base + SIM_FLASH_SECTOR > bad_addr) {
+		return false;	// a bad range fails erases too, not only writes
+	}
 	if (!spend()) {
 		// Torn erase: the first half erased, the rest scrambled
 		memset(&sim_flash_data[base], 0xFF, SIM_FLASH_SECTOR / 2);
