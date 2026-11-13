@@ -40,3 +40,5 @@ personal_notes.md
 # Local agent notes and settings (machine-specific; may name private hosts)
 *.local.md
 .claude/
+
+web/site/

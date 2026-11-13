@@ -48,9 +48,15 @@ def release_and_beta(versions, beta):
 # feature-matrix.md groups of developer tools that never ship in a release: not on the visitor pages
 BENCH_ONLY = {"Bench"}
 # the production address: link previews need absolute URLs (og:url, og:image)
-SITE_URL = "https://radiofoundry.org/"
+SITE_URL = os.environ.get("RFOUNDRY_SITE_URL", "https://radiofoundry.org/")
+if not SITE_URL.endswith("/"):
+	SITE_URL += "/"
+SITE_NAME = os.environ.get("RFOUNDRY_SITE_NAME", "RadioFoundry")
+SITE_BRAND_HTML = os.environ.get("RFOUNDRY_SITE_BRAND_HTML", "Radio<b>Foundry</b>")
+NO_CODEPLUG = os.environ.get("RFOUNDRY_NO_CODEPLUG", "") not in ("", "0", "n", "no")
+ONLY_BOARD = os.environ.get("RFOUNDRY_ONLY_BOARD", "")
 # where users help each other: the footer and every failure message link it, next to the GitHub issues
-COMMUNITY_URL = "https://www.facebook.com/groups/radiofoundry/"
+COMMUNITY_URL = os.environ.get("RFOUNDRY_COMMUNITY_URL", "https://www.facebook.com/groups/radiofoundry/")
 BOARD_ORDER = {"supported": 0, "testing": 1, "in_progress": 2, "planned": 3}
 # a radio page's documentation links (board.toml [docs]), in this order
 DOC_ORDER = ("hardware", "install", "codec", "bringup")
@@ -114,7 +120,15 @@ class Site:
 		self.boards, self.planned = repo.boards(list(self.fmap), vids)
 		# board.toml order: the first is the home page's radio
 		self.boards.sort(key=lambda b: (BOARD_ORDER[b["status"]], b["order"]))
+		if ONLY_BOARD:
+			self.boards = [b for b in self.boards if b["id"] == ONLY_BOARD]
+			if not self.boards:
+				raise repo.SourceError("RFOUNDRY_ONLY_BOARD=%s names no board" % ONLY_BOARD)
+			self.planned = []
+			self.variants = []
 		self.flash = repo.flash_boards()
+		if ONLY_BOARD:
+			self.flash["boards"] = {k: v for k, v in self.flash["boards"].items() if k == ONLY_BOARD}
 		with open(repo.path("site", "data", "screens.json"), encoding="utf-8") as f:
 			self.screens = json.load(f)
 		for f in self.features:
@@ -131,7 +145,7 @@ class Site:
 		for b in self.boards:
 			names = repo.screens(b["gallery"])
 			unknown = [n for n in names if self.screen(n) is None]
-			if unknown:
+			if unknown and not ONLY_BOARD:
 				self.warn("screens not in site/data/screens.json: %s" % ", ".join(unknown))
 			b["screens"] = [n for n in names if self.screen(n) is not None]
 			if b["flash"].get("board") and b["flash"]["board"] not in self.flash["boards"]:
@@ -142,6 +156,12 @@ class Site:
 			if f["group"] not in self.groups:
 				self.groups.append(f["group"])
 		self.releases = repo.releases(self.firmware)
+		if ONLY_BOARD:
+			for b in self.boards:
+				for man, _img in self.releases:
+					if man.get("board") == b["id"] and man.get("features"):
+						b["config"]["full"] = man["features"].split(",")
+						break
 		self.release, self.beta = release_and_beta([m["version"] for m, _ in self.releases], self.beta)
 
 	def feature_state(self, board, name, variant="full"):
@@ -262,8 +282,12 @@ class Site:
 
 	def nav(self, lang, home, current):
 		items = [("radios", "radios/index.html"), ("features", "features/index.html"),
-			 ("flash", "flash/index.html"), ("codeplug", "codeplug/index.html"), ("docs", "docs/index.html"),
-			 ("screenshots", "screenshots/index.html"), ("tools", "tools/index.html")]
+			 ("flash", "install/index.html"), ("screenshots", "screenshots/index.html")]
+		if not ONLY_BOARD:
+			items.insert(3, ("docs", "docs/index.html"))
+			items.append(("tools", "tools/index.html"))
+		if not NO_CODEPLUG:
+			items.insert(3, ("codeplug", "codeplug/index.html"))
 		return "".join('<a href="%s%s"%s>%s</a>' % (home, href, ' aria-current="page"' if key == current else "",
 							    html.escape(self.i18n.t(lang, "nav." + key)))
 			       for key, href in items)
@@ -365,7 +389,8 @@ class Site:
 			self.write("data/" + name, json.dumps(obj, indent=1, ensure_ascii=False) + "\n")
 		self.copy_firmware()
 		for lang in self.i18n.codes:
-			self.docs_assets(lang)
+			if not ONLY_BOARD:
+				self.docs_assets(lang)
 			self.home(lang)
 			self.radios_index(lang)
 			for b in self.boards:
@@ -373,9 +398,14 @@ class Site:
 			self.screenshots_page(lang)
 			self.features_page(lang)
 			self.flash_page(lang)
-			self.tools_page(lang)
-			self.codeplug_page(lang)
-			self.docs_pages(lang)
+			if not ONLY_BOARD:
+				self.tools_page(lang)
+			if NO_CODEPLUG:
+				self.codeplug_soon_page(lang)
+			else:
+				self.codeplug_page(lang)
+			if not ONLY_BOARD:
+				self.docs_pages(lang)
 			self.not_found(lang)
 		for b in self.boards:
 			boot = self.shots.scaled(b["gallery"], "boot")
@@ -384,6 +414,7 @@ class Site:
 				self.write("static/img/radios/%s-%s.svg" % (b["id"], look), device.boot(img, boot))
 		scales = self.shots.write(self.out)
 		self.log("screenshots: " + ", ".join("%s x%d" % gk for gk in scales.items()))
+		self.rebrand()
 		self.write(".nojekyll", "")
 		self.check_screenshots()
 		self.check_links()
@@ -395,6 +426,31 @@ class Site:
 		return self.warnings
 
 	SHOTS_SECTION = re.compile(r'<section class="rshots" id="([^"]+)".*?</section>', re.S)
+
+	def rebrand(self):
+		"""Apply a product name to the generated pages and scripts (P32Firmware uses this). Source templates and docs
+		keep the upstream RadioFoundry wording; only the built output is renamed."""
+		if SITE_NAME == "RadioFoundry":
+			return
+		domain = SITE_URL.split("://", 1)[-1].split("/", 1)[0]
+		repl = [
+			(b"RadioFoundry", SITE_NAME.encode()),
+			(b"radiofoundry.org", domain.encode()),
+			(b"Radio<b>Foundry</b>", SITE_BRAND_HTML.encode()),
+		]
+		for dirpath, _dirs, files in os.walk(self.out):
+			for name in files:
+				if not name.endswith((".html", ".json", ".js", ".svg")):
+					continue
+				p = os.path.join(dirpath, name)
+				with open(p, "rb") as f:
+					data = f.read()
+				new = data
+				for old, newv in repl:
+					new = new.replace(old, newv)
+				if new != data:
+					with open(p, "wb") as f:
+						f.write(new)
 
 	def check_screenshots(self):
 		"""The screenshots page has a section for every board in boards/, and each section every gallery screen
@@ -722,7 +778,7 @@ class Site:
 			   '<script type="module" src="{{root}}static/js/flasher/app.js?v=%s"></script>' % (strings, self.asset_version))
 		# the beta notice, opened once per browser session (static/js/flasher/beta.js)
 		beta = self.tpl.partial("beta_notice", {"repo": self.repo_url, "community": COMMUNITY_URL, "home": "{{home}}"}, lang)	# page() fills in home
-		self.page(lang, "flash/index.html", self.t(lang, "flash.title"), self.tpl.render("flash", {"beta": beta}, lang),
+		self.page(lang, "install/index.html", self.t(lang, "flash.title"), self.tpl.render("flash", {"beta": beta}, lang),
 			  "flash", scripts=scripts, nav="flash", footer=self.tpl.partial("flash_log", {"errors": self.errors_paragraph(lang)}, lang))
 
 	def tools_page(self, lang):
@@ -732,6 +788,14 @@ class Site:
 			   '<script type="module" src="{{root}}static/js/tools.js?v=%s"></script>' % (strings, self.asset_version))
 		self.page(lang, "tools/index.html", self.t(lang, "tools.title"), self.tpl.render("tools", {}, lang),
 			  "tools", scripts=scripts, nav="tools")
+
+	def codeplug_soon_page(self, lang):
+		content = ('<section class="wrap section page-head"><h1>%s</h1><p class="lead">%s</p></section>'
+			   '<section class="wrap section"><p>%s</p></section>') % (
+			html.escape(self.t(lang, "editor.soon_title")), html.escape(self.t(lang, "editor.soon_lead")),
+			html.escape(self.t(lang, "editor.soon_text")))
+		self.page(lang, "codeplug/index.html", self.t(lang, "editor.soon_title"), content, "codeplug",
+			  description=self.t(lang, "editor.soon_lead"), nav="")
 
 	def codeplug_page(self, lang):
 		strings = json.dumps(self.i18n.subset(lang, ("editor.", "flash.part.", "report.")), ensure_ascii=False).replace("</", "<\\/")

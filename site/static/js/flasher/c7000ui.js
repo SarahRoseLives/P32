@@ -1495,10 +1495,11 @@ export async function splitOwnImage(c, board, data) {
 	return { image: data.slice(0, Math.ceil(end / 4) * 4), slot: info ? slot.slice(0, info.length) : null };
 }
 
-// The backend (backends.js): connect and check take the place of "now" and "codec"; a reinstall from the help task
+// The backend (backends.js): the fixed image means no build step; connect and check take the place of "now" and "codec".
+// A reinstall from the help task
 // skips the radio step. Stock firmware comes back through the restore task: from a backup, or from the radio's
 // original firmware file (vendorBundle).
-const INSTALL = ["radio", "build", "connect", "check", "write", "done"], RECOVER = ["build", "connect", "check", "write", "done"];
+const INSTALL = ["radio", "connect", "check", "write", "done"], RECOVER = ["connect", "check", "write", "done"];
 const UPDATE = ["update", "connect", "check", "write", "done"];
 register({
 	id: "c7000-stub",

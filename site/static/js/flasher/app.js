@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The RadioFoundry Authors
-// The web flasher: a step-by-step page over the modules beside it. Three tasks:
+// P32Firmware installer r20261113-1: one fixed release image, no build or feature step. Three tasks:
 //
 //   update    a radio that runs RadioFoundry: connect once, keep its build (or edit it), write the current release
 //   install   pick the radio and the build, find out what runs on the radio (backing it up if it runs RadioFoundry), decide
@@ -141,7 +141,7 @@ const initialState = () => ({
 const S = initialState();
 
 // Custom builds and the flash log
-const API = "https://api.radiofoundry.org/v1/";
+const API = new URL("/v1/", location.href).href;
 // minimal non-invasive reporting for helping the RadioFoundry project track programming failures; opt out with
 // ?reporting=0
 const FLASH_LOG = new URLSearchParams(location.search).get("reporting") !== "0";
@@ -357,7 +357,7 @@ async function flashFinished(started, error = null) {
 }
 
 const STEPS = {
-	install: ["radio", "build", "now", "codec", "write", "done"],
+	install: ["radio", "now", "codec", "write", "done"],
 	backup: ["radio", "backup"],
 	restart: ["radio", "restart"],
 	restore: ["bundle", "restore"],
@@ -366,9 +366,9 @@ const STEPS = {
 // An update before the radio is known; its backend then says how it is reached (backends.js)
 STEPS.update = ["update", "write", "done"];
 // A radio running RadioFoundry that updates over the cable has no codec decision to make: the step goes
-const STUB_INSTALL = ["radio", "build", "now", "write", "done"];
+const STUB_INSTALL = ["radio", "now", "write", "done"];
 // Installing again from the help task: what runs on the radio is known to be broken, so that question goes
-const RECOVER_INSTALL = ["build", "codec", "write", "done"];
+const RECOVER_INSTALL = ["codec", "write", "done"];
 // The radio's backend (backends.js) decides a task's steps; the shared ones otherwise. An update whose build the user
 // edits (or whose build the radio doesn't say) takes the build step after its first
 function stepsFor() {
@@ -389,6 +389,19 @@ async function loadData() {
 }
 
 const fb = () => (S.sim ? S.sim.fb : S.data.fb);
+
+// P32Firmware ships one release image and has no build service. Load it once, then put it on the state when a radio
+// is selected; the install and update flows have no build step.
+let FIXED_FIRMWARE = null;
+async function loadFixedFirmware() {
+	const rel = S.data.releases.find((x) => x.board === S.data.radios[0]?.id) || S.data.releases[0];
+	if (!rel) throw new Error("no P32Firmware release image");
+	const m = await (await fetch(`${ROOT}${rel.manifest}`, { cache: "no-store" })).json();
+	const v = encodeURIComponent(m?.image?.sha256 || m?.version || "dev");
+	const image = new Uint8Array(await (await fetch(`${ROOT}${rel.image}?v=${v}`)).arrayBuffer());
+	await verify(m, image, fb(), rel.board);
+	return { manifest: m, image, source: `P32Firmware ${m.version}`, origin: "release", variant: "full" };
+}
 // Every image comes from the build service, so a radio needs only a backend the page has for it (backends.js)
 // In the practice mode only the simulated radio: S.sim (its key, stock file, fake radio) is that radio's, and another
 // one picked on the radio step met a missing stock file at the codec step (OPENDIGITALRADIO-22)
@@ -866,8 +879,8 @@ async function connectForUpdate(status) {
 	S.current = currentBuild(p, r, S.data.releases.filter((x) => x.board === r.id), S.data.reported);
 	S.decided = {};
 	planUpdate(S.current, S.selection, S.decided);
-	// a build the radio doesn't say: the build step, starting from the closest variant
-	S.editBuild = S.current.kind === "unknown";
+	// One fixed image: no build step on an update either.
+	S.editBuild = false;
 	diag.note("update: radio", { board: p.board, git: p.git, build: S.current.kind, preset: S.current.preset || S.current.guess || null });
 }
 
@@ -1005,7 +1018,7 @@ function selectRadio(r) {
 	S.selection = new Selection(r, S.data.features, S.data.variants);
 	S.selection.useVariant("full");
 	S.langAdded = null;
-	S.firmware = null;
+	S.firmware = FIXED_FIRMWARE;
 	S.buildOptions = {};
 	S.variant = null;	// the hardware variant is read from the radio again
 	S.stockRead = null;
@@ -2780,6 +2793,7 @@ async function main() {
 	if (a) { a.href = `mailto:${mail}`; a.textContent = mail; }
 	try {
 		S.data = await loadData();
+		FIXED_FIRMWARE = await loadFixedFirmware();
 	} catch (e) {
 		diag.error("load data", e);
 		app.replaceChildren(notice(t("flash.err.load"), "bad"), reportLine());

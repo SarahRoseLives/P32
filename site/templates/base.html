@@ -18,7 +18,7 @@
 <meta property="og:image:alt" content="{{t site.preview_alt}}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="generator" content="site/build.py {{ git }}">
-{{{ alternates }}}<link rel="icon" href="{{root}}static/img/icon.svg?v={{ assets }}" type="image/svg+xml">
+{{{ alternates }}}<link rel="icon" href="{{root}}static/img/favicon.ico?v={{ assets }}" sizes="any">
 <link rel="icon" href="{{root}}static/img/icon-32.png?v={{ assets }}" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="{{root}}static/img/apple-touch-icon.png?v={{ assets }}">
 <link rel="stylesheet" href="{{root}}static/css/tokens.css?v={{ assets }}">
@@ -30,18 +30,20 @@
 <header class="site-header">
 	<div class="wrap header-row">
 		<a class="brand" href="{{ home }}index.html">
-			<img src="{{root}}static/img/icon.svg?v={{ assets }}" alt="" width="28" height="28">
+			<img src="{{root}}static/img/logo.png?v={{ assets }}" alt="" width="28" height="28">
 			<span>Radio<b>Foundry</b></span>
 		</a>
 		<button class="nav-toggle" aria-expanded="false" aria-controls="site-nav">{{t nav.menu}}</button>
 		<nav id="site-nav" class="site-nav" aria-label="{{t nav.label}}">{{{ nav }}}</nav>
 		<div class="header-tools">
+			<a class="btn btn-primary donate-btn" href="https://sarahsforge.dev/products/donation" target="_blank" rel="noopener">{{t nav.donate}}</a>
 			{{{ languages }}}
 			<button class="theme-toggle" type="button" aria-label="{{t nav.theme}}" title="{{t nav.theme}}">◐</button>
 		</div>
 	</div>
 </header>
 <main id="main">
+<div class="wrap"><p class="notice bad"><strong>Experimental:</strong> {{t site.experimental}}</p></div>
 {{{ content }}}
 </main>
 <footer class="site-footer">
@@ -57,7 +59,7 @@
 	</div>
 	{{{ footer }}}
 	<div class="wrap footer-row">
-		<p>{{t footer.license}} · <a href="{{ repo }}">{{t footer.source}}</a> · <a href="{{ community }}" target="_blank" rel="noopener">{{t footer.community}}</a> · <a href="{{ home }}docs/index.html">{{t nav.docs}}</a></p>
+		<p>{{t footer.license}} · <a href="{{ repo }}">{{t footer.source}}</a> · <a href="{{ community }}" target="_blank" rel="noopener">{{t footer.community}}</a></p>
 		<p class="build-stamp">{{{ firmware_release }}} · <a href="{{ repo }}/commit/{{ git_full }}">{{ git_stamp }}</a> · <time datetime="{{ built_iso }}">{{ built_at }}</time></p>
 	</div>
 </footer>
