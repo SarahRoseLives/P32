@@ -4106,7 +4106,8 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 		}
 		break;
 	case P25CALL_REQUEST:
-		if (!board.p25_tx->active()) {
+		// The raw engine arms before its worker reports active. Do not retune over the request in that gap.
+		if (!board.p25_tx->active() && now_ms - sm->tx_start_ms >= 100u) {
 			p25call_start_probe(sm);
 			sm->p25_call = P25CALL_GRANT;
 			sm->p25_call_deadline_ms = now_ms + P25CALL_GRANT_MS;
@@ -4127,10 +4128,10 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 		// it while its IdenUp is still missing, rather than retrying on the control-channel uplink.
 		bool grant = p->valid && p->voice_grant &&
 			(p->source == 0u || p->source == sm->p25_call_unit);
-		if (grant && p->voice_hz == 0) {
+		if (grant && p->voice_tx_hz == 0) {
 			changed(sm);	// wait for the grant's IdenUp; the probe is still running
 		} else if (grant) {
-			uint32_t hz = p->voice_hz;	// the system's granted voice channel
+			uint32_t hz = p->voice_tx_hz;	// the subscriber transmit side of the granted channel
 			sm->p25_call_tg = p->tg != 0 ? p->tg : sm->p25_call_tg;
 			p25_cc_rx_stop();
 			sm->p25_call_voice_hz = hz;

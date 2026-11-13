@@ -343,19 +343,19 @@ bool p25_cc_voice_request_start(const settings_p25_t *p25)
 	if (!cc_uplink_hz(p25, &hz)) {
 		return false;
 	}
-	static uint8_t stream[8u * P25_CC_FRAME_BYTES];
+	static uint8_t stream[64u * P25_CC_FRAME_BYTES];
 	uint8_t tsbk[P25_CC_TSBK_BYTES];
 	size_t n = 0;
-	for (unsigned i = 0; i < 4u; i++) {
+	// Let the site acquire the uplink with a query train; put the single voice request at the end so its
+	// grant follows after the transmitter stops and the control-channel receiver is listening again.
+	for (unsigned i = 0; i < 16u; i++) {
 		p25_tsbk_group_affiliation_query_response(tsbk, p25->tg, p25->unit_id);
 		p25_cc_build_frame(&stream[n], p25->nac, tsbk);
 		n += P25_CC_FRAME_BYTES;
 	}
-	for (unsigned i = 0; i < 4u; i++) {
-		p25_tsbk_group_voice_request(tsbk, p25->tg, p25->unit_id, 0);
-		p25_cc_build_frame(&stream[n], p25->nac, tsbk);
-		n += P25_CC_FRAME_BYTES;
-	}
+	p25_tsbk_group_voice_request(tsbk, p25->tg, p25->unit_id, 0);
+	p25_cc_build_frame(&stream[n], p25->nac, tsbk);
+	n += P25_CC_FRAME_BYTES;
 	return board.p25_tx->arm(hz, 9, false, true) &&
 	       board.p25_tx->start_raw(stream, (uint32_t)n, hal_micros());
 }
