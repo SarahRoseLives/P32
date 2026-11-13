@@ -760,8 +760,13 @@ static void save_channel_job(void *ctx)
 		job_ch.tx_tone = job.now.tx_tone;
 	if (job.temp & RADIO_TEMP_RX_TONE)
 		job_ch.rx_tone = job.now.rx_tone;
-	if (job.temp & RADIO_TEMP_MODE)
+	if (job.temp & RADIO_TEMP_MODE) {
 		job_ch.mode = job.now.mode;
+		job_ch.p25 = job.now.p25;
+		job_ch.p25_conv = job.now.p25_conv;
+		job_ch.p25_tg = job.now.p25_tg;
+		job_ch.p25_nac = job.now.p25_nac;
+	}
 	if (job.temp & RADIO_TEMP_CC)
 		job_ch.color_code = job.now.color_code;
 	if (job.temp & RADIO_TEMP_TS)

@@ -16,6 +16,9 @@
 #include "p25/p25_imbe.h"
 #include "p25/tx/p25_live_frame.h"
 #include "p25/p25_cc_tx.h"
+#if CONFIG_BEEP
+#include "radio/beep.h"
+#endif
 #if CONFIG_WATCHDOG
 #include "app/watchdog.h"
 #endif
@@ -44,6 +47,9 @@ static void audio_block(const int16_t *mic, int16_t *spk, void *ctx)
 {
 	(void)ctx;
 	memset(spk, 0, AUDIO_BLOCK_SAMPLES * sizeof *spk);
+#if CONFIG_BEEP
+	beep_mix(spk);		// local chirps/bonks, never part of the P25 transmit stream
+#endif
 	if (board.audio->speaker_pcm != NULL) {
 		board.audio->speaker_pcm(false);	// keep the beep mixer from re-enabling its 2 ms poll
 	}

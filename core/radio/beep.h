@@ -52,6 +52,11 @@ void beep_init(const hal_audio_t *audio);
 // Start a pattern at level 1..100 (0 or BEEP_NONE: nothing). shared: the DMR voice stream is running and mixes the
 // beep in; otherwise the beep starts its own stream. Replaces a pattern still playing
 void beep_play(beep_t b, uint8_t level, bool shared);
+// Start the pattern's first segment as a held tone: it sounds until beep_stop, for a refused PTT held down. shared as
+// beep_play.
+void beep_play_hold(beep_t b, uint8_t level, bool shared);
+// Stop a held tone (or a normal pattern still playing). Safe when nothing plays.
+void beep_stop(void);
 // Every radio poll: stop the beep's own stream once the pattern is over (shared: the voice stream took over)
 void beep_service(bool shared);
 // From an audio block callback: add the beep to the block (saturating). True while the beep sounds

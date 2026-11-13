@@ -738,16 +738,40 @@ static void test_beep_module(void)
 	a_start_fails = false;
 	CHECK(aud.starts == 4 && aud.stops == 4 && !aud.pcm && !beep_busy());
 
+	// A held refusal tone sounds until it is stopped: no segment end, no gap
+	beep_play_hold(BEEP_TX_DENY, 50, false);
+	CHECK(aud.streaming && beep_busy());
+	beep_audio_block(mic, blk, NULL);	// lead-in
+	beep_audio_block(mic, blk, NULL);
+	bool held_sound = false;
+	for (int i = 1; i < AUDIO_BLOCK_SAMPLES; i++) {
+		held_sound |= blk[i] != 0;
+	}
+	CHECK(held_sound && beep_busy());
+	for (int i = 0; i < 20; i++) {
+		beep_audio_block(mic, blk, NULL);
+		beep_service(false);
+	}
+	CHECK(aud.streaming && beep_busy() && aud.pcm);
+	beep_stop();
+	beep_audio_block(mic, blk, NULL);
+	CHECK(!beep_busy());
+	for (int i = 0; i < 6; i++) {
+		beep_audio_block(mic, blk, NULL);
+		beep_service(false);
+	}
+	CHECK(!aud.streaming && !aud.pcm);
+
 	// Shared (the voice stream runs): no stream started; beep_mix adds into the block
 	beep_play(BEEP_TX_PERMIT, 50, true);
-	CHECK(aud.starts == 4);	// no stream of its own
+	CHECK(aud.starts == 5);	// no stream of its own
 	for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
 		blk[i] = 1000;
 	}
 	CHECK(beep_mix(blk));
 	CHECK(blk[0] == 1000 && blk[20] != 1000);
-	// 50+40+50 ms = 1120 samples = 7 blocks; the eighth is quiet
-	for (int i = 0; i < 6; i++) {
+	// 20+40+40+40+40 ms = 180 ms = 9 blocks; the tenth is quiet
+	for (int i = 0; i < 8; i++) {
 		CHECK(beep_mix(blk));
 	}
 	CHECK(!beep_mix(blk));
@@ -768,7 +792,7 @@ static void test_beep_module(void)
 	beep_play(BEEP_KEY, 50, false);
 	beep_stats_t st;
 	beep_get_stats(&st);
-	CHECK(st.no_stream == 2 && st.played == 5);
+	CHECK(st.no_stream == 2 && st.played == 6);
 	beep_init(&fake_audio);
 
 	// A beep inside the hold: no second lead-in, the tone starts in the first block

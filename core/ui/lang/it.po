@@ -28,15 +28,7 @@ msgstr "No"
 msgid " ago"
 msgstr " fa"
 
-#: core/ui/ui_app.c core/ui/ui_instrument.c
-msgid "OK Menu  * P25"
-msgstr "OK Menu  * P25"
-
-#: core/ui/ui_app.c
-msgid "OK Menu  Hold OK P25"
-msgstr "OK Menu  Tieni OK P25"
-
-#: core/ui/ui_app.c core/ui/ui_screens.c
+#: core/ui/ui_app.c core/ui/ui_instrument.c core/ui/ui_screens.c
 msgid "OK Menu  * Quick"
 msgstr "OK Menu  * Rapido"
 
@@ -301,10 +293,6 @@ msgid " is empty: set it in qdmr"
 msgstr " è vuota: impostala in qdmr"
 
 #: core/ui/ui_app.c
-msgid "P25: FM channels only"
-msgstr "P25: solo canali FM"
-
-#: core/ui/ui_app.c
 msgid "Reply ended"
 msgstr "Risposta finita"
 
@@ -351,6 +339,18 @@ msgstr "Banda 12.5 kHz"
 #: core/ui/ui_app.c
 msgid "Up/Dn tone  # TX/RX"
 msgstr "Su/Giù tono  # TX/RX"
+
+#: core/ui/ui_app.c
+msgid "P25: FM"
+msgstr "P25: FM"
+
+#: core/ui/ui_app.c
+msgid "P25: conventional"
+msgstr "P25: convenzionale"
+
+#: core/ui/ui_app.c
+msgid "P25: FM channels only"
+msgstr "P25: solo canali FM"
 
 #: core/ui/ui_app.c
 msgid "AM only in the air band"
@@ -1234,7 +1234,7 @@ msgstr "RILASCIA PTT"
 
 #: core/ui/ui_instrument.c
 msgid "RSSI "
-msgstr ""
+msgstr "RSSI "
 
 #: core/ui/ui_instrument.c
 msgid "Release PTT"
@@ -1247,10 +1247,6 @@ msgstr "PTT Rispondi  INDIETRO"
 #: core/ui/ui_instrument.c
 msgid "TYPE FREQ  HOLD OK PROG"
 msgstr "DIGITA FREQ  TIENI OK PROG"
-
-#: core/ui/ui_instrument.c
-msgid "OK Menu  * FM"
-msgstr "OK Menu  * FM"
 
 #: core/ui/ui_menus.c
 msgid "Last caller"
@@ -1793,6 +1789,22 @@ msgid "Battery saver"
 msgstr "Risparmio batt."
 
 #: core/ui/ui_menus.c
+msgid "P25 trunked"
+msgstr "P25 trunking"
+
+#: core/ui/ui_menus.c core/ui/ui_screens.c
+msgid "P25 conventional"
+msgstr "P25 convenzionale"
+
+#: core/ui/ui_menus.c
+msgid "P25 talkgroup"
+msgstr "Talkgroup P25"
+
+#: core/ui/ui_menus.c
+msgid "P25 NAC"
+msgstr "NAC P25"
+
+#: core/ui/ui_menus.c
 msgid "Tune to this ch"
 msgstr "Vai a questo canale"
 
@@ -1871,6 +1883,14 @@ msgstr "Non è un codice DCS"
 #: core/ui/ui_menus.c
 msgid "CTCSS goes 60.0 to 260.0"
 msgstr "CTCSS va da 60.0 a 260.0"
+
+#: core/ui/ui_menus.c
+msgid "NAC is 3 hex digits"
+msgstr "NAC: 3 cifre hex"
+
+#: core/ui/ui_menus.c core/ui/ui_screens.c
+msgid "NAC"
+msgstr "NAC"
 
 #: core/ui/ui_menus.c
 msgid "Save first: hold OK"
@@ -3245,16 +3265,8 @@ msgid "Edit scan lists in qdmr"
 msgstr "Modifica liste scan in qdmr"
 
 #: core/ui/ui_menus.c
-msgid "NAC is 3 hex digits"
-msgstr "NAC: 3 cifre hex"
-
-#: core/ui/ui_menus.c
 msgid "WACN is 5 hex digits"
 msgstr "WACN: 5 cifre hex"
-
-#: core/ui/ui_menus.c
-msgid "NAC"
-msgstr "NAC"
 
 #: core/ui/ui_menus.c
 msgid "WACN"
@@ -3377,10 +3389,6 @@ msgid "Step "
 msgstr "Passo "
 
 #: core/ui/ui_screens.c
-msgid "P25 conventional"
-msgstr "P25 convenzionale"
-
-#: core/ui/ui_screens.c
 msgid "P25 trunking"
 msgstr "Trunking P25"
 
@@ -3461,6 +3469,10 @@ msgid "Repeater channel: PTT off"
 msgstr "Canale ripetitore: PTT off"
 
 #: core/ui/ui_screens.c
+msgid "Not affiliated yet"
+msgstr "Non ancora affiliato"
+
+#: core/ui/ui_screens.c
 msgid "Not allowed here"
 msgstr "Non permesso qui"
 
@@ -3507,6 +3519,10 @@ msgstr "Sintonizza fuori banda"
 #: core/ui/ui_screens.c
 msgid "Pick a user channel to talk"
 msgstr "Scegli un canale utente per parlare"
+
+#: core/ui/ui_screens.c
+msgid "Wait for affiliation"
+msgstr "Attendi l'affiliazione"
 
 #: core/ui/ui_screens.c
 msgid "Private to you"
@@ -3823,6 +3839,14 @@ msgstr "{Privacy|Priv}"
 #: core/ui/ui_screens.c
 msgid "{Talk to|Talk}"
 msgstr "{Parla a|Parla}"
+
+#: core/ui/ui_screens.c
+msgid "{P25/FM|Mode}"
+msgstr "{P25/FM|Modo}"
+
+#: core/ui/ui_screens.c
+msgid "{Talkgroup|TG}"
+msgstr "{Talkgroup|TG}"
 
 #: core/ui/ui_screens.c
 msgid "{Copy to VFO|To VFO}"

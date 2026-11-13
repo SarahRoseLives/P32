@@ -913,6 +913,11 @@ static void sb_channel_row(sbuf_t *b, const channel_t *ch)
 	uint8_t prefix = 0;	// "TG" / "ID": left out in the middle form
 	sbuf_t wb;
 	sb_init(&wb, what, sizeof what);
+	if (ch->p25 || ch->p25_conv) {
+		sb_str(&wb, "P25");
+		prefix = 3;
+		sb_u32(&wb, ch->p25_tg, 1);
+	} else
 #if CONFIG_DMR
 	if (ch->mode == RADIO_MODE_DMR) {
 		static contact_t c;
@@ -1747,7 +1752,8 @@ static const ui_scr_def_t chlist_screen = {
 
 enum { CE_NAME, CE_NUMBER, CE_MODE, CE_RX, CE_TX, CE_POWER, CE_RX_ONLY, CE_BW, CE_RX_TONE, CE_TX_TONE, CE_VOX,
        CE_CC, CE_TS, CE_CONTACT, CE_LIST, CE_ID, CE_DMO, CE_BEEP, CE_ALIAS1, CE_ALIAS2, CE_TOT, CE_SCAN, CE_ECO,
-       CE_ZONES, CE_GO, CE_SHARE, CE_SAVE, CE_SAVE_NEW, CE_COUNT, CE_NONE = 0xFF };
+       CE_P25, CE_P25_CONV, CE_P25_TG, CE_P25_NAC, CE_ZONES, CE_GO, CE_SHARE, CE_SAVE, CE_SAVE_NEW, CE_COUNT,
+       CE_NONE = 0xFF };
 
 static channel_t ced_ch;		// what the screen shows (the working copy when editing)
 static uint16_t ced_num;		// its number, 0 = no such channel
@@ -1787,6 +1793,8 @@ static const struct { uint8_t off, len, bit; } ced_fields[CE_ZONES] = {
 	[CE_BEEP] = CE_FIELD(no_beep), [CE_ALIAS1] = { offsetof(channel_t, alias_tx), 1, CODEPLUG_ALIAS_TS1_TEXT },
 	[CE_ALIAS2] = { offsetof(channel_t, alias_tx), 1, CODEPLUG_ALIAS_TS2_TEXT }, [CE_TOT] = CE_FIELD(tot_s),
 	[CE_SCAN] = CE_FIELD(scan_skip), [CE_ECO] = CE_FIELD(no_eco),
+	[CE_P25] = CE_FIELD(p25), [CE_P25_CONV] = CE_FIELD(p25_conv), [CE_P25_TG] = CE_FIELD(p25_tg),
+	[CE_P25_NAC] = CE_FIELD(p25_nac),
 };
 
 // Whether row r differs from what is stored (the dot), or for CE_COUNT, any row
@@ -1859,6 +1867,12 @@ static void ced_build(void)
 		bool dmr_only = r >= CE_CC && r <= CE_ALIAS2;
 		if ((fm_only && dmr) || (dmr_only && !dmr) || (r == CE_MODE && !CONFIG_DMR))
 			continue;
+		if ((r == CE_P25 || r == CE_P25_CONV || r == CE_P25_TG || r == CE_P25_NAC) && dmr)
+			continue;
+		if (r == CE_P25 && !CONFIG_P25) continue;
+		if (r == CE_P25_CONV && !CONFIG_P25) continue;
+		if (r == CE_P25_TG && !(CONFIG_P25 && (ced_ch.p25 || ced_ch.p25_conv))) continue;
+		if (r == CE_P25_NAC && !(CONFIG_P25 && ced_ch.p25_conv)) continue;
 		if ((r == CE_ZONES || r == CE_GO || r == CE_SHARE || r == CE_SAVE_NEW) && fresh)
 			continue;
 		if (r == CE_SHARE && !CONFIG_ZONE_SHARE)
@@ -1999,8 +2013,9 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 		TRN("RX only"), TRN("Bandwidth"), TRN("RX CTCSS/DCS"), TRN("TX CTCSS/DCS"), "VOX", TRN("Color code"),
 		TRN("Timeslot"), TRN("TX contact"), TRN("RX group list"), TRN("Own ID"), TRN("Direct mode"),
 		TRN("Talk permit beeps"), TRN("Talker alias TS1"), TRN("Talker alias TS2"), TRN("TX time-out"), TRN("Scan"),
-		TRN("Battery saver"), TRN("Zones"), TRN("Tune to this ch"), TRN(GLYPH_SHARE " Share channel to..."),
-		TRN("Save"), TRN("Save as new channel") };
+		TRN("Battery saver"), TRN("P25 trunked"), TRN("P25 conventional"), TRN("P25 talkgroup"),
+		TRN("P25 NAC"), TRN("Zones"), TRN("Tune to this ch"),
+		TRN(GLYPH_SHARE " Share channel to..."), TRN("Save"), TRN("Save as new channel") };
 	const channel_t *ch = &ced_ch;
 	if (i >= ced_n)
 		return;
@@ -2145,6 +2160,25 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 	case CE_ECO:
 		sb_onoff(&b, !ch->no_eco);
 		break;
+	case CE_P25:
+		sb_onoff(&b, ch->p25);
+		break;
+	case CE_P25_CONV:
+		sb_onoff(&b, ch->p25_conv);
+		break;
+	case CE_P25_TG:
+		sb_u32(&b, ch->p25_tg, 1);
+		break;
+	case CE_P25_NAC: {
+		static const char hex[] = "0123456789ABCDEF";
+		char t[4];
+		t[0] = hex[(ch->p25_nac >> 8) & 0x0F];
+		t[1] = hex[(ch->p25_nac >> 4) & 0x0F];
+		t[2] = hex[ch->p25_nac & 0x0F];
+		t[3] = 0;
+		sb_str(&b, t);
+		break;
+	}
 	case CE_ZONES:
 		sb_chinfo_zones(&b, ced_num);
 		break;
@@ -2153,8 +2187,11 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 	}
 }
 
-#if CONFIG_CHANNEL_EDIT
 static void ui_text_open(char *target, uint8_t max);
+static void ui_text_open_as(char *target, uint8_t max, const char *heading);
+static void (*text_done)(void);
+
+#if CONFIG_CHANNEL_EDIT
 static bool discard_contact;	// Unsaved Changes asks about the contact editor's new contact (else a channel)
 
 // The first problem that keeps the copy from being saved, as a toast; NULL when it can be saved
@@ -2303,9 +2340,10 @@ static void ced_digit(char d)
 		ced_digits[ced_len++] = d;
 		ced_digits[ced_len] = 0;
 		break;
+	case CE_P25_TG:
 	case CE_CC:
 	case CE_TOT: {
-		int32_t hi = ced_edit == CE_CC ? 15 : CE_TOT_MAX;
+		int32_t hi = ced_edit == CE_P25_TG ? 65535 : ced_edit == CE_CC ? 15 : CE_TOT_MAX;
 		v = ced_typed ? v : d - '0';
 		ced_val = v > hi ? d - '0' : v;
 		ced_typed = true;
@@ -2349,6 +2387,9 @@ static void ced_commit(void)
 		break;
 	case CE_CC:
 		c->color_code = (uint8_t)ced_val;
+		break;
+	case CE_P25_TG:
+		c->p25_tg = (uint16_t)ced_val;
 		break;
 	case CE_TOT:
 		if (ced_val % CE_TOT_STEP != 0) {
@@ -2419,6 +2460,41 @@ static bool chinfo_key(const input_event_t *ev)
 }
 #endif
 
+#if CONFIG_CHANNEL_EDIT
+static char ced_nac_text[4];
+
+static void ced_nac_kept(void)
+{
+	uint16_t v = 0;
+	for (const char *p = ced_nac_text; *p != 0; p++) {
+		char c = *p;
+		uint8_t d;
+		if (c >= '0' && c <= '9') d = (uint8_t)(c - '0');
+		else if (c >= 'A' && c <= 'F') d = (uint8_t)(c - 'A' + 10);
+		else if (c >= 'a' && c <= 'f') d = (uint8_t)(c - 'a' + 10);
+		else { ui_toast(TR("NAC is 3 hex digits")); return; }
+		v = (uint16_t)((v << 4) | d);
+	}
+	if (v > 0xFFFu) {
+		ui_toast(TR("NAC is 3 hex digits"));
+		return;
+	}
+	ced_ch.p25_nac = v;
+	ui_dirty();
+}
+
+static void ced_nac_begin(uint16_t nac)
+{
+	static const char hex[] = "0123456789ABCDEF";
+	ced_nac_text[0] = hex[(nac >> 8) & 0x0F];
+	ced_nac_text[1] = hex[(nac >> 4) & 0x0F];
+	ced_nac_text[2] = hex[nac & 0x0F];
+	ced_nac_text[3] = 0;
+	ui_text_open_as(ced_nac_text, 3, TRN("NAC"));
+	text_done = ced_nac_kept;
+}
+#endif
+
 static void chinfo_select(uint16_t i, bool hold)
 {
 #if CONFIG_ZONE_SHARE
@@ -2444,7 +2520,10 @@ static void chinfo_select(uint16_t i, bool hold)
 	uint8_t r = ced_rows[i];
 	switch (r) {
 	case CE_NAME: ui_text_open(c->name, CODEPLUG_NAME_LEN); break;
-	case CE_MODE: c->mode = c->mode == RADIO_MODE_DMR ? RADIO_MODE_FM : RADIO_MODE_DMR; break;
+	case CE_MODE:
+		c->mode = c->mode == RADIO_MODE_DMR ? RADIO_MODE_FM : RADIO_MODE_DMR;
+		ced_build();
+		break;
 	case CE_RX:
 	case CE_TX:
 	case CE_ID:
@@ -2488,6 +2567,34 @@ static void chinfo_select(uint16_t i, bool hold)
 	case CE_ALIAS2: c->alias_tx ^= CODEPLUG_ALIAS_TS2_TEXT; break;
 	case CE_SCAN: c->scan_skip = !c->scan_skip; break;
 	case CE_ECO: c->no_eco = !c->no_eco; break;
+	case CE_P25:
+		c->p25 = !c->p25;
+		if (c->p25) c->p25_conv = false;
+		ced_build();
+		break;
+	case CE_P25_CONV:
+#if CONFIG_P25
+		c->p25_conv = !c->p25_conv;
+		if (c->p25_conv) {
+			c->p25 = false;
+			if (c->p25_nac == 0 || c->p25_tg == 0) {
+				settings_t st;
+				settings_read(&st);
+				if (c->p25_nac == 0) c->p25_nac = st.p25.nac;
+				if (c->p25_tg == 0) c->p25_tg = st.p25.tg;
+			}
+		}
+		ced_build();
+#endif
+		break;
+	case CE_P25_NAC:
+		ced_nac_begin(c->p25_nac);
+		break;
+	case CE_P25_TG:
+		ced_edit = r;
+		ced_val = c->p25_tg;
+		ced_typed = false;
+		break;
 	case CE_NUMBER: ui_toast(TR("Save as new channel to use another number")); break;
 #if CONFIG_ZONE_EDIT
 	case CE_ZONES: ui_push(SCR_CHZONES, ced_num); break;
@@ -2566,7 +2673,6 @@ static const ui_scr_def_t discard_screen = {
 #define TEXT_MULTI_MS	1000u
 
 static char *text_target;
-static void (*text_done)(void);		// called once the text is kept (NULL: none)
 static uint8_t text_max;
 static char text_buf[CODEPLUG_NAME_LEN + 1];
 static uint8_t text_len;
@@ -4623,7 +4729,7 @@ static bool tool_shown(uint16_t i)
 	}
 	if (i == T_P25_SYS) {
 #if CONFIG_P25
-		return board.p25_probe != NULL;	// the system a radio with the P25 probe stores
+		return board.p25_probe != NULL;	// the systems a radio with the P25 probe stores
 #else
 		return false;
 #endif
@@ -5754,6 +5860,7 @@ static void p25s_load(void)
 static void p25s_save(void)
 {
 	settings_t *st = settings_begin();
+	p25s.valid = 1;		// saving the FPP form makes it a usable system
 	st->p25 = p25s;
 	settings_end(hal_millis());
 }
@@ -6058,6 +6165,7 @@ static const ui_scr_def_t p25sys_screen = {
 	.hint = TRN("0-9 type  OK edit/save  Back"),
 	.count = p25s_count, .item = p25s_item, .key = p25s_key, .enter = p25s_enter,
 };
+
 #endif
 
 // ======================= Screens with their own drawing =======================

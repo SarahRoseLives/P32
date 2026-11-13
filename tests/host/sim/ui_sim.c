@@ -1358,6 +1358,9 @@ static void sim_settings_defaults(void)
 void radio_req_p25(bool on) { (void)on; }
 void radio_req_p25_follow(bool on) { (void)on; }
 void radio_req_p25_voice(bool on) { (void)on; }
+void radio_req_p25_conv(bool on) { (void)on; }
+void radio_req_p25_nac(uint16_t nac) { (void)nac; }
+void radio_req_p25_tg(uint16_t tg) { (void)tg; }
 void p25_voice_set_agc(bool on) { (void)on; }
 bool p25_voice_agc(void) { return false; }
 #endif

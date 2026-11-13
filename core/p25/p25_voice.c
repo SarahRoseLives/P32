@@ -23,6 +23,9 @@
 #include "p25/p25_receive_policy.h"
 #include "p25/p25_voice_policy.h"
 #include "p25/p25_imbe.h"
+#if CONFIG_BEEP
+#include "radio/beep.h"
+#endif
 
 #define P25_VOICE_PCM_FRAMES	48u	// 960 ms: three LDUs plus jitter
 #define P25_VOICE_PREFILL	18u	// start after ~360 ms so a late LDU never gaps the speaker
@@ -139,6 +142,9 @@ static void audio_block(const int16_t *mic, int16_t *spk, void *ctx)
 			v.underruns++;	// only a real gap; the prefill is silence, not an underrun
 		}
 	}
+#if CONFIG_BEEP
+	beep_mix(spk);		// the permit chirp and refusal bonk share this stream
+#endif
 }
 
 static void on_frame(const p25_rx *f, void *ctx)

@@ -47,6 +47,14 @@ typedef struct {
 	uint8_t sfr_flag1;
 	uint8_t sfr_a;
 	uint8_t sfr_b;
+	// P25 memories. Trunked uses the global settings.p25 system plus this talkgroup; conventional carries its own
+	// NAC and talkgroup. The open-firmware record stores the trunked flag in flag4's unused talkaround bit, the
+	// conventional flag in flag2 bit 7, the TG in the contact field and the NAC in the color-code byte and flag2's
+	// low nibble.
+	bool p25;
+	bool p25_conv;
+	uint16_t p25_tg;
+	uint16_t p25_nac;
 } channel_t;
 
 // channel_t.alias_tx: what the channel sends as talker alias on each timeslot (text = our radio name)

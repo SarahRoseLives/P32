@@ -1107,6 +1107,7 @@ static const char *deny_reason(const radio_view_t *v, char *buf, size_t len)
 	case TXDENY_AM: sb_str(&b, TR("Air band: receive only")); break;
 	case TXDENY_BCAST: sb_str(&b, TR("Broadcast: receive only")); break;
 	case TXDENY_SFR_RPT: sb_str(&b, TR("Repeater channel: PTT off")); break;
+	case TXDENY_NOT_AFFIL: sb_str(&b, TR("Not affiliated yet")); break;
 	default: sb_str(&b, TR("Not allowed here")); break;
 	}
 	return buf;
@@ -1127,6 +1128,7 @@ static const char *deny_action(const radio_view_t *v)
 	case TXDENY_AM:
 	case TXDENY_BCAST: return v->vfo ? TR("Tune out of the band") : TR("Pick another channel");
 	case TXDENY_SFR_RPT: return TR("Pick a user channel to talk");
+	case TXDENY_NOT_AFFIL: return TR("Wait for affiliation");
 	default: return TR("Pick another channel");
 	}
 }
@@ -2757,17 +2759,57 @@ void ui_draw_hotspot(const radio_view_t *v, const hotspot_view_t *h, const ui_st
 
 uint8_t ui_quick_kind(int pos, const radio_view_t *v)
 {
-	static const uint8_t fm[UI_QUICK_TILES] = {
+#if CONFIG_P25_VOICE
+	static const uint8_t fm_vfo[UI_QUICK_TILES] = {
 		QT_POWER, QT_SQUELCH, QT_TONE, QT_MODE, QT_MONITOR, QT_VOX, QT_SCAN, QT_BANDWIDTH, QT_BRIGHTNESS,
 	};
+	static const uint8_t p25_vfo[UI_QUICK_TILES] = {
+		QT_POWER, QT_SQUELCH, QT_P25_NAC, QT_MODE, QT_MONITOR, QT_P25_TG, QT_SCAN, QT_BANDWIDTH, QT_BRIGHTNESS,
+	};
+#else
+	static const uint8_t fm_vfo[UI_QUICK_TILES] = {
+		QT_POWER, QT_SQUELCH, QT_TONE, QT_MODE, QT_MONITOR, QT_VOX, QT_SCAN, QT_BANDWIDTH, QT_BRIGHTNESS,
+	};
+#endif
+#if !CONFIG_P25_VOICE
+	static const uint8_t fm_ch[UI_QUICK_TILES] = {
+		QT_POWER, QT_SQUELCH, QT_TONE, QT_TO_VFO, QT_MONITOR, QT_VOX, QT_SCAN, QT_BANDWIDTH, QT_BRIGHTNESS,
+	};
+#endif
+#if CONFIG_P25_VOICE
+	static const uint8_t p25_fm_ch[UI_QUICK_TILES] = {
+		QT_POWER, QT_SQUELCH, QT_TONE, QT_TO_VFO, QT_MONITOR, QT_VOX, QT_SCAN, QT_BANDWIDTH, QT_P25,
+	};
+	static const uint8_t p25_ch[UI_QUICK_TILES] = {
+		QT_POWER, QT_SQUELCH, QT_P25_NAC, QT_TO_VFO, QT_MONITOR, QT_P25_TG, QT_SCAN, QT_BANDWIDTH, QT_P25,
+	};
+#endif
 	static const uint8_t dmr[UI_QUICK_TILES] = {
 		QT_POWER, QT_TIMESLOT, QT_CC, QT_MODE, QT_HEAR_ALL, QT_PRIVACY, QT_SCAN, QT_TALK_TO, QT_BRIGHTNESS,
 	};
 	if (pos < 0 || pos >= UI_QUICK_TILES)
 		return QT_POWER;
-	if (!v->vfo && pos == 3)
-		return QT_TO_VFO;	// a channel's tile 4 copies it to the VFO; the VFO's stays Mode
-	uint8_t kind = v->ch.mode == RADIO_MODE_DMR ? dmr[pos] : fm[pos];
+	if (!v->vfo && pos == 3 && v->ch.mode == RADIO_MODE_DMR)
+		return QT_TO_VFO;	// a DMR channel's tile 4 copies it to the VFO; the VFO's stays Mode
+	uint8_t kind;
+	if (v->ch.mode == RADIO_MODE_DMR) {
+		kind = dmr[pos];
+	} else if (v->vfo) {
+#if CONFIG_P25_VOICE
+		kind = v->p25.conv ? p25_vfo[pos] : fm_vfo[pos];
+#else
+		kind = fm_vfo[pos];
+#endif
+#if CONFIG_P25_VOICE
+	} else if (v->p25.conv) {
+		kind = p25_ch[pos];
+	} else {
+		kind = p25_fm_ch[pos];
+#else
+	} else {
+		kind = fm_ch[pos];
+#endif
+	}
 	if (v->vfo && (kind == QT_MONITOR || kind == QT_PRIVACY))
 		return QT_SPLIT;	// the VFO's TX frequency; Monitor stays on its key, privacy on channels
 	return kind;
@@ -2799,6 +2841,8 @@ bool ui_quick_tile(int tile, const radio_view_t *v, const ui_state_t *s, char *l
 		[QT_HEAR_ALL] = TRN(TEXT_ALT_OPEN "Digital monitor" TEXT_ALT_NEXT "DMon" TEXT_ALT_CLOSE),
 		[QT_PRIVACY] = TRN(TEXT_ALT_OPEN "Privacy" TEXT_ALT_NEXT "Priv" TEXT_ALT_CLOSE),
 		[QT_TALK_TO] = TRN(TEXT_ALT_OPEN "Talk to" TEXT_ALT_NEXT "Talk" TEXT_ALT_CLOSE),
+		[QT_P25] = TRN(TEXT_ALT_OPEN "P25/FM" TEXT_ALT_NEXT "Mode" TEXT_ALT_CLOSE),
+		[QT_P25_NAC] = TRN("NAC"), [QT_P25_TG] = TRN(TEXT_ALT_OPEN "Talkgroup" TEXT_ALT_NEXT "TG" TEXT_ALT_CLOSE),
 		[QT_TO_VFO] = TRN(TEXT_ALT_OPEN "Copy to VFO" TEXT_ALT_NEXT "To VFO" TEXT_ALT_CLOSE),
 		[QT_SPLIT] = TRN(TEXT_ALT_OPEN "TX freq" TEXT_ALT_NEXT "TXFreq" TEXT_ALT_CLOSE),
 	};
@@ -2849,10 +2893,34 @@ bool ui_quick_tile(int tile, const radio_view_t *v, const ui_state_t *s, char *l
 		return v->ch.mode == RADIO_MODE_FM;
 	}
 	case QT_MODE:
-		sb_str(&b, mode_word(v));	// what it is, as every other tile
-		// Only in the VFO (a channel's tile 4 is QT_TO_VFO), in a build with both VFO kinds; it keeps the mode like
-		// its other settings
+#if CONFIG_P25_VOICE
+		sb_str(&b, v->p25.conv ? "P25" : mode_word(v));	// what it is, as every other tile
+		// The VFO's Mode tile: P25/FM in a P25-only build, else the VFO's FM / DMR
+#if !CONFIG_DMR
+		return v->vfo;
+#else
 		return feat(UI_FEAT_MODE) && v->vfo && CONFIG_VFO_FM && CONFIG_VFO_DMR;
+#endif
+#else
+		sb_str(&b, mode_word(v));
+		return feat(UI_FEAT_MODE) && v->vfo && CONFIG_VFO_FM && CONFIG_VFO_DMR;
+#endif
+#if CONFIG_P25_VOICE
+	case QT_P25:
+		sb_str(&b, v->p25.conv ? "P25" : "FM");
+		return v->ch.mode == RADIO_MODE_FM;
+	case QT_P25_NAC: {
+		static const char hex[] = "0123456789ABCDEF";
+		uint16_t n = editing ? s->p25_nac_edit : (v->ch.p25_nac ? v->ch.p25_nac : 0x293u);
+		sb_chr(&b, hex[(n >> 8) & 0x0F]);
+		sb_chr(&b, hex[(n >> 4) & 0x0F]);
+		sb_chr(&b, hex[n & 0x0F]);
+		return v->p25.conv;
+	}
+	case QT_P25_TG:
+		sb_u32(&b, editing ? s->p25_tg_edit : (v->ch.p25_tg ? v->ch.p25_tg : 1u), 1);
+		return v->p25.conv;
+#endif
 	case QT_TO_VFO:
 		sb_str(&b, TR("Copy"));
 		return CONFIG_VFO_FM || CONFIG_VFO_DMR;	// a channel the VFO can't hold is refused on the press, with the reason

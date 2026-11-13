@@ -44,9 +44,11 @@ static bool same_channel(const channel_t *a, const channel_t *b)
 	return strcmp(a->name, b->name) == 0 && a->rx_hz == b->rx_hz && a->tx_hz == b->tx_hz && a->mode == b->mode &&
 	       a->bw == b->bw && a->rx_tone.type == b->rx_tone.type && a->rx_tone.value == b->rx_tone.value &&
 	       a->tx_tone.type == b->tx_tone.type && a->tx_tone.value == b->tx_tone.value && a->power == b->power &&
-	       a->rx_only == b->rx_only && a->color_code == b->color_code && a->timeslot == b->timeslot &&
-	       a->contact == b->contact && a->listen_list == b->listen_list && a->dmr_id == b->dmr_id && a->dmo == b->dmo &&
-	       a->vox == b->vox && a->scan_skip == b->scan_skip && a->no_beep == b->no_beep && a->no_eco == b->no_eco;
+	       a->rx_only == b->rx_only && (a->p25_conv || a->color_code == b->color_code) &&
+	       a->timeslot == b->timeslot && a->contact == b->contact && a->listen_list == b->listen_list &&
+	       a->dmr_id == b->dmr_id && a->dmo == b->dmo && a->vox == b->vox && a->scan_skip == b->scan_skip &&
+	       a->no_beep == b->no_beep && a->no_eco == b->no_eco && a->p25 == b->p25 &&
+	       a->p25_conv == b->p25_conv && a->p25_tg == b->p25_tg && a->p25_nac == b->p25_nac;
 }
 
 static channel_t make(const char *name, uint32_t rx, uint32_t tx)
@@ -66,7 +68,7 @@ static channel_t make(const char *name, uint32_t rx, uint32_t tx)
 
 static void test_encode(void)
 {
-	channel_t v[6];
+	channel_t v[7];
 	v[0] = make("FM wide", 146520000, 146520000);
 	v[0].bw = RADIO_BW_25K;
 	v[0].tx_tone = (subtone_t){ TONE_CTCSS, 885 };
@@ -93,7 +95,11 @@ static void test_encode(void)
 	v[3].scan_skip = true;
 	v[4] = make("", 136000000, 174000000);
 	v[5] = make("Lo", 400012500, 479987500);
-	for (unsigned i = 0; i < 6; i++) {
+	v[6] = make("P25 conv", 146520000, 146520000);
+	v[6].p25_conv = true;
+	v[6].p25_tg = 3113;
+	v[6].p25_nac = 0x293;
+	for (unsigned i = 0; i < 7; i++) {
 		uint8_t r[CODEPLUG_OPENFW_CHANNEL_SIZE];
 		channel_t back;
 		memset(r, 0xFF, sizeof(r));
@@ -112,6 +118,15 @@ static void test_encode(void)
 	CHECK(r[0x20] == 0x23 && r[0x21] == 0xC0 && r[0x22] == 0x85 && r[0x23] == 0x08);
 	CHECK(r[0x19] == 0 && r[0x27] == 0x00 && r[0x28] == 0x16 && r[0x29] == 0x00);
 	CHECK(r[1] == 0xFF && r[0] == 'x');
+	// P25 conventional: NAC 0x293 in 0x2C and flag2 bits 8-11, TG in the contact field, flag2 bit 7
+	memset(r, 0, sizeof(r));
+	channel_t pc = make("x", 146520000, 146520000);
+	pc.p25_conv = true;
+	pc.p25_nac = 0x293;
+	pc.p25_tg = 0xBEEF;
+	codeplug_openfw_encode(&pc, r);
+	CHECK(r[0x2C] == 0x93 && (r[0x31] & 0x80) && (r[0x31] & 0x0F) == 2);
+	CHECK(r[0x2E] == 0xEF && r[0x2F] == 0xBE);
 
 	// Bytes the model doesn't own are kept: TOT, location, SFR bytes, vendor flags, VFO step, squelch
 	uint8_t old[CODEPLUG_OPENFW_CHANNEL_SIZE];

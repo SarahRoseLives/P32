@@ -331,9 +331,14 @@ static void draw_meter(const radio_view_t *v, radio_state_t st, int y)
 	int w = gfx_width(), n = 13, bw = 3, gap = 2;
 	int x0 = CONTENT_X;
 	color_t c = st == RS_TX ? ui_col.tx : ui_col.rx;
-	int lit = st == RS_TX ? 9 : call_active(v) ? 8 : rssi_bars(v->rssi_dbm) * 3;
+	int lit = st == RS_TX ? 9 : rssi_bars(v->rssi_dbm) * 3;
+	if (call_active(v) && v->p25.peak != 0) {
+		lit = ((unsigned)v->p25.peak * (unsigned)n + 16383u) / 32768u;
+		if (lit > n) lit = n;
+	}
 	for (int i = 0; i < n; i++) {
-		int hh = 3 + (i % 5);
+		// One rising ramp, not a repeating five-bar ornament: the lit count carries the level.
+		int hh = 3 + (i * 12) / (n - 1);
 		gfx_fill(x0 + i * (bw + gap), y + 18 - hh, bw, hh, i < lit ? c : ui_col.line);
 	}
 	(void)w;
@@ -423,10 +428,8 @@ bool ui_instrument_home(const radio_view_t *v, const ui_state_t *s)
 		hint_text = TR("OK TUNE  BACK CANCEL");
 	} else if (v->vfo) {
 		hint_text = TR("TYPE FREQ  HOLD OK PROG");
-	} else if (trunk(v) || conv(v)) {
-		hint_text = TR("OK Menu  * FM");
 	} else {
-		hint_text = TR("OK Menu  * P25");
+		hint_text = TR("OK Menu  * Quick");
 	}
 	ui_draw_bottom(s, hint_text);
 	return true;

@@ -49,7 +49,10 @@ static uint32_t fl_base = DEFAULT_FLASH_BASE;
 #define CH_FLAG1	0x30u	// bits 0-1 talker alias on TS1, 2-3 on TS2: 0 off, 1 APRS, 2 text, 3 both
 #define CH_FLAG2	0x31u
 #define CH_FLAG4	0x33u
+#define FLAG4_P25	0x08u	// unused talkaround bit: a P25 trunked memory
 #define FLAG2_TS2	0x40u
+#define FLAG2_P25_CONV	0x80u	// a P25 conventional memory (flag2 bit 7, otherwise unused)
+#define FLAG2_NAC_HI	0x0Fu	// its NAC bits 8-11 (flag2 bits 0-3, otherwise unused)
 #define FLAG4_VOX	0x40u
 #define FLAG4_ZONE_SKIP	0x20u	// zone scan skip
 #define FLAG4_RX_ONLY	0x04u
@@ -628,7 +631,11 @@ bool codeplug_openfw_decode(const uint8_t *r, channel_t *out)
 	out->rx_only = (r[CH_FLAG4] & FLAG4_RX_ONLY) != 0;
 	out->color_code = r[CH_CC] & 0x0Fu;
 	out->timeslot = (r[CH_FLAG2] & FLAG2_TS2) ? 2 : 1;
-	out->contact = le16(&r[CH_CONTACT]);
+	out->p25 = (r[CH_FLAG4] & FLAG4_P25) != 0;
+	out->p25_conv = (r[CH_FLAG2] & FLAG2_P25_CONV) != 0;
+	out->p25_tg = (out->p25 || out->p25_conv) ? le16(&r[CH_CONTACT]) : 0;
+	out->p25_nac = out->p25_conv ? (uint16_t)(((r[CH_FLAG2] & FLAG2_NAC_HI) << 8) | r[CH_CC]) : 0;
+	out->contact = (out->p25 || out->p25_conv) ? 0 : le16(&r[CH_CONTACT]);
 	out->listen_list = r[CH_RX_GROUP];
 	if (r[CH_LFLAG1] & LFLAG1_ID) {
 		out->dmr_id = ((uint32_t)r[CH_DMR_ID] << 16) | ((uint32_t)r[CH_DMR_ID + 1] << 8) | r[CH_DMR_ID + 2];
@@ -673,12 +680,20 @@ void codeplug_openfw_encode(const channel_t *ch, uint8_t *r)
 	r[CH_POWER] = ch->power == CODEPLUG_POWER_DEFAULT ? 0 : power_to_byte(ch->power);
 	put16(&r[CH_RX_TONE], tone_word(&ch->rx_tone));
 	put16(&r[CH_TX_TONE], tone_word(&ch->tx_tone));
-	r[CH_FLAG4] = (uint8_t)((r[CH_FLAG4] & ~(FLAG4_VOX | FLAG4_ZONE_SKIP | FLAG4_RX_ONLY | FLAG4_25K)) |
+	r[CH_FLAG4] = (uint8_t)((r[CH_FLAG4] & ~(FLAG4_VOX | FLAG4_ZONE_SKIP | FLAG4_RX_ONLY | FLAG4_25K |
+						 FLAG4_P25)) |
 				(ch->vox ? FLAG4_VOX : 0) | (ch->scan_skip ? FLAG4_ZONE_SKIP : 0) |
-				(ch->rx_only ? FLAG4_RX_ONLY : 0) | (ch->bw == RADIO_BW_25K ? FLAG4_25K : 0));
-	r[CH_FLAG2] = (uint8_t)((r[CH_FLAG2] & ~FLAG2_TS2) | (ch->timeslot == 2 ? FLAG2_TS2 : 0));
-	r[CH_CC] = ch->color_code & 0x0Fu;
-	put16(&r[CH_CONTACT], ch->contact);
+				(ch->rx_only ? FLAG4_RX_ONLY : 0) | (ch->bw == RADIO_BW_25K ? FLAG4_25K : 0) |
+				(ch->p25 ? FLAG4_P25 : 0));
+	bool p25_conv = ch->p25_conv && !ch->p25;
+	uint8_t f2 = (uint8_t)((r[CH_FLAG2] & ~(FLAG2_TS2 | FLAG2_P25_CONV)) |
+			       (ch->timeslot == 2 ? FLAG2_TS2 : 0) | (p25_conv ? FLAG2_P25_CONV : 0));
+	if (p25_conv) {
+		f2 = (uint8_t)((f2 & ~FLAG2_NAC_HI) | ((ch->p25_nac >> 8) & FLAG2_NAC_HI));
+	}
+	r[CH_FLAG2] = f2;
+	r[CH_CC] = p25_conv ? (uint8_t)(ch->p25_nac & 0xFFu) : (ch->color_code & 0x0Fu);
+	put16(&r[CH_CONTACT], (ch->p25 || p25_conv) ? ch->p25_tg : ch->contact);
 	r[CH_RX_GROUP] = (uint8_t)(ch->listen_list <= 0xFFu ? ch->listen_list : 0);
 	r[CH_LFLAG1] = (uint8_t)((r[CH_LFLAG1] & ~(LFLAG1_ID | LFLAG1_NO_BEEP | LFLAG1_NO_ECO | LFLAG1_DMO)) |
 				 (ch->dmr_id != 0 ? LFLAG1_ID : 0) | (ch->no_beep ? LFLAG1_NO_BEEP : 0) |

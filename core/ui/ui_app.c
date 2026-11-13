@@ -62,11 +62,7 @@ static char home_hint[32];
 // The hint's keys part, in the language in use: the quick settings key, or holding OK on a radio without it
 static const char *home_hint_keys(void)
 {
-#if CONFIG_P25_STAR
-	return has_quick_key ? TR("OK Menu  * P25") : TR("OK Menu  Hold OK P25");
-#else
 	return has_quick_key ? TR("OK Menu  * Quick") : TR("OK Menu  Hold OK Quick");
-#endif
 }
 #if CONFIG_HOTSPOT
 static bool hs_diag;	// hotspot mode: the diagnostics page instead of the Hotspot screen
@@ -1109,19 +1105,6 @@ bool ui_home_key(const input_event_t *ev)
 		}
 		return true;
 	}
-#if CONFIG_P25_STAR && CONFIG_P25_VOICE
-	if (ev->action == ACT_QUICK && press) {
-		// Home: * switches the current FM channel between analog FM and conventional P25. Long * still locks the keys.
-		if (view->p25.conv) {
-			radio_req_p25_voice(false);
-		} else if (view->ch.mode == RADIO_MODE_FM) {
-			radio_req_p25_voice(true);
-		} else {
-			ui_toast(TR("P25: FM channels only"));
-		}
-		return true;
-	}
-#endif
 	if (ev->gesture == GESTURE_LONG) {
 		if (ev->action == ACT_SELECT) {
 			if (!has_quick_key)
@@ -1307,6 +1290,20 @@ static void quick_change(uint8_t kind, int8_t dir)
 		ui_st.cc_edit = (uint8_t)(c < 0 ? 15 : c > 15 ? 0 : c);
 		break;
 	}
+#if CONFIG_P25_VOICE
+	case QT_P25_NAC: {
+		int n = ui_st.p25_nac_edit + dir;
+		ui_st.p25_nac_edit = (uint16_t)(n < 0 ? 0 : n > 0xFFF ? 0xFFF : n);
+		ui_st.p25_edit_typed = true;
+		break;
+	}
+	case QT_P25_TG: {
+		int n = ui_st.p25_tg_edit + dir;
+		ui_st.p25_tg_edit = (uint16_t)(n < 0 ? 0 : n > 0xFFFF ? 0xFFFF : n);
+		ui_st.p25_edit_typed = true;
+		break;
+	}
+#endif
 	case QT_BRIGHTNESS: {
 		int b = ui_st.brightness + dir * 10;
 		ui_st.brightness = (uint8_t)(b < 10 ? 10 : b > 100 ? 100 : b);
@@ -1325,6 +1322,12 @@ static void quick_close_editor(void)
 		return;		// the editor stays open on what was typed
 	if (kind == QT_CC && ui_st.quick_edit && !ui_svc_dmr_color_code(ui_st.cc_edit))
 		ui_toast(TR("Color code: not in this build"));
+#if CONFIG_P25_VOICE
+	if (kind == QT_P25_NAC && ui_st.quick_edit)
+		radio_req_p25_nac(ui_st.p25_nac_edit);
+	if (kind == QT_P25_TG && ui_st.quick_edit)
+		radio_req_p25_tg(ui_st.p25_tg_edit);
+#endif
 	if (kind == QT_BRIGHTNESS)
 		ui_svc_setting_set(UI_SET_BRIGHTNESS, ui_st.brightness);
 	ui_st.quick_edit = false;
@@ -1371,6 +1374,31 @@ static void quick_activate(int tile)
 		ui_toast(TR("Up/Dn tone  # TX/RX"));
 		break;
 	}
+#if CONFIG_P25_VOICE
+	case QT_P25:
+		if (view->p25.conv) {
+			radio_req_p25_voice(false);
+			radio_req_p25_conv(false);
+			ui_toast(TR("P25: FM"));
+		} else if (view->ch.mode == RADIO_MODE_FM && !view->ch.p25) {
+			radio_req_p25_conv(true);
+			radio_req_p25_voice(true);
+			ui_toast(TR("P25: conventional"));
+		} else {
+			ui_toast(TR("P25: FM channels only"));
+		}
+		break;
+	case QT_P25_NAC:
+		ui_st.p25_nac_edit = view->ch.p25_nac ? view->ch.p25_nac : 0x293u;
+		ui_st.p25_edit_typed = false;
+		ui_st.quick_edit = true;
+		break;
+	case QT_P25_TG:
+		ui_st.p25_tg_edit = view->ch.p25_tg ? view->ch.p25_tg : 1u;
+		ui_st.p25_edit_typed = false;
+		ui_st.quick_edit = true;
+		break;
+#endif
 	case QT_TO_VFO:
 		copy_to_vfo();
 		break;
@@ -1379,6 +1407,20 @@ static void quick_activate(int tile)
 		ui_st.quick_edit = true;	// the hint row says what Up / Down and the digits do
 		break;
 	case QT_MODE: {
+#if CONFIG_P25_VOICE && !CONFIG_DMR
+		// A P25-only build: the VFO's Mode tile is FM / conventional P25.
+		if (view->p25.conv) {
+			radio_req_p25_voice(false);
+			radio_req_p25_conv(false);
+			ui_toast(TR("P25: FM"));
+		} else if (view->ch.mode == RADIO_MODE_FM) {
+			radio_req_p25_conv(true);
+			radio_req_p25_voice(true);
+			ui_toast(TR("P25: conventional"));
+		} else {
+			ui_toast(TR("P25: FM channels only"));
+		}
+#else
 		bool to_dmr = view->ch.mode != RADIO_MODE_DMR;	// the view may change at once (the host simulator)
 		if (to_dmr && (view->am || view->bcast)) {
 			ui_toast(view->am ? TR("AM only in the air band") : TR("FM only in the broadcast band"));
@@ -1388,6 +1430,7 @@ static void quick_activate(int tile)
 			ui_toast(to_dmr ? "VFO: DMR" : "VFO: FM");	// the VFO keeps its mode
 		else
 			quick_unavailable(kind);
+#endif
 		break;
 	}
 	case QT_MONITOR:
@@ -1479,6 +1522,22 @@ bool ui_quick_key(const input_event_t *ev)
 		return true;
 	}
 	if (d >= 0 && (press || ev->gesture == GESTURE_LONG)) {
+#if CONFIG_P25_VOICE
+		if (ui_st.quick_edit && kind == QT_P25_NAC) {
+			uint16_t n = ui_st.p25_edit_typed ? (uint16_t)((ui_st.p25_nac_edit << 4) | d) : (uint16_t)d;
+			ui_st.p25_nac_edit = n > 0xFFFu ? d : n;
+			ui_st.p25_edit_typed = true;
+			dirty = true;
+			return true;
+		}
+		if (ui_st.quick_edit && kind == QT_P25_TG) {
+			uint32_t n = ui_st.p25_edit_typed ? (uint32_t)ui_st.p25_tg_edit * 10u + (uint32_t)d : (uint32_t)d;
+			ui_st.p25_tg_edit = (uint16_t)(n > 0xFFFFu ? (uint32_t)d : n);
+			ui_st.p25_edit_typed = true;
+			dirty = true;
+			return true;
+		}
+#endif
 		if (ui_st.quick_edit && kind == QT_SQUELCH) {
 			for (int n = d - view->squelch; n != 0; n += n > 0 ? -1 : 1)
 				radio_req_squelch(n > 0 ? 1 : -1);
@@ -2170,7 +2229,7 @@ void ui_app_key(const input_event_t *ev)
 	// QUICK opens quick settings from any screen; BACK returns to where the user was
 	const ui_scr_def_t *d = ui_scr[stack[sp].scr];
 	if (ev->action == ACT_QUICK && ev->gesture == GESTURE_PRESS && stack[sp].scr != SCR_QUICK &&
-			stack[sp].scr != SCR_DIAG && stack[sp].scr != SCR_HOME && !typing) {
+			stack[sp].scr != SCR_DIAG && !typing) {
 		ui_push(SCR_QUICK, 0);
 		return;
 	}

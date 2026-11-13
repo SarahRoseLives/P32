@@ -74,7 +74,8 @@ void settings_defaults(settings_t *s)
 	s->p25.site = 1;
 	s->p25.band_auto = 1;
 	s->p25.valid = 1;
-	strcpy(s->p25.name, "438.800");
+	s->p25.nac = 0x123;
+	strcpy(s->p25.name, "SITE 1");
 }
 
 // Page k of a settings_t: its offset and length
@@ -133,6 +134,11 @@ static uint8_t slot_buf2[SLOT_SIZE];
 
 static uint16_t rec_page(const uint8_t *r) { return (uint16_t)((r[8] | (r[9] << 8)) >> SETTINGS_PAGE_SHIFT); }
 static uint16_t rec_layout(const uint8_t *r) { return (uint16_t)((r[8] | (r[9] << 8)) & 0x0FFFu); }
+
+static bool single_site_name(const char *name)
+{
+	return name[0] == '\0' || strcmp(name, "438.800") == 0;
+}
 
 settings_load_t settings_init(void)
 {
@@ -238,6 +244,25 @@ settings_load_t settings_init(void)
 	}
 	if (live.p25.uplink_hz == 0u) {
 		live.p25.uplink_hz = 433800000u;
+	}
+	// The development site is the default system. Normalize a record still carrying the old conventional NAC or
+	// name once; a system the user renamed is left alone after this.
+	if (live.p25.cc_hz == 438800000u && live.p25.uplink_hz == 433800000u &&
+	    (single_site_name(live.p25.name) || (uint16_t)live.p25.unit_id == 57920u)) {
+		live.p25.nac = 0x123;
+		live.p25.wacn = 0xBEEF0;
+		live.p25.sys = 0x123;
+		live.p25.tg = 1;
+		live.p25.rfss = 1;
+		live.p25.site = 1;
+		live.p25.unit_id = 2;
+		live.p25.band_auto = 1;
+		live.p25.valid = 1;
+		strcpy(live.p25.name, "SITE 1");
+	}
+	// A record from before the FPP save set the flag still has a usable system if its control and uplink are set.
+	if (!live.p25.valid && live.p25.cc_hz != 0u && live.p25.uplink_hz != 0u) {
+		live.p25.valid = 1;
 	}
 	storage_unlock();
 	saved = live;

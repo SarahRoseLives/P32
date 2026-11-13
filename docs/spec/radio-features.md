@@ -308,8 +308,8 @@ None of them needs a correction in the driver. The HIL test (`test_fm_tx_dtmf`) 
 |---|---|---|
 | key | 1000 Hz 25 ms | `radio_req_beep(BEEP_KEY)` from the UI, if `key_beep` |
 | error | 400 Hz 150 ms | UI errors |
-| TX permit | 1600 Hz 50 ms twice | DMR: the channel is granted (unless the codeplug channel has "no beep", or `talk_permit` is off: Settings > Sound > Talk permit tone) |
-| TX deny | 300 Hz 400 ms | any TX refusal |
+| TX permit | 450, 1550, 1050, 1550, 1300 Hz, 20/40/40/40/40 ms | DMR: the channel is granted (unless the codeplug channel has "no beep", or `talk_permit` is off: Settings > Sound > Talk permit tone); P25 trunked: the site granted the voice channel |
+| TX deny | 350 Hz 120 ms, then 180 ms of silence | any TX refusal; on a P25 trunked channel the pattern repeats until PTT is released |
 | call end | 1200 Hz 50 ms, 900 Hz 70 ms | DMR: a played call ended (unless "no beep") |
 | TOT warning | 1000 Hz 100 ms twice | 3.2 |
 | battery low | 800 Hz, 600 Hz | entering low, then every 2 min |

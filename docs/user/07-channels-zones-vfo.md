@@ -139,7 +139,8 @@ Focus a row and press **OK**:
 
 | Row | What OK does |
 |---|---|
-| Two choices (mode, timeslot, bandwidth, RX only, scan, VOX, direct mode, beeps, talker alias, battery saver) | switches to the other one |
+| Two choices (mode, timeslot, bandwidth, RX only, scan, VOX, direct mode, beeps, talker alias, battery saver, P25 trunked, P25 conventional) | switches to the other one |
+| P25 talkgroup, P25 NAC | type the talkgroup, or a 3-digit hexadecimal NAC (for example 293), then **OK**. P25 talkgroup appears for either P25 kind; P25 NAC appears for a conventional P25 channel |
 | Power, RX CTCSS/DCS, TX CTCSS/DCS, color code, TX time-out | opens a picker: turn the knob (or Up / Down) to the value, **OK** keeps it, **Back** cancels. Color code and time-out also take digits |
 | RX CTCSS/DCS, TX CTCSS/DCS, typed | type a CTCSS tone with its tenths digit: **8 8 5** is 88.5, **1 3 1 8** is 131.8. Under 60 the digits are whole Hz: **6 7** is 67.0, **1 0 0** is 100.0. Start with **0** for a DCS code: **0 2 3** is D023N. **Back** takes the last digit back. For an inverted DCS code, turn the knob one step: each code's I follows its N (D023N, D023I, D025N) |
 | Zones | opens every zone, marked "In" where the channel is. **OK** puts the channel in a zone or takes it out, saved at once. A new channel shows the row once saved |
@@ -156,6 +157,13 @@ channel you are on: the radio reloads it from the codeplug.
 
 The radio won't save a channel without a name, with RX outside its bands, with TX where it can't transmit (set RX only
 instead), or a DMR channel without a TX contact. It says which.
+
+A P25 conventional channel keeps its own NAC and talkgroup; a P25 trunked channel uses the system in **Tools > P25
+system** and its own talkgroup. Switching **P25 trunked** on clears **P25 conventional**, and the other way round.
+**\*** opens Quick settings. On a P25-only build, the VFO's tile **4** (Mode) selects FM / conventional P25, and a
+channel's tile **9** is P25/FM: press it to start or stop conventional P25. While P25 is on, tile **3** is the NAC
+and tile **6** the talkgroup; those quick changes are temporary until you hold **OK** on the channel to save them.
+**Tools > P25 voice** also starts it.
 
 **Save as new channel** stores the edited copy at the lowest free number and leaves the original as it was.
 **Tune to this ch** tunes the channel and **Share channel to...** sends it to another radio ([Sharing a zone](#sharing-a-zone));

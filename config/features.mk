@@ -236,8 +236,7 @@ CONFIG_P25_VOICE ?= n
 # P25 Phase 1 conventional transmit: the IMBE microphone encoder, TX framing/timing and the modem voice path
 # (docs/spec/p25.md 10). Off by default; it needs the P25 voice codec and the HR_C7000 modem glue.
 CONFIG_P25_TX ?= n
-# Home * switches the current FM channel between FM and conventional P25. Off by default: on radios that keep * for
-# Quick settings, leave it off and reach P25 through Tools > P25 voice.
+# Kept for builds that set it for other reasons. Home * now opens Quick settings on every build; P25/FM is tile 9.
 CONFIG_P25_STAR ?= n
 # Large-panel instrument Home: on a 240 px-wide color panel, make Home a single channel instrument (mode rail,
 # large state/frequency or talkgroup, technical deck) instead of the standard stacked Home. Off by default; it needs

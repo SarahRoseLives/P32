@@ -23,8 +23,10 @@
 // Distinct sounds (radio users tell them apart without looking, docs/ux/survey.md)
 static const beep_seg_t p_key[] = { { 1000, 25 } };
 static const beep_seg_t p_error[] = { { 400, 150 } };
-static const beep_seg_t p_permit[] = { { 1600, 50 }, { 0, 40 }, { 1600, 50 } };
-static const beep_seg_t p_deny[] = { { 300, 400 } };
+// Motorola-style PTT chirp (450 -> 1550 -> 1050 -> 1550 -> 1300 Hz, about 180 ms)
+static const beep_seg_t p_permit[] = { { 450, 20 }, { 1550, 40 }, { 1050, 40 }, { 1550, 40 }, { 1300, 40 } };
+// A short low bonk; held on a trunked channel, it repeats (tone, then a gap) instead of becoming a steady buzz
+static const beep_seg_t p_deny[] = { { 350, 120 }, { 0, 180 } };
 static const beep_seg_t p_call_end[] = { { 1200, 50 }, { 0, 30 }, { 900, 70 } };
 static const beep_seg_t p_tot[] = { { 1000, 100 }, { 0, 100 }, { 1000, 100 } };
 static const beep_seg_t p_batt_low[] = { { 800, 150 }, { 0, 100 }, { 600, 200 } };
@@ -73,6 +75,7 @@ static beep_stats_t stats;
 static uint8_t req_pattern;
 static uint8_t req_level;
 static uint8_t req_seq;
+static bool req_hold;
 
 // Radio task only
 static bool own_stream;
@@ -80,6 +83,7 @@ static bool own_stream;
 // Audio side
 static uint8_t cb_seq;
 static uint8_t cb_pattern;
+static bool cb_hold;
 static uint8_t cb_seg;
 static uint32_t cb_left;	// samples left in the segment
 static uint32_t cb_len;		// samples in the segment
@@ -112,7 +116,7 @@ bool beep_busy(void)
 	return cb_active || LOAD(req_seq) != cb_seq;
 }
 
-void beep_play(beep_t b, uint8_t level, bool shared)
+static void beep_start(beep_t b, uint8_t level, bool shared, bool hold)
 {
 	if (b <= BEEP_NONE || b >= BEEP_COUNT || level == 0) {
 		return;
@@ -123,6 +127,7 @@ void beep_play(beep_t b, uint8_t level, bool shared)
 	}
 	req_pattern = (uint8_t)b;
 	req_level = level > 100 ? 100 : level;
+	req_hold = hold;
 	STORE(req_seq, (uint8_t)(req_seq + 1));
 	if (!shared) {
 		// Always (re)start: the board just installs the callback when it already streams. The voice stream may have
@@ -147,6 +152,23 @@ void beep_play(beep_t b, uint8_t level, bool shared)
 		}
 	}
 	stats.played++;
+}
+
+void beep_play(beep_t b, uint8_t level, bool shared)
+{
+	beep_start(b, level, shared, false);
+}
+
+void beep_play_hold(beep_t b, uint8_t level, bool shared)
+{
+	beep_start(b, level, shared, true);
+}
+
+void beep_stop(void)
+{
+	req_hold = false;
+	req_pattern = BEEP_NONE;
+	STORE(req_seq, (uint8_t)(req_seq + 1));
 }
 
 void beep_service(bool shared)
@@ -201,9 +223,14 @@ bool beep_mix(int16_t *spk)
 	if (seq != cb_seq) {
 		cb_seq = seq;
 		cb_pattern = req_pattern;
+		cb_hold = req_hold;
 		cb_amp = (int32_t)req_level * AMP_PER_LEVEL;
 		cb_seg = 0;
 		cb_phase = 0;
+		if (cb_pattern <= BEEP_NONE || cb_pattern >= BEEP_COUNT) {
+			cb_active = false;	// beep_stop: keep the route for its tail, but make no sound
+			return false;
+		}
 		cb_active = true;
 		load_seg();
 	}
@@ -218,8 +245,12 @@ bool beep_mix(int16_t *spk)
 	for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {
 		while (cb_left == 0) {
 			if (++cb_seg >= patterns[cb_pattern].count) {
-				cb_active = false;
-				return true;	// the rest of this block is left as it was
+				if (cb_hold) {
+					cb_seg = 0;	// held: repeat the bonk until beep_stop
+				} else {
+					cb_active = false;
+					return true;	// the rest of this block is left as it was
+				}
 			}
 			load_seg();
 		}
@@ -241,7 +272,7 @@ bool beep_mix(int16_t *spk)
 		}
 		cb_left--;
 	}
-	if (cb_left == 0 && cb_seg + 1u >= patterns[cb_pattern].count) {
+	if (!cb_hold && cb_left == 0 && cb_seg + 1u >= patterns[cb_pattern].count) {
 		cb_active = false;	// ended exactly at the block's end
 	}
 	return true;

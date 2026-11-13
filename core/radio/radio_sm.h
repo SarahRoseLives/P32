@@ -150,6 +150,9 @@ typedef enum {
 	RREQ_VFO_TX,		// arg: the VFO's TX Hz, 0 = simplex (its RX frequency)
 	RREQ_P25,		// P25 control-channel monitor (CONFIG_P25): arg 1 enter, 0 leave
 	RREQ_P25_VOICE,		// P25 voice receiver (CONFIG_P25_VOICE): arg 1 enter, 0 leave
+	RREQ_P25_CONV,		// P25 conventional channel profile (CONFIG_P25_VOICE): arg 1 on, 0 off
+	RREQ_P25_NAC,		// P25 conventional NAC for now: arg 0..0xFFF
+	RREQ_P25_TG,		// P25 conventional talkgroup for now: arg 0..0xFFFF
 	RREQ_P25_FOLLOW,		// P25 monitor follow grants on/off (CONFIG_P25): arg 1 on, 0 off
 } radio_req_type_t;
 
@@ -288,6 +291,7 @@ typedef struct {
 	uint8_t p25_retries;
 	bool p25_tot;		// the talk timer ended this P25 call
 	bool p25_boot_affil;	// register/affiliate once when the monitor starts
+	bool p25_leave;		// de-register before leaving a trunked channel
 #endif
 #endif
 
