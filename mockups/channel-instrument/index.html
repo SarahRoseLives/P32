@@ -1,0 +1,283 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 The RadioFoundry Authors -->
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="light">
+	<title>P32 Channel Instrument — conventional, trunked, FPP</title>
+	<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+	<div class="brand"><span class="brand-mark">P32</span><span class="brand-name">CHANNEL INSTRUMENT</span></div>
+	<div class="meta"><a href="../p25-ui/">P25 UI Lab</a> · 240 × 320 · 16 colors · keypad only</div>
+</header>
+
+<main class="workspace">
+	<section class="stage">
+		<div class="device">
+			<div class="device-top"><span class="led"></span><span class="speaker"></span><span class="device-label">INSTRUMENT / 01</span></div>
+			<div class="screen-scale">
+				<div class="screen" id="screen" data-current="home-conv">
+					<!-- conventional home -->
+					<section class="view" data-screen="home-conv" style="--accent: var(--blue)">
+						<div class="rail"><span class="badge blue">CNV</span><span class="rail-mode">P25</span><span class="grow"></span><span class="signal"><i></i><i></i><i></i><i class="off"></i></span><span class="batt">82</span></div>
+						<div class="eyebrow">ZONE-ANA <span>/</span> CH 12</div>
+						<div class="display">
+							<div class="display-label">CONVENTIONAL</div>
+							<div class="display-main">446.0000<span class="unit">MHz</span></div>
+							<div class="display-sub">TG <b>1</b> <span class="sep">·</span> NAC <b>293</b> <span class="sep">·</span> UID <b>2</b></div>
+						</div>
+						<div class="activity"><span class="dot"></span><b>READY</b><span>No active call</span><span class="activity-right">RSSI −74</span></div>
+						<div class="deck">
+							<div><span>FREQ</span><b>446.0000</b></div><div><span>NAC</span><b>293</b></div><div><span>POWER</span><b>2.0 W</b></div>
+						</div>
+						<div class="soft"><span><b>OK</b> Channels</span><span><b>HOLD OK</b> Program</span></div>
+					</section>
+
+					<!-- trunked home -->
+					<section class="view" data-screen="home-trunk" style="--accent: var(--violet)">
+						<div class="rail"><span class="badge violet">TRK</span><span class="rail-mode">P25</span><span class="grow"></span><span class="signal"><i></i><i></i><i></i><i class="off"></i></span><span class="batt">82</span></div>
+						<div class="eyebrow">SYS 123 <span>/</span> SITE 1</div>
+						<div class="display">
+							<div class="display-label">TRUNKED <span class="status-inline">AFFILIATED</span></div>
+							<div class="display-main">TG 1<span class="unit">TALKGROUP</span></div>
+							<div class="display-sub">CC <b>438.8000</b> <span class="sep">·</span> WACN <b>BEEF0</b> <span class="sep">·</span> UID <b>2</b></div>
+						</div>
+						<div class="activity"><span class="dot"></span><b>CC LOCKED</b><span>Site 1 · no active call</span><span class="activity-right">RSSI −82</span></div>
+						<div class="deck">
+							<div><span>CONTROL</span><b>438.8000</b></div><div><span>SYSTEM</span><b>123</b></div><div><span>UNIT</span><b>2</b></div>
+						</div>
+						<div class="soft"><span><b>OK</b> Channels</span><span><b>HOLD OK</b> Program</span></div>
+					</section>
+
+					<!-- FM home -->
+					<section class="view" data-screen="home-fm" style="--accent: var(--green)">
+						<div class="rail"><span class="badge green">FM</span><span class="rail-mode">ANALOG</span><span class="grow"></span><span class="signal"><i></i><i></i><i></i><i class="off"></i></span><span class="batt">82</span></div>
+						<div class="eyebrow">ZONE-ANA <span>/</span> CH 12</div>
+						<div class="display">
+							<div class="display-label">ANALOG FM <span class="status-inline">12.5 kHz</span></div>
+							<div class="display-main">446.0000<span class="unit">MHz</span></div>
+							<div class="display-sub">TONE <b>88.5</b> <span class="sep">·</span> POWER <b>2.0 W</b></div>
+						</div>
+						<div class="activity"><span class="dot"></span><b>SQUELCH CLOSED</b><span>Monitor off</span><span class="activity-right">RSSI −74</span></div>
+						<div class="deck">
+							<div><span>TONE</span><b>88.5 Hz</b></div><div><span>BANDWIDTH</span><b>12.5 k</b></div><div><span>POWER</span><b>2.0 W</b></div>
+						</div>
+						<div class="soft"><span><b>OK</b> Channels</span><span><b>HOLD OK</b> Program</span></div>
+					</section>
+
+					<!-- receive -->
+					<section class="view" data-screen="rx" style="--accent: var(--green)">
+						<div class="rail"><span class="badge green">RX</span><span class="rail-mode">P25</span><span class="grow"></span><span class="signal"><i></i><i></i><i></i><i class="off"></i></span><span class="batt">82</span></div>
+						<div class="eyebrow">INCOMING GROUP CALL <span>/</span> CONVENTIONAL</div>
+						<div class="display">
+							<div class="display-label">CLEAR VOICE <span class="status-inline">NAC 293</span></div>
+							<div class="display-main">UNIT 7<span class="unit">SOURCE</span></div>
+							<div class="display-sub">TALKGROUP <b>1</b> <span class="sep">·</span> GROUP CALL</div>
+						</div>
+						<div class="meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+						<div class="activity"><span class="dot"></span><b>RECEIVING</b><span>12:42 · −74 dBm</span><span class="activity-right">PTT reply</span></div>
+						<div class="deck"><div><span>NAC</span><b>293</b></div><div><span>TG</span><b>1</b></div><div><span>STATE</span><b>CLEAR</b></div></div>
+						<div class="soft"><span><b>PTT</b> Reply</span><span><b>BACK</b> Home</span></div>
+					</section>
+
+					<!-- transmit -->
+					<section class="view" data-screen="tx" style="--accent: var(--amber)">
+						<div class="rail"><span class="badge amber">TX</span><span class="rail-mode" id="tx-rail-mode">P25</span><span class="grow"></span><span class="signal"><i></i><i></i><i></i><i class="off"></i></span><span class="batt">82</span></div>
+						<div class="eyebrow" id="tx-eyebrow">TRANSMITTING <span>/</span> CONVENTIONAL</div>
+						<div class="display">
+							<div class="display-label" id="tx-label">CLEAR VOICE <span class="status-inline">NAC 293</span></div>
+							<div class="display-main" id="tx-main">00:00<span class="unit">HOLD PTT</span></div>
+							<div class="display-sub" id="tx-sub">TALKGROUP <b>1</b> <span class="sep">·</span> UID <b>2</b></div>
+						</div>
+						<div class="meter amber"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+						<div class="activity"><span class="dot amber"></span><b>ON AIR</b><span>Release PTT to listen</span><span class="activity-right">2.0 W</span></div>
+						<div class="deck"><div><span id="tx-deck1-l">MODE</span><b id="tx-deck1">P25</b></div><div><span id="tx-deck2-l">TG</span><b id="tx-deck2">1</b></div><div><span id="tx-deck3-l">POWER</span><b id="tx-deck3">2.0 W</b></div></div>
+						<div class="soft"><span><b>HOLD</b> PTT</span><span><b>RELEASE</b> Listen</span></div>
+					</section>
+
+					<!-- channel list -->
+					<section class="view" data-screen="channels" style="--accent: var(--blue)">
+						<div class="rail"><span class="badge blue">OK</span><span class="rail-mode">CHANNELS</span><span class="grow"></span><span class="batt">82</span></div>
+						<div class="page-title">CHANNELS <span>4 / 12</span></div>
+						<div class="group-label">CONVENTIONAL</div>
+						<div class="ch-row selected"><span class="tag cnv">CNV</span><span class="ch-name">CALL 1</span><span class="ch-val">446.0000</span></div>
+						<div class="ch-row"><span class="tag cnv">CNV</span><span class="ch-name">CALL 2</span><span class="ch-val">446.1250</span></div>
+						<div class="group-label">TRUNKED</div>
+						<div class="ch-row"><span class="tag trk">TRK</span><span class="ch-name">SYS 123 / TG 1</span><span class="ch-val">438.8000</span></div>
+						<div class="group-label">ANALOG</div>
+						<div class="ch-row"><span class="tag fm">FM</span><span class="ch-name">CALL 1</span><span class="ch-val">446.0000</span></div>
+						<div class="spacer"></div>
+						<div class="soft"><span><b>OK</b> Select</span><span><b>BACK</b> Home</span></div>
+					</section>
+
+					<!-- FPP program -->
+					<section class="view" data-screen="program" style="--accent: var(--ink)">
+						<div class="rail"><span class="badge ink">FPP</span><span class="rail-mode">PROGRAM</span><span class="grow"></span><span class="batt">82</span></div>
+						<div class="page-title">PROGRAM <span>LOCAL</span></div>
+						<div class="program">
+							<div class="cats"><span class="active">CH</span><span>ZN</span><span>SY</span><span>TG</span><span>WR</span></div>
+							<div class="prog-list">
+								<div class="group-label">CHANNELS</div>
+								<div class="ch-row selected"><span class="tag cnv">CNV</span><span class="ch-name">CALL 1</span><span class="ch-val">EDIT</span></div>
+								<div class="ch-row"><span class="tag trk">TRK</span><span class="ch-name">SYS 123</span><span class="ch-val">EDIT</span></div>
+								<div class="ch-row"><span class="tag fm">FM</span><span class="ch-name">CALL 1</span><span class="ch-val">EDIT</span></div>
+								<div class="ch-row"><span class="tag new">+</span><span class="ch-name">New channel</span><span class="ch-val"></span></div>
+								<div class="group-label">SYSTEMS</div>
+								<div class="ch-row"><span class="tag trk">SYS</span><span class="ch-name">SYS 123</span><span class="ch-val">EDIT</span></div>
+							</div>
+						</div>
+						<div class="soft"><span><b>ENCODER</b> Categories</span><span><b>OK</b> Edit</span></div>
+					</section>
+
+					<!-- FPP talkgroups -->
+					<section class="view" data-screen="talkgroups" style="--accent: var(--violet)">
+						<div class="rail"><span class="badge violet">TG</span><span class="rail-mode">PROGRAM</span><span class="grow"></span><span class="batt">82</span></div>
+						<div class="page-title">TALKGROUPS <span>SYS 123</span></div>
+						<div class="group-label">SYSTEM 123</div>
+						<div class="ch-row selected"><span class="tag trk">TG</span><span class="ch-name">TG 1</span><span class="ch-val">DEFAULT</span></div>
+						<div class="ch-row"><span class="tag trk">TG</span><span class="ch-name">TG 2</span><span class="ch-val">SCAN</span></div>
+						<div class="ch-row"><span class="tag new">+</span><span class="ch-name">New talkgroup</span><span class="ch-val"></span></div>
+						<div class="spacer"></div>
+						<div class="soft"><span><b>OK</b> Edit</span><span><b>BACK</b> Program</span></div>
+					</section>
+
+					<!-- edit conventional -->
+					<section class="view" data-screen="edit-conv" style="--accent: var(--blue)">
+						<div class="rail"><span class="badge blue">CNV</span><span class="rail-mode">EDIT</span><span class="grow"></span><span class="batt">82</span></div>
+						<div class="page-title">CHANNEL 12 <span>CONVENTIONAL</span></div>
+						<div class="types"><span class="active">CONV</span><span>TRK</span><span>FM</span></div>
+						<div class="fields">
+							<div class="field selected"><span>FREQUENCY</span><b>446.0000</b></div>
+							<div class="field"><span>NAC</span><b>293</b></div>
+							<div class="field"><span>TALKGROUP</span><b>1</b></div>
+							<div class="field"><span>POWER</span><b>2.0 W</b></div>
+							<div class="field"><span>BANDWIDTH</span><b>12.5 kHz</b></div>
+							<div class="field"><span>RX ONLY</span><b>No</b></div>
+						</div>
+						<div class="soft"><span><b>OK</b> Edit</span><span><b>BACK</b> Save</span></div>
+					</section>
+
+					<!-- edit trunked -->
+					<section class="view" data-screen="edit-trunk" style="--accent: var(--violet)">
+						<div class="rail"><span class="badge violet">TRK</span><span class="rail-mode">EDIT</span><span class="grow"></span><span class="batt">82</span></div>
+						<div class="page-title">CHANNEL 14 <span>TRUNKED</span></div>
+						<div class="types"><span>CONV</span><span class="active">TRK</span><span>FM</span></div>
+						<div class="fields">
+							<div class="field selected"><span>SYSTEM</span><b>SYS 123</b></div>
+							<div class="field"><span>TALKGROUP</span><b>1</b></div>
+							<div class="field"><span>ZONE</span><b>ZONE-ANA</b></div>
+							<div class="field"><span>POWER</span><b>2.0 W</b></div>
+							<div class="field"><span>RX ONLY</span><b>No</b></div>
+							<div class="field"><span>EMERGENCY</span><b>Allowed</b></div>
+						</div>
+						<div class="soft"><span><b>OK</b> Edit</span><span><b>BACK</b> Save</span></div>
+					</section>
+
+					<!-- edit system -->
+					<section class="view" data-screen="edit-system" style="--accent: var(--violet)">
+						<div class="rail"><span class="badge violet">SYS</span><span class="rail-mode">EDIT</span><span class="grow"></span><span class="batt">82</span></div>
+						<div class="page-title">SYS 123 <span>TRUNKED</span></div>
+						<div class="fields tight">
+							<div class="field selected"><span>CONTROL</span><b>438.8000</b></div>
+							<div class="field"><span>WACN</span><b>BEEF0</b></div>
+							<div class="field"><span>SYSTEM ID</span><b>123</b></div>
+							<div class="field"><span>RFSS</span><b>1</b></div>
+							<div class="field"><span>SITE</span><b>1</b></div>
+							<div class="field"><span>NAC</span><b>293</b></div>
+							<div class="field"><span>UNIT ID</span><b>2</b></div>
+							<div class="field"><span>BAND PLAN</span><b>Auto</b></div>
+						</div>
+						<div class="soft"><span><b>OK</b> Edit</span><span><b>BACK</b> Save</span></div>
+					</section>
+
+					<!-- write -->
+					<section class="view" data-screen="write" style="--accent: var(--amber)">
+						<div class="rail"><span class="badge amber">WR</span><span class="rail-mode">WRITE</span><span class="grow"></span><span class="batt">82</span></div>
+						<div class="write-main">
+							<div class="write-count">3</div>
+							<div class="write-label">CHANGES READY</div>
+							<div class="write-sub">Channel 12 · Channel 14 · SYS 123</div>
+						</div>
+						<div class="write-list">
+							<div><span>CHANNEL 12</span><b>CONV · NAC 293</b></div>
+							<div><span>CHANNEL 14</span><b>TRK · TG 1</b></div>
+							<div><span>SYS 123</span><b>CC 438.8000 · UID 2</b></div>
+						</div>
+						<div class="soft"><span><b>OK</b> Write</span><span><b>BACK</b> Cancel</span></div>
+					</section>
+				</div>
+			</div>
+			<div class="device-side"><span class="side ptt">PTT</span><span class="side">SK1</span><span class="side">SK2</span></div>
+			<div class="device-bottom"><span>P32</span><span>INSTRUMENT</span><span>240×320</span></div>
+		</div>
+
+		<div class="controls">
+			<button type="button" data-action="profile">* Profile</button>
+			<button type="button" data-action="ptt">Hold PTT</button>
+			<button type="button" data-action="channels">OK — Channels</button>
+			<button type="button" data-action="program">Hold OK — Program</button>
+			<span>The screen is not a touch target; these controls only drive the mockup.</span>
+		</div>
+	</section>
+
+	<aside class="panel">
+		<nav class="nav" aria-label="Instrument screens">
+			<button type="button" class="active" data-go="home-conv">Conv home</button>
+			<button type="button" data-go="home-trunk">Trunked home</button>
+			<button type="button" data-go="home-fm">FM home</button>
+			<button type="button" data-go="rx">RX</button>
+			<button type="button" data-go="tx">TX</button>
+			<button type="button" data-go="channels">Channels</button>
+			<button type="button" data-go="program">Program</button>
+			<button type="button" data-go="talkgroups">Talkgroups</button>
+			<button type="button" data-go="edit-conv">Edit conventional</button>
+			<button type="button" data-go="edit-trunk">Edit trunked</button>
+			<button type="button" data-go="edit-system">Edit system</button>
+			<button type="button" data-go="write">Write</button>
+		</nav>
+
+		<section class="note">
+			<h2>THE IDEA</h2>
+			<p id="note">One instrument, three channel families. The radio keeps the same frame and changes the object being operated: a conventional channel, a trunked system's talkgroup, or an analog frequency.</p>
+			<div class="keys"><span class="k">*</span> profile <span class="k">OK</span> channels <span class="k">HOLD OK</span> program <span class="k">PTT</span> talk</div>
+		</section>
+
+		<section class="note">
+			<h2>CHANNEL MODEL</h2>
+			<ul>
+				<li><b>Conventional</b> frequency + NAC + TG; direct PTT, no control channel.</li>
+				<li><b>Trunked</b> system + talkgroup; CC affiliation and grants; unit from the system.</li>
+				<li><b>Analog</b> frequency + tone + bandwidth; the existing FM path.</li>
+				<li><b>FPP</b> edits all three locally; write is explicit and summarized.</li>
+			</ul>
+		</section>
+
+		<section class="note">
+			<h2>CONSTRAINTS</h2>
+			<ul>
+				<li>240 × 320, 16 colors, 4 bpp; no gradients or shadows inside the screen.</li>
+				<li>No touch. Encoder moves focus; OK edits; BACK saves/returns.</li>
+				<li>PTT remains physical and is never a touch target.</li>
+				<li>Long OK enters local programming; short OK opens the channel sheet.</li>
+			</ul>
+		</section>
+
+		<section class="note">
+			<h2>16-COLOR RAIL</h2>
+			<div class="swatches">
+				<i style="--c:#f7fafc"></i><i style="--c:#e8eff5"></i><i style="--c:#d6e3ed"></i><i style="--c:#bfd2e2"></i>
+				<i style="--c:#8fb4cc"></i><i style="--c:#5d8eac"></i><i style="--c:#2b6287"></i><i style="--c:#123c57"></i>
+				<i style="--c:#ffffff"></i><i style="--c:#cfe7e3"></i><i style="--c:#7fc8c0"></i><i style="--c:#1d8a82"></i>
+				<i style="--c:#f0c27a"></i><i style="--c:#b45b1e"></i><i style="--c:#b3261e"></i><i style="--c:#2f6f4a"></i>
+			</div>
+			<p class="tiny">HTML/CSS concept only. Nothing here is flashed or transmitted.</p>
+		</section>
+	</aside>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 The RadioFoundry Authors -->
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="light">
+	<title>P32 P25 UI Lab — 240×320 keypad mockups</title>
+	<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+	<div class="brand"><span class="brand-mark">P32</span><span class="brand-name">UI LAB / P25</span></div>
+	<div class="meta">DM-32UV · 240 × 320 · 16 colors · keypad only</div>
+</header>
+
+<main class="workspace">
+	<section class="stage" aria-label="Radio mockup">
+		<div class="device">
+			<div class="device-top">
+				<span class="led" aria-hidden="true"></span>
+				<span class="speaker" aria-hidden="true"></span>
+				<span class="device-label">P25</span>
+			</div>
+
+			<div class="screen-scale">
+				<div class="screen" id="screen" data-current="home-p25">
+					<!-- boot -->
+					<section class="view boot" data-screen="boot" aria-label="Boot screen">
+						<img src="../../boards/dm32/boot_splash.jpg" alt="P32 P25 firmware boot artwork">
+					</section>
+
+					<!-- FM home -->
+					<section class="view" data-screen="home-fm" aria-label="FM home">
+						<div class="status">
+							<span class="pill idle">IDLE</span>
+							<span class="smode">FM</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="zone-line"><span class="zone">ZONE-ANA</span><span class="pos">CH 12 / 32</span></div>
+						<div class="hero">
+							<div class="freq">446.0000<span class="unit">MHz</span></div>
+							<div class="tagline">ANALOG FM</div>
+							<div class="subline">TONE <b>88.5</b><span class="dot">·</span>12.5 kHz<span class="dot">·</span>2.0 W</div>
+						</div>
+						<div class="activity-card">
+							<div class="activity-head"><span>ACTIVITY</span><span>RSSI −74 dBm</span></div>
+							<div class="activity-main"><span class="ready-dot"></span>SQUELCH CLOSED</div>
+							<div class="activity-sub">Monitor off · Tone 88.5 Hz</div>
+						</div>
+						<div class="spacer-body"></div>
+						<div class="talkline"><span class="key">PTT</span><span class="arrow">→</span><span>TALK</span><span class="dim">HOLD TO TRANSMIT</span></div>
+						<div class="hint"><span>OK Menu</span><span>* P25</span></div>
+					</section>
+
+					<!-- P25 conventional home -->
+					<section class="view is-active" data-screen="home-p25" aria-label="P25 conventional home">
+						<div class="status">
+							<span class="pill listen">LISTEN</span>
+							<span class="smode">P25</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="zone-line"><span class="zone">ZONE-ANA</span><span class="pos">CONVENTIONAL</span></div>
+						<div class="hero">
+							<div class="freq">446.0000<span class="unit">MHz</span></div>
+							<div class="tagline accent">P25 CONVENTIONAL</div>
+							<div class="subline">NAC <b>293</b><span class="dot">·</span>TG <b>1</b><span class="dot">·</span>UID <b>2</b></div>
+						</div>
+						<div class="activity-card">
+							<div class="activity-head"><span>ACTIVITY</span><span>RSSI −74 dBm</span></div>
+							<div class="activity-main"><span class="ready-dot"></span>READY · NO ACTIVE CALL</div>
+							<div class="activity-sub">Last: Unit 7 · TG 1 · 12:42</div>
+						</div>
+						<div class="spacer-body"></div>
+						<div class="talkline"><span class="key">PTT</span><span class="arrow">→</span><span>TG 1</span><span class="dim">2.0 W</span></div>
+						<div class="hint"><span>OK Menu</span><span>* FM</span></div>
+					</section>
+
+					<!-- P25 trunked home -->
+					<section class="view" data-screen="home-trunk" aria-label="P25 trunked home">
+						<div class="status">
+							<span class="pill listen">AFFIL</span>
+							<span class="smode">P25</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="zone-line"><span class="zone">SYS 123 · SITE 1</span><span class="pos">TRUNKED</span></div>
+						<div class="hero">
+							<div class="freq">438.8000<span class="unit">MHz</span></div>
+							<div class="tagline accent">P25 TRUNKED · CC</div>
+							<div class="subline">WACN <b>BEEF0</b><span class="dot">·</span>TG <b>1</b><span class="dot">·</span>UID <b>2</b></div>
+						</div>
+						<div class="activity-card">
+							<div class="activity-head"><span>ACTIVITY</span><span>RSSI −82 dBm</span></div>
+							<div class="activity-main"><span class="ready-dot"></span>AFFILIATED · CC LOCKED</div>
+							<div class="activity-sub">Site 1 · last grant 12:41 · TG 1</div>
+						</div>
+						<div class="spacer-body"></div>
+						<div class="talkline"><span class="key">PTT</span><span class="arrow">→</span><span>REQUEST</span><span class="dim">CC 438.800</span></div>
+						<div class="hint"><span>OK Menu</span><span>* FM</span></div>
+					</section>
+
+					<!-- P25 receive -->
+					<section class="view" data-screen="rx-p25" aria-label="P25 receive">
+						<div class="status">
+							<span class="pill rx">RX</span>
+							<span class="smode">P25</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="rx-kicker">INCOMING GROUP CALL</div>
+						<div class="caller">UNIT 7</div>
+						<div class="call-meta">TALKGROUP 1 · SOURCE 7</div>
+						<div class="badge clear">P25 CLEAR <span>·</span> NAC 293</div>
+						<div class="audio-meter" aria-label="audio level"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+						<div class="spacer-body"></div>
+						<div class="info-row"><span class="dim">RSSI −74 dBm</span><span class="dim">12:42</span></div>
+						<div class="hint"><span>PTT Reply</span><span>BACK</span></div>
+					</section>
+
+					<!-- P25 transmit -->
+					<section class="view" data-screen="tx-p25" aria-label="P25 transmit">
+						<div class="status">
+							<span class="pill tx">TX</span>
+							<span class="smode">P25</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="rx-kicker">TRANSMITTING</div>
+						<div class="caller" id="tx-call">TG 1</div>
+						<div class="tx-time" id="tx-time">00:00</div>
+						<div class="badge clear" id="tx-meta">P25 CLEAR <span>·</span> NAC 293</div>
+						<div class="mic-meter" aria-label="microphone level"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+						<div class="spacer-body"></div>
+						<div class="info-row"><span class="dim" id="tx-power">2.0 W</span><span class="dim">RELEASE PTT TO LISTEN</span></div>
+						<div class="hint"><span>HOLD PTT</span><span>BACK cancels</span></div>
+					</section>
+
+					<!-- quick settings -->
+					<section class="view" data-screen="quick" aria-label="Quick settings">
+						<div class="status">
+							<span class="pill idle">IDLE</span>
+							<span class="smode">P25</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="screen-title"><span>QUICK</span><span class="dim">1 / 6</span></div>
+						<div class="rows">
+							<div class="row selected"><span class="label">Power</span><span class="value">High</span></div>
+							<div class="row"><span class="label">Squelch</span><span class="value">4</span></div>
+							<div class="row"><span class="label">Backlight</span><span class="value">80%</span></div>
+							<div class="row"><span class="label">Mode</span><span class="value accent">P25</span></div>
+							<div class="row"><span class="label">Scan</span><span class="value">Off</span></div>
+							<div class="row"><span class="label">P25 system</span><span class="value">›</span></div>
+						</div>
+						<div class="spacer-body"></div>
+						<div class="hint"><span>Encoder</span><span>OK edit</span><span>BACK</span></div>
+					</section>
+
+					<!-- P25 system settings -->
+					<section class="view" data-screen="p25-settings" aria-label="P25 system settings">
+						<div class="status">
+							<span class="pill idle">IDLE</span>
+							<span class="smode">P25</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="screen-title"><span>P25 SYSTEM</span><span class="dim">1 / 7</span></div>
+						<div class="rows">
+							<div class="row"><span class="label">Mode</span><span class="value accent">Conventional</span></div>
+							<div class="row selected"><span class="label">Frequency</span><span class="value">446.0000</span></div>
+							<div class="row"><span class="label">NAC</span><span class="value">293</span></div>
+							<div class="row"><span class="label">Talkgroup</span><span class="value">1</span></div>
+							<div class="row"><span class="label">Unit ID</span><span class="value">2</span></div>
+							<div class="row"><span class="label">Band plan</span><span class="value">Auto</span></div>
+							<div class="row"><span class="label">Save</span><span class="value">›</span></div>
+						</div>
+						<div class="spacer-body"></div>
+						<div class="hint"><span>Encoder</span><span>OK edit</span><span>BACK</span></div>
+					</section>
+
+					<!-- tools -->
+					<section class="view" data-screen="tools" aria-label="Tools menu">
+						<div class="status">
+							<span class="pill idle">IDLE</span>
+							<span class="smode">P25</span>
+							<span class="spacer"></span>
+							<span class="signal" aria-label="signal 3 of 4"><i></i><i></i><i></i><i class="off"></i></span>
+							<span class="battery">82</span>
+						</div>
+						<div class="screen-title"><span>TOOLS</span><span class="dim">1 / 6</span></div>
+						<div class="rows">
+							<div class="row selected"><span class="index">1</span><span class="label">P25 voice</span><span class="value">›</span></div>
+							<div class="row"><span class="index">2</span><span class="label">P25 system</span><span class="value">›</span></div>
+							<div class="row"><span class="index">3</span><span class="label">Zones</span><span class="value">›</span></div>
+							<div class="row"><span class="index">4</span><span class="label">Channels</span><span class="value">›</span></div>
+							<div class="row"><span class="index">5</span><span class="label">Scan</span><span class="value">›</span></div>
+							<div class="row"><span class="index">6</span><span class="label">Settings</span><span class="value">›</span></div>
+						</div>
+						<div class="spacer-body"></div>
+						<div class="hint"><span>1–6 open</span><span>BACK</span></div>
+					</section>
+				</div>
+			</div>
+
+			<div class="device-side" aria-hidden="true">
+				<span class="side ptt">PTT</span>
+				<span class="side">SK1</span>
+				<span class="side">SK2</span>
+			</div>
+			<div class="device-bottom"><span>P32</span><span>P25</span><span>240×320</span></div>
+		</div>
+
+		<div class="mock-controls">
+			<button type="button" data-action="star">* P25 / FM</button>
+			<button type="button" data-action="ptt" id="ptt-button">Hold PTT (mock)</button>
+			<span>Mock controls outside the screen. The radio itself is keypad/encoder only.</span>
+		</div>
+	</section>
+
+	<aside class="panel">
+		<nav class="screen-nav" aria-label="Mockup screens">
+			<button type="button" data-go="boot">Boot</button>
+			<button type="button" data-go="home-fm">FM home</button>
+			<button type="button" class="active" data-go="home-p25">P25 home</button>
+			<button type="button" data-go="home-trunk">P25 trunked</button>
+			<button type="button" data-go="rx-p25">P25 RX</button>
+			<button type="button" data-go="tx-p25">P25 TX</button>
+			<button type="button" data-go="quick">Quick</button>
+			<button type="button" data-go="p25-settings">P25 setup</button>
+			<button type="button" data-go="tools">Tools</button>
+		</nav>
+
+		<section class="notes">
+			<h2>SCREEN INTENT</h2>
+			<p id="screen-note">Conventional P25 at rest. The operator sees the channel, NAC, talkgroup and unit at a glance; PTT is the only talk action.</p>
+			<div class="legend"><span class="legend-key">*</span> FM / P25 <span class="legend-key">OK</span> Menu <span class="legend-key">PTT</span> Talk</div>
+		</section>
+
+		<section class="contract">
+			<h2>DEVICE CONTRACT</h2>
+			<ul>
+				<li><b>Display</b> 240 × 320, 16-color 4bpp, 37.5 KiB frame buffer, 10 px side / 5 px top-bottom safe area.</li>
+				<li><b>Input</b> PTT, SK1/SK2, 3 × 4 keypad, rotary encoder. No touchscreen.</li>
+				<li><b>Radio</b> 400–480 MHz, 1/5 W. This P25 image has FM and P25 Phase 1; DMR is off.</li>
+				<li><b>P25</b> Conventional 446.0000, NAC 293, TG 1, UID 2. Trunking remains available through Tools.</li>
+				<li><b>Palette</b> use color as status, not decoration. Every color cue also carries a word.</li>
+			</ul>
+		</section>
+
+		<section class="palette">
+			<h2>16-COLOR BUDGET</h2>
+			<div class="swatches" aria-label="palette">
+				<i style="--c:#f7fafc"></i><i style="--c:#e8eff5"></i><i style="--c:#d6e3ed"></i><i style="--c:#bfd2e2"></i>
+				<i style="--c:#8fb4cc"></i><i style="--c:#5d8eac"></i><i style="--c:#2b6287"></i><i style="--c:#123c57"></i>
+				<i style="--c:#ffffff"></i><i style="--c:#cfe7e3"></i><i style="--c:#7fc8c0"></i><i style="--c:#1d8a82"></i>
+				<i style="--c:#f0c27a"></i><i style="--c:#b45b1e"></i><i style="--c:#b3261e"></i><i style="--c:#2f6f4a"></i>
+			</div>
+			<p class="tiny">Mockups only. These are HTML/CSS screens, not firmware assets, and nothing here flashes or transmits.</p>
+		</section>
+	</aside>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
