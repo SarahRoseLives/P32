@@ -146,9 +146,6 @@ static void finish(void)
 		hooks->p25_finish();
 	}
 	hrc_dmr_irqs_reinstall();	// the DMR engine (and the FM receive audio hook) get their handlers back
-	if (board.power != NULL && board.power->led != NULL) {
-		board.power->led(LED_RED, false);
-	}
 	saved = hrc_irq_save();
 	cleanup_needed = false;
 	finishing = false;

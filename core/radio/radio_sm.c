@@ -4140,6 +4140,7 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 			sm->view.state = RS_TX;
 			sm->tx_start_ms = now_ms;
 			sm->view.tx_elapsed_ms = 0;
+			outputs(sm);
 			changed(sm);
 		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
 			if (sm->p25_retries < P25CALL_RETRIES) {
@@ -4166,6 +4167,7 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 					       sm->p25_call_unit, true)) {
 				sm->p25_call = P25CALL_VOICE;
 				sm->view.state = RS_TX;
+				outputs(sm);
 				beep(sm, BEEP_TX_PERMIT);	// the TX audio block mixes this locally, never into the call
 				changed(sm);
 			} else {
