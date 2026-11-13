@@ -29,6 +29,9 @@ typedef struct {
 	bool voice_grant;	// a group voice grant has been seen (channel number may be 0)
 	uint32_t source;	// the last grant's source unit
 	uint32_t grant_seq;	// grants parsed so far (the radio follows a change)
+	uint16_t affiliate_tg;	// the last Group Affiliation Response's group
+	uint32_t affiliate_source;	// its source unit
+	uint32_t affiliation_seq;	// affiliation responses parsed so far
 } p25_cc_t;
 
 // Decode one CRC-checked 12-byte TSBK into cc. Returns false for an opcode this parser does not know (cc->opcode is

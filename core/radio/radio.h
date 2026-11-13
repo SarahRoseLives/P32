@@ -243,6 +243,10 @@ typedef struct {
 	bool voice_grant;	// a group voice grant has been seen
 	uint32_t source;	// the last grant's source unit
 	uint32_t grants;	// grants seen (a change means a new grant)
+	bool affiliated;	// a Group Affiliation Response has been decoded
+	uint16_t affiliate_tg;	// the response's group
+	uint32_t affiliate_source;	// the response's source unit
+	uint32_t affiliation_seq;	// affiliation responses seen
 	uint16_t system_tg;	// the configured system's talkgroup
 	uint16_t system_unit;	// our configured unit ID
 	uint32_t system_cc_hz;	// the configured control-channel downlink

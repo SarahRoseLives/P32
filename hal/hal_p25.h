@@ -32,6 +32,10 @@ typedef struct {
 	bool voice_grant;	// a group voice grant has been seen
 	uint32_t source;	// the last grant's source unit
 	uint32_t grants;	// grants seen since start (a change means a new grant)
+	bool affiliated;	// a Group Affiliation Response has been decoded
+	uint16_t affiliate_tg;	// its group
+	uint32_t affiliate_source;	// its source unit
+	uint32_t affiliation_seq;	// affiliation responses seen since start
 } hal_p25_cc_t;
 
 typedef struct {

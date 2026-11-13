@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "p25/p25_tsbk_parse.h"
+#include "p25/p25_cc_tx.h"
 
 static int failures;
 
@@ -46,6 +47,16 @@ int main(void)
 	CHECK(cc.tg == 1);
 	CHECK(cc.vch == 1);
 	CHECK(cc.source == 1);
+
+	// Group Affiliation Response 0x28: the site's echo of our group and source
+	uint8_t aff[12];
+	p25_tsbk_group_affiliation(aff, 0x123, 1, 2);
+	memset(&cc, 0, sizeof cc);
+	CHECK(p25_tsbk_parse(aff, &cc));
+	CHECK(cc.opcode == 0x28);
+	CHECK(cc.affiliate_tg == 1);
+	CHECK(cc.affiliate_source == 2);
+	CHECK(cc.affiliation_seq == 1);
 
 	// An unknown opcode is reported, not guessed
 	static const uint8_t other[12] = { 0xFF, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };

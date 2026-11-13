@@ -288,6 +288,7 @@ typedef struct {
 	uint32_t p25_activity;		// raw PHY block counter seen
 	uint32_t p25_activity_ms;		// when it last advanced (carrier present)
 	uint32_t p25_grant_seen;		// grants seen when the monitor last acted
+	uint32_t p25_aff_seen;		// affiliation responses seen
 #if CONFIG_P25_TX
 	uint8_t p25_call;		// P25 PTT call state (radio_sm.c)
 	uint32_t p25_call_deadline_ms;

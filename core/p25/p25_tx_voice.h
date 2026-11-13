@@ -26,8 +26,9 @@ void p25_tx_voice_stats(uint32_t *captured, uint32_t *encoded, uint32_t *ldus, u
 // Send a fixed control-channel burst (alternating Unit Registration and Group Affiliation) on the system's uplink.
 // This is the radio-local equivalent of the debug CC op, for bench captures. Returns false if the PHY refused.
 bool p25_cc_burst_start(const settings_p25_t *p25, uint16_t frames);
-// PTT: register and affiliate on the control-channel uplink. The site answers while the radio is still transmitting,
-// so its responses are not needed; the short voice request below follows. False if the PHY refused.
+// PTT: register and affiliate on the control-channel uplink. One repeating burst at channel selection gives the
+// site's lossy decoder enough frames; the radio then returns to the control channel without retrying. False if the
+// PHY refused.
 bool p25_cc_affiliate_start(const settings_p25_t *p25);
 // PTT: a short group voice request burst, then the caller listens for the grant. Short on purpose: the site queues
 // the grant immediately, and a long request would finish with the grant already gone.

@@ -59,6 +59,10 @@ static void publish(void)
 	v.out.voice_grant = v.cc.voice_grant;
 	v.out.source = v.cc.source;
 	v.out.grants = v.cc.grant_seq;
+	v.out.affiliated = v.cc.affiliation_seq != 0;
+	v.out.affiliate_tg = v.cc.affiliate_tg;
+	v.out.affiliate_source = v.cc.affiliate_source;
+	v.out.affiliation_seq = v.cc.affiliation_seq;
 	v.out.blocks = v.frames;
 	v.out.activity = v.activity;
 	v.seq++;

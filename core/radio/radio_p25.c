@@ -58,6 +58,10 @@ bool radio_p25_publish(radio_p25_view_t *v)
 		n.voice_grant = cc.voice_grant;
 		n.source = cc.source;
 		n.grants = cc.grants;
+		n.affiliated = v->affiliated || cc.affiliated;
+		n.affiliate_tg = cc.affiliate_tg;
+		n.affiliate_source = cc.affiliate_source;
+		n.affiliation_seq = cc.affiliation_seq;
 		n.system_tg = v->system_tg;
 		n.system_unit = v->system_unit;
 		n.system_cc_hz = v->system_cc_hz;
@@ -109,6 +113,10 @@ bool radio_p25_voice_publish(radio_p25_view_t *v)
 	n.corrected = st.corrected;
 	n.follow = v->follow;
 	n.voice_hz = v->voice_hz;
+	n.affiliated = v->affiliated;
+	n.affiliate_tg = v->affiliate_tg;
+	n.affiliate_source = v->affiliate_source;
+	n.affiliation_seq = v->affiliation_seq;
 	n.system_tg = v->system_tg;
 	n.system_unit = v->system_unit;
 	n.system_cc_hz = v->system_cc_hz;

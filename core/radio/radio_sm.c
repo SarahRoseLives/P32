@@ -169,6 +169,25 @@ static void p25_cc_update(radio_sm_t *sm, uint32_t now_ms)
 	}
 }
 
+// The site's Group Affiliation Response can confirm the talkgroup earlier than the burst-complete path below. Either
+// way, the monitor only permits a voice request after the radio is affiliated; a site that rejected us does not turn
+// this into an affiliation.
+static void p25_affiliation_update(radio_sm_t *sm)
+{
+	if (sm->view.p25.affiliation_seq == sm->p25_aff_seen) {
+		return;
+	}
+	sm->p25_aff_seen = sm->view.p25.affiliation_seq;
+	if (sm->view.p25.affiliated &&
+	    sm->view.p25.affiliate_source == sm->view.p25.system_unit &&
+	    (sm->view.p25.affiliate_tg == 0 || sm->view.p25.affiliate_tg == sm->view.p25.system_tg)) {
+		sm->p25_affiliated = 1;
+		sm->view.p25.affiliated = true;
+		sm->p25_boot_affil = false;
+		changed(sm);
+	}
+}
+
 #endif
 
 void radio_settings_default(radio_settings_t *s)
@@ -4049,6 +4068,7 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 			sm->p25_call = P25CALL_BOOT_WAIT;
 			sm->p25_call_deadline_ms = now_ms + P25CALL_AFFIL_SETTLE_MS;
 			sm->p25_affiliated = 1;
+			sm->view.p25.affiliated = true;
 			changed(sm);
 		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
 			p25call_restore(sm, now_ms);
@@ -4065,6 +4085,7 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 			sm->p25_call = P25CALL_AFFIL_WAIT;
 			sm->p25_call_deadline_ms = now_ms + P25CALL_AFFIL_SETTLE_MS;
 			sm->p25_affiliated = 1;
+			sm->view.p25.affiliated = true;
 			changed(sm);
 		} else if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
 			p25call_abort(sm, now_ms);
@@ -4074,7 +4095,7 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 	case P25CALL_AFFIL_WAIT:
 		if ((int32_t)(now_ms - sm->p25_call_deadline_ms) >= 0) {
 			p25_cc_rx_stop();
-			if (!p25call_send_vch()) {
+		if (!p25call_send_vch()) {
 				p25call_restore(sm, now_ms);
 				beep(sm, BEEP_TX_DENY);
 			} else {
@@ -4976,6 +4997,7 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 	sm->view.p25.system_cc_hz = sys->cc_hz;
 	sm->view.p25.system_uplink_hz = sys->uplink_hz != 0 ? sys->uplink_hz : cc_hz;
 	sm->p25_affiliated = 0;
+	sm->p25_aff_seen = 0;
 	sm->p25 = true;
 	sm->p25_cc_ms = 0;
 	sm->p25_cc_frames = 0;
@@ -5028,6 +5050,7 @@ static void p25_teardown(radio_sm_t *sm)
 	sm->p25_activity_ms = 0;
 	sm->view.p25.on = false;
 	sm->view.p25.valid = false;
+	sm->p25_aff_seen = 0;
 	sm->view.p25.out_of_range = false;
 	sm->view.p25.no_control = false;
 	sm->p25_boot_affil = false;
@@ -6915,6 +6938,7 @@ void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms)
 			changed(sm);
 		}
 		p25_cc_update(sm, now_ms);
+		p25_affiliation_update(sm);
 #if CONFIG_P25_VOICE
 		sm->view.p25.follow = sm->p25_follow;
 		if (sm->p25_follow && sm->view.p25.valid && sm->view.p25.opcode == 0x00 &&

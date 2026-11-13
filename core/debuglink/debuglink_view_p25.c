@@ -21,6 +21,9 @@ void debuglink_view_p25(const radio_view_t *v, dl_text_t *t)
 	dl_text(t, "p25.activity=%u\np25.system_sys=%x\np25.system_wacn=%x\np25.out_of_range=%u\np25.no_control=%u\n",
 		(unsigned)v->p25.activity, v->p25.system_sys, (unsigned)v->p25.system_wacn, v->p25.out_of_range,
 		v->p25.no_control);
+	dl_text(t, "p25.affiliated=%u\np25.affiliate_tg=%u\np25.affiliate_source=%u\np25.affiliation_seq=%u\n",
+		v->p25.affiliated, v->p25.affiliate_tg, (unsigned)v->p25.affiliate_source,
+		(unsigned)v->p25.affiliation_seq);
 #else
 	(void)v;
 	dl_text(t, "p25.built=0\n");

@@ -296,7 +296,8 @@ bool p25_cc_affiliate_start(const settings_p25_t *p25)
 	if (!cc_uplink_hz(p25, &hz)) {
 		return false;
 	}
-	// The proven radio-local registration burst: enough repeats for the site's lossy uplink decoder.
+	// One registration/affiliation burst at channel selection. The site gets repeated frames for its lossy uplink
+	// decoder; the radio then returns to the control channel without a retry loop.
 	static uint8_t stream[60u * P25_CC_FRAME_BYTES];
 	uint8_t tsbk[P25_CC_TSBK_BYTES];
 	size_t n = 0;

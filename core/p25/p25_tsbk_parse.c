@@ -44,6 +44,11 @@ bool p25_tsbk_parse(const uint8_t tsbk[12], p25_cc_t *cc)
 		}
 		return true;
 	}
+	case 0x28:		// Group Affiliation Response: system, group and source
+		cc->affiliate_tg = (uint16_t)((a >> 24) & 0xFFFFu);
+		cc->affiliate_source = (uint32_t)(a & 0xFFFFFFu);
+		cc->affiliation_seq++;
+		return true;
 	case 0x00: {		// Group Voice Grant: channel, options, talkgroup and source
 		uint32_t ch = (uint32_t)((a >> 48) & 0xFFFFu);
 		unsigned id = (unsigned)((ch >> 12) & 0xFu);

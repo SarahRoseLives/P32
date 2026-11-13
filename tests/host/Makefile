@@ -1295,8 +1295,9 @@ p25PhyTest: p25PhyTest.c $(CORE)/p25/p25_phy.c $(CORE)/p25/p25_phy.h $(CORE)/p25
 p25TsbkTest: p25TsbkTest.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_tsbk.h
 	$(CC) $(CFLAGS) -o $@ p25TsbkTest.c $(CORE)/p25/p25_tsbk.c
 
-p25TsbkParseTest: p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_tsbk_parse.h
-	$(CC) $(CFLAGS) -o $@ p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c
+p25TsbkParseTest: p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_tsbk_parse.h \
+	$(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
+	$(CC) $(CFLAGS) -o $@ p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
 
 # P25 Phase 1 trunked control-channel TSBK encoding and CC frame construction (core/p25/p25_cc_tx)
 TESTS   += p25CcTxTest
