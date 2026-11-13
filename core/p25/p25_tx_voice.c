@@ -23,6 +23,15 @@
 #include "app/watchdog.h"
 #endif
 
+static bool local_tone(void)
+{
+#if CONFIG_BEEP
+	return beep_busy();
+#else
+	return false;
+#endif
+}
+
 #define P25_TXV_STACK	4096	// words (16 KB): the fixed-point IMBE encoder nests deeper than the decoder
 #define P25_TXV_PRIORITY	3	// host/input priority: the encoder keeps the 20 ms stream, the watchdog kick covers the tight loop
 #define P25_TXV_PCMQ	8u	// 160 ms of microphone audio
@@ -51,7 +60,7 @@ static void audio_block(const int16_t *mic, int16_t *spk, void *ctx)
 	beep_mix(spk);		// local chirps/bonks, never part of the P25 transmit stream
 #endif
 	if (board.audio->speaker_pcm != NULL) {
-		board.audio->speaker_pcm(false);	// keep the beep mixer from re-enabling its 2 ms poll
+		board.audio->speaker_pcm(local_tone());	// route only a local chirp, never the microphone
 	}
 	if (!v.audio_on || !v.running) {
 		return;
@@ -207,7 +216,7 @@ bool p25_tx_voice_start(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source,
 	}
 	v.audio_on = true;
 	if (board.audio->speaker_pcm != NULL) {
-		board.audio->speaker_pcm(false);	// the permit beep is over; do not leave the mixer polling every 2 ms
+		board.audio->speaker_pcm(local_tone());
 	}
 	if (xTaskCreate(tx_task, "p25txv", P25_TXV_STACK, NULL, P25_TXV_PRIORITY, &v.task) != pdPASS) {
 		stop_audio();

@@ -222,12 +222,8 @@ static void beep_mode(radio_sm_t *sm, uint8_t b, bool hold)
 #if CONFIG_P25_VOICE
 	shared = shared || p25_voice_running();
 #endif
-#if CONFIG_P25
-	// The permit chirp marks the moment the site grants; play it on its own stream so a P25 voice/probe stream that
-	// is still winding down cannot swallow it.
-	if (b == BEEP_TX_PERMIT && sm->p25) {
-		shared = false;
-	}
+#if CONFIG_P25_TX
+	shared = shared || p25_tx_voice_active();
 #endif
 	uint8_t level = sm->set.beep_level;
 	if (board.radio != NULL && board.radio->volume != NULL && !board.radio->volume_pcm) {
@@ -3974,7 +3970,6 @@ static void p25call_down(radio_sm_t *sm, uint32_t now_ms)
 	sm->p25_call_nac = sys->nac;
 	sm->p25_call_tg = sys->tg;
 	sm->p25_retries = 0;
-	sm->p25_grant_beeped = false;
 
 	// The PHY transmitter refuses while the receive probe owns the modem. The monitor's RF route goes with it.
 	p25_cc_rx_stop();
@@ -4111,13 +4106,6 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 		// it while its IdenUp is still missing, rather than retrying on the control-channel uplink.
 		bool grant = p->valid && p->voice_grant &&
 			(p->source == 0u || p->source == sm->p25_call_unit);
-		if (grant && !sm->p25_grant_beeped) {
-			// The grant itself is the permit instant. Beep before waiting for an IdenUp that names the voice
-			// channel: that wait is what made the chirp arrive late in a call.
-			sm->p25_grant_beeped = true;
-			beep(sm, BEEP_TX_PERMIT);
-			changed(sm);
-		}
 		if (grant && p->voice_hz == 0) {
 			changed(sm);	// wait for the grant's IdenUp; the probe is still running
 		} else if (grant) {
@@ -4156,6 +4144,7 @@ static void p25call_poll(radio_sm_t *sm, uint32_t now_ms)
 					       sm->p25_call_unit, true)) {
 				sm->p25_call = P25CALL_VOICE;
 				sm->view.state = RS_TX;
+				beep(sm, BEEP_TX_PERMIT);	// the TX audio block mixes this locally, never into the call
 				changed(sm);
 			} else {
 				p25call_restore(sm, now_ms);

@@ -280,7 +280,6 @@ typedef struct {
 	bool p25_no_auto;	// the next tune must not start a trunked channel's monitor
 	bool p25_conv_tx;	// conventional P25 PTT is keyed
 	bool p25_conv_restart;	// main poll: restart the conventional receiver after TX drains
-	bool p25_grant_beeped;	// the current trunked call has played its permit chirp
 	bool p25_follow;		// the P25 monitor follows voice grants (CONFIG_P25 + CONFIG_P25_VOICE)
 	uint32_t p25_cc_hz;		// the control channel to return to
 	uint32_t p25_voice_hz;		// the voice channel of the call being followed

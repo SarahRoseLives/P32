@@ -108,7 +108,11 @@ static void cc_task(void *arg)
 	int16_t samples[AUDIO_BLOCK_SAMPLES];
 
 	(void)arg;
-	while (v.running) {
+	for (;;) {
+		if (!v.running) {
+			vTaskDelay(10);
+			continue;
+		}
 		uint16_t n = board.p25_probe->audio_read(samples, AUDIO_BLOCK_SAMPLES);
 
 		if (n) {
@@ -138,8 +142,6 @@ static void cc_task(void *arg)
 		}
 		vTaskDelay(1);
 	}
-	v.task = NULL;
-	vTaskDelete(NULL);
 }
 
 bool p25_cc_rx_start(void)
@@ -151,27 +153,30 @@ bool p25_cc_rx_start(void)
 	    board.p25_probe->audio_read == NULL || board.p25_probe->audio_stop == NULL) {
 		return false;
 	}
-	TaskHandle_t task = v.task;
-	if (task != NULL) {
-		return true;
-	}
+	if (v.task == NULL) {
 #if CONFIG_P25_VOICE
-	p25_demod *demod = p25_voice_demod();
+		p25_demod *demod = p25_voice_demod();
 #else
-	p25_demod *demod = &cc_demod;
+		p25_demod *demod = &cc_demod;
 #endif
-	memset(&v, 0, sizeof v);
-	v.demod = demod;
+		v.demod = demod;
+		if (xTaskCreate(cc_task, "p25cc", P25_CC_STACK, NULL, P25_CC_PRIORITY, &v.task) != pdPASS) {
+			v.task = NULL;
+			return false;
+		}
+	}
+	v.seq = 0;
+	memset(&v.cc, 0, sizeof v.cc);
+	memset(&v.out, 0, sizeof v.out);
+	v.frames = 0;
+	v.activity = 0;
+	v.last_acq = 0;
+	v.progress_ms = hal_millis();
 	p25_demod_init(v.demod);
 	if (!board.p25_probe->audio_start()) {
 		return false;
 	}
 	v.running = true;
-	if (xTaskCreate(cc_task, "p25cc", P25_CC_STACK, NULL, P25_CC_PRIORITY, &v.task) != pdPASS) {
-		v.running = false;
-		board.p25_probe->audio_stop();
-		return false;
-	}
 	return true;
 }
 
@@ -182,10 +187,6 @@ void p25_cc_rx_stop(void)
 	}
 	v.running = false;
 	board.p25_probe->audio_stop();
-	if (v.task != NULL) {
-		vTaskDelete(v.task);
-		v.task = NULL;
-	}
 }
 
 bool p25_cc_rx_running(void)
