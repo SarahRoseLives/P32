@@ -82,7 +82,8 @@ only until the developer radios are moved); otherwise the codec is installed aga
 also refuses a slot whose code doesn't fit the window or whose list names a word outside the code. A build without a
 codec map can't be written.
 
-The runtime stub's window (`HRC_STUB_BASE`) follows the codec window. The slot tool is `tools/hrc7000_codec.py`.
+In a codec build the runtime stub's window (`HRC_STUB_BASE`) follows the codec window. A build without the codec can
+link the window and leave only the stub's 8 KB. The slot tool is `tools/hrc7000_codec.py`.
 
 ## STM32 radios
 

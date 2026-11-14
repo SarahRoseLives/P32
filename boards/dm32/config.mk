@@ -1,15 +1,22 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The RadioFoundry Authors
 # DM-32UV feature defaults (config/features.mk lists them all). 880 KB of code space before the codec slot, so RAM is
-# the limit: 211,456 B below the codec's RAM window (boards/dm32/memory.ld, docs/spec/hardware-dm32.md 17.1), the
-# RTOS heap's 33 KB among them (freertos_board.h). Every feature the radio has hardware and glue for is on, and the
-# image keeps about 0.5 KB of it free: a feature that needs more RAM cuts some first, or shrinks the heap if
-# tasks.heap_min_free shows room (tests/hil/test_task_stacks.py)
+# the limit. The P25/FM image has no codec to run, so it links to 0x56000 instead of stopping at the codec window:
+# 286,720 B, with the top 8 KB left for the runtime stub (boards/dm32/p25_only.ld, docs/spec/hardware-dm32.md 17.1).
+# The RTOS heap is 116 KB (freertos_board.h); make size shows the static headroom left for other buffers. Every feature
+# the radio has hardware and glue for is on, except those the product leaves out below.
 # The host link runs on the programming cable's UART0; USB, PPP and TCP_CONNS follow the platform
 # (platform/hrc7000/config.mk)
 # P32Firmware is P25/FM only: DMR and the services that follow it are left out. The HR_C7000 modem glue and PCM audio
 # stay on because the P25 receiver and transmitter use them (CONFIG_HRC_MODEM).
 CONFIG_DMR ?= n
+# Without DMR there is no stock codec to run, so the image can use the codec's RAM window. The runtime stub still
+# needs a home above RadioFoundry: 8 KB at the top, enough for the universal monitor's 7,784-byte loaded copy. A DMR
+# build keeps boards/dm32/memory.ld and the platform's 0x44000/80 KB stub span (platform/hrc7000/platform.h).
+ifneq ($(CONFIG_DMR),y)
+LDSCRIPT := boards/dm32/p25_only.ld
+MCU_DEFS += -DHRC_STUB_BASE=0x00056000u -DHRC_STUB_SIZE=0x00002000u
+endif
 CONFIG_HRC_MODEM ?= y
 CONFIG_P25 ?= y
 CONFIG_P25_VOICE ?= y

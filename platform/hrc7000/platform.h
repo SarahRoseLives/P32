@@ -292,10 +292,11 @@ uint32_t hrc_micros(void);
 void hrc_soft_reset(void) __attribute__((noreturn));
 
 // Runtime RAM-monitor (stub) entry (CONFIG_STUB_ENTRY, docs/spec/hardware-dm32.md 17.2). The host loads the stub here
-// and RadioFoundry jumps to it without a power cycle. The span is the codec window at the top of SRAM, which RadioFoundry never links
-// anything into (boards/dm32/memory.ld: 0x43A00..0x58000); the codec is parked before the load, so the whole window is free. Base is
-// 4 KB aligned inside it. The universal stub copies itself to 0x30000 (RadioFoundry's RAM, dead by then), clear of this span. A
-// board with another layout sets its own span in board.mk or config.mk
+// and RadioFoundry jumps to it without a power cycle. The default span is the codec window at the top of SRAM, which a
+// DMR build never links anything into (boards/dm32/memory.ld: 0x43A00..0x58000); the codec is parked before the load,
+// so the whole window is free. A P25/FM build links part of that window and sets the smaller 8 KB top span in
+// boards/dm32/config.mk. Base is 4 KB aligned inside it. The universal stub copies itself to 0x30000 (RadioFoundry's
+// RAM, dead by then), clear of this span. A board with another layout sets its own span in board.mk or config.mk
 #ifndef HRC_STUB_BASE
 #define HRC_STUB_BASE		0x00044000u
 #define HRC_STUB_SIZE		0x00014000u	// 80 KB, to the end of SRAM

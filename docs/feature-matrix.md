@@ -400,13 +400,13 @@ the hotspot off.
 
 ### DM-32UV
 
-The DM-32UV has 880 KB of code space, so RAM limits it: 165,612 bytes above the stock codec's RAM window and 27,868
-below it (RAM_LO). Its network is PPP on the programming cable (`NET_PPP`), on by default with the IP gateway and
-every service, `TCP_CONNS=3` (`boards/dm32/config.mk`). It fits because the state the core marks `RFOUNDRY_CPU_RAM` lives
-in RAM_LO ([hardware-dm32.md](spec/hardware-dm32.md) 17.1). Measured with csky-elf GCC 14 (bytes of the image, RAM
-of the linker's regions; the RTOS heap, 40 KB with every task stack, is inside the used part):
+The DM-32UV has 880 KB of code space, so RAM limits it. The P32Firmware default (P25/FM, no codec) uses
+`boards/dm32/p25_only.ld`: the image is 475,800 bytes and RAM is 275,176 of 286,720 B (11,544 free), with a 116 KB
+RTOS heap inside the used part. That reclaims 75,264 B of the stock codec's 83,456 B RAM window
+([hardware-dm32.md](spec/hardware-dm32.md) 17.1). The DMR build keeps `boards/dm32/memory.ld` and the 211,456 B region.
+The measurements below are the earlier DMR network default, not the P32 image:
 
-| DM-32UV build | Image | RAM (165,612 B) | RAM_LO (27,868 B) |
+| DM-32UV DMR build (historical) | Image | RAM (165,612 B) | RAM_LO (27,868 B) |
 |---|---:|---:|---:|
 | before the network (`RFOUNDRY_CPU_RAM` in main RAM) | 313,804 | 153,740 (11,872 free) | 8,800 |
 | default (PPP, gateway, every service, 3 TCP connections) | 365,236 | 154,428 (11,184 free) | 24,392 (3,476 free) |

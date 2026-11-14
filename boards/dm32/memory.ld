@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /* Copyright (c) 2026 The RadioFoundry Authors */
-/* Baofeng DM-32UV, HR_C7000 (CK803S), application behind the Baofeng bootloader (docs/spec/hardware-dm32.md 2).
+/* Baofeng DM-32UV, HR_C7000 (CK803S), DMR build behind the Baofeng bootloader (docs/spec/hardware-dm32.md 2). A P25/FM
+ * build has no codec and uses p25_only.ld, which links part of the codec window (config.mk selects it).
  *
  * Program flash (XIP, 1 MB at 0x03000000): bootloader 0x03000000..0x0300C000 (never written), the application from
  * 0x0300C000 (board.mk APP_BASE), the codec slot 0x030E8000..0x03100000 (docs/spec/codec-dm32.md "Recommended

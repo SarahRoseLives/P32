@@ -1211,7 +1211,7 @@ Runs on a radio: `docs/testing/dm32-bringup.md` is the bring-up checklist and li
 |---|---|---|
 | Image | linked at 0x0300C000, crt0 (`Reset_Handler`) is the first byte; wrapped with `tools/serial_loader.py --wrap` for the Baofeng updater | `boards/dm32/memory.ld`, `platform/hrc7000/crt0.S` |
 | Program flash | app 0x0300C000..0x030E8000 (880 KB); codec slot 0x030E8000..0x03100000, filled only on the user's machine by `tools/hrc7000_codec.py` | `boards/dm32/memory.ld` |
-| SRAM | one region, 0x10000..0x43A00 (211,456 B): vector table (VBR = 0x10000), RAM code (interrupt entry, clock set-up, the DMR slot engine and the board's DMR glue), `.ram_lo` (the state the core marks `RFOUNDRY_CPU_RAM`, the zeroed state of the radio task, APRS, hotspot rings and DMR data buffers, and the interrupt stack), data, bss (RTOS heap inside, the network buffers) and the start-up stack. 0x43A00..0x58000 (83,456 B) is the codec window and is not linked. See 17.1 | `boards/dm32/memory.ld`, `platform/hrc7000/common.ld` |
+| SRAM | DMR builds use `memory.ld`: one region, 0x10000..0x43A00 (211,456 B), with the codec window 0x43A00..0x58000 above it. P25/FM builds use `p25_only.ld`: 0x10000..0x56000 (286,720 B), reclaiming 75,264 B of that window and leaving the top 8 KB, 0x56000..0x58000, for the runtime stub. Both have the vector table (VBR = 0x10000), RAM code, `.ram_lo`, data, bss (RTOS heap inside) and the start-up stack. See 17.1 | `boards/dm32/memory.ld`, `boards/dm32/p25_only.ld`, `platform/hrc7000/common.ld` |
 | Modem SRAM | 0x18000000..0x1800013F PCM buffers; 0x18000E48..0x18003E28 the codec's tables (copied at first use) | `platform/hrc7000/audio_pcm.c`, `platform/hrc7000/vocoder.c` |
 | Clocks | XIP quad mode and divider (1.1 steps 2-3) always; the rest of 1.1 only when the bootloader left the system clock on the oscillator; watchdog off (then `main()` starts it, [watchdog.md](watchdog.md)); cache as 1.3 | `platform/hrc7000/clock.c` |
 | Interrupts | PIC sources 0-63 as vectors 32-95 (assumed vectored), level mode, one level, never nested; EOI by writing 0x04 to 0x17000010 in the common entry | `platform/hrc7000/irq.c`, `freertos/portasm.S` |
@@ -1227,18 +1227,21 @@ Runs on a radio: `docs/testing/dm32-bringup.md` is the bring-up checklist and li
 
 ### 17.1 SRAM layout
 
-The application has one RAM region below the codec's window (`boards/dm32/memory.ld`, `platform/hrc7000/common.ld`; the
-linker fails the build when it overflows). The codec window 0x43A00..0x58000 (83,456 B) holds the codec code copied
-from the codec slot at boot (`codec-placement.md`); RadioFoundry links nothing there. No DMA reaches SRAM on this
-board, so any buffer can sit anywhere in the region. crt0 (`platform/hrc7000/crt0.S`) copies `.ramfunc` and `.data`
-from flash and zeroes `.bss` and `.ram_lo` before `main`; nothing in `.ram_lo` may have an initializer (it is `NOLOAD`:
-an initial value would be dropped).
+The linker script depends on whether the image has a codec (`platform/hrc7000/common.ld`; the linker fails the build
+when it overflows). A DMR build uses `boards/dm32/memory.ld` and has one RAM region, 0x10000..0x43A00 (211,456 B);
+0x43A00..0x58000 (83,456 B) is the codec window and holds the codec code copied from the slot at boot
+(`codec-placement.md`). A P25/FM build has no codec to run, so `boards/dm32/p25_only.ld` links 0x10000..0x56000
+(286,720 B), reclaiming 75,264 B of the window. The last 8 KB, 0x56000..0x58000, is the runtime stub's load span
+(17.2); RadioFoundry's RAM does not reach it. Both scripts keep the stock `__codec_*` symbols for the registry and
+the codec tools. No DMA reaches SRAM on this board, so any buffer can sit anywhere in the linked region. crt0
+(`platform/hrc7000/crt0.S`) copies `.ramfunc` and `.data` from flash and zeroes `.bss` and `.ram_lo` before `main`;
+nothing in `.ram_lo` may have an initializer (it is `NOLOAD`: an initial value would be dropped).
 
 | Part | Contents |
 |---|---|
 | `.vectors`, `.ramfunc` | the vector table (512 B) and the RAM code: interrupt entry, clock set-up, the DMR slot engine and the board's DMR glue |
-| `.ram_lo` | the `RFOUNDRY_CPU_RAM` state (radio task, APRS, hotspot rings, DMR data) and the 2 KB interrupt stack |
-| `.data`, `.bss` | frame buffer 40 KB, RTOS heap 33 KB (every task stack and queue; `boards/dm32/freertos_board.h`), vocoder states 13 KB, the network buffers (TCP connections, the network personality's packets and frame, the gateway's bursts and frame), 2 KB start-up stack |
+| `.ram_lo` | the `RFOUNDRY_CPU_RAM` state (radio task and the build's service state) and the 2 KB interrupt stack |
+| `.data`, `.bss` | frame buffer 37.5 KB, RTOS heap 116 KB in the P25/FM image (52 KB with DMR; every task stack and queue, `boards/dm32/freertos_board.h`), the DMR build's vocoder states and network buffers, 2 KB start-up stack |
 
 The image sizes and the RAM left in each build are in [feature-matrix.md](../feature-matrix.md), "Whole images".
 
@@ -1251,17 +1254,24 @@ gets it running from a radio that is already up. On by default (`CONFIG_STUB_ENT
 the command answers unavailable on a board whose platform has no `hal_system_t.enter_stub` (every board but the
 HR_C7000 so far). The wire format is debug link command `0x1A` (`docs/spec/debuglink.md` 3.18).
 
-**RAM region.** The monitor is loaded into the codec window at the top of SRAM, `0x43A00..0x58000` (83,456 B), which `boards/dm32/memory.ld` leaves out of the image entirely (section 17.1): RadioFoundry links nothing there. A radio that hosts its codec runs it in that
-window, so the first STUB command parks the codec (`hrc_vocoder_park`: it waits for a call in progress, then every
-later call returns silence) before the window is handed out. Without that, an upload on a DMR channel overwrote the
-running codec and hung the radio (bench 2026-10-15). The load span is `0x44000..0x58000` (`HRC_STUB_BASE` / `HRC_STUB_SIZE`, 80 KB, 4 KB aligned inside the window). Nothing in RadioFoundry's own RAM (below the window) is touched while the image loads, so the host link task keeps running to receive
-it; RadioFoundry abandons all of its RAM only at the jump.
+**RAM region.** A DMR build loads the monitor into the codec window at the top of SRAM, `0x43A00..0x58000` (83,456 B),
+which `boards/dm32/memory.ld` leaves out of the image entirely (section 17.1). A radio that hosts its codec runs it in
+that window, so the first STUB command parks the codec (`hrc_vocoder_park`: it waits for a call in progress, then
+every later call returns silence) before the window is handed out. Without that, an upload on a DMR channel
+overwrote the running codec and hung the radio (bench 2026-10-15). The DMR load span is `0x44000..0x58000`
+(`HRC_STUB_BASE` / `HRC_STUB_SIZE`, 80 KB, 4 KB aligned inside the window).
 
-The monitor (the universal build, protocol version 6) is 7,004 bytes and runs at `0x30000`, not where it was loaded.
+A P25/FM build has no codec, so `p25_only.ld` links that window up to `0x56000` and leaves only `0x56000..0x58000`
+(8 KB) for the monitor (`boards/dm32/config.mk`). Its loaded copy is 7,784 bytes, so it fits. Nothing in
+RadioFoundry's own RAM is touched while the image loads, so the host link task keeps running to receive it;
+RadioFoundry abandons all of its RAM only at the jump.
+
+The monitor (the universal build, protocol version 7) is 7,784 bytes and runs at `0x30000`, not where it was loaded.
 Its first 0x80 bytes are position independent and use no stack: interrupts off, then a copy of the image from the load
 address to `0x30000` and a jump there. It then zeroes its `.bss` and sets its own 4 KB stack. The whole footprint is
-`0x30000..0x37978` (31,096 B: image, `.bss` to `0x36974`, stack `0x36978..0x37978`); the linker refuses a layout over
-32 KB or outside SRAM. That range is RadioFoundry's RAM, which is dead after the jump, and it does not overlap the loaded copy at `0x44000..`. The entry stops without writing anything if the two would overlap. Deepest stack use
+`0x30000..0x37C90` (31,888 B: image, `.bss` to `0x36C90`, stack `0x36C90..0x37C90`); the linker refuses a layout over
+32 KB or outside SRAM. That range is RadioFoundry's RAM, which is dead after the jump, and it does not overlap the
+loaded copy at either load span. The entry stops without writing anything if the two would overlap. Deepest stack use
 measured on two HR_C7000 boards: 168 bytes. The same image is what the serial boot ROM loads at `0x10000`
 with the radio off (28 blocks of 256 B; the ROM itself uses no RAM, only registers). Placement for every route:
 `stub/README.md`, RAM placement.
