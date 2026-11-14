@@ -1185,14 +1185,18 @@ export function doneView() {
 				tries > 1 ? ctx.helpLink() : null, tries > 1 ? reportLine() : null);
 			return S().forward(button(t("flash.c7.done.check"), check, { primary: true }));
 		}
-		const wantCodec = c.decision?.mode !== "none";
+		const features = String(S().firmware?.manifest?.features || "").split(/[ ,]+/).filter(Boolean);
+		const needsCodec = buildNeedsCodec(features.join(","));
+		const wantCodec = needsCodec && c.decision?.mode !== "none";
 		const good = !wantCodec || (p.codec && !["absent", "none"].includes(p.codec));
+		const ready = needsCodec ? t("flash.c7.done.ready")
+			: t(features.includes("P25_VOICE") ? "flash.c7.done.ready_p25" : "flash.c7.done.ready_fm");
 		diag.note(...crumbs.verify(p, good));
 		S().reportResult = good ? "problem" : "failed";
 		top.set({ led: "off", screen: "rfoundry" });
 		fill(status, 
 			h("dl", { class: "kv-list" }, h("dt", {}, t("flash.now.firmware")), h("dd", {}, p.git)),
-			notice(good ? t("flash.c7.done.ready") : t("flash.c7.done.no_codec"), good ? "ok" : "bad"), good ? null : ctx.helpLink(), good ? null : reportLine(),
+			notice(good ? ready : t("flash.c7.done.no_codec"), good ? "ok" : "bad"), good ? null : ctx.helpLink(), good ? null : reportLine(),
 			// a backup taken from a radio that ran RadioFoundry holds that RadioFoundry build, not the original firmware
 			c.backupSaved ? h("p", { class: "small muted" }, t(c.rfoundry ? "flash.c7.done.backup_kept_rfoundry" : "flash.c7.done.backup_kept")) : null,
 			// not asked of the radio: any STUB command parks RadioFoundry's codec until the next restart (platform stub_region, core/stubentry)
@@ -1275,6 +1279,13 @@ async function bringChannels(c, status, left) {
 		S().reportResult = "problem";
 		box.append(notice(t("flash.c7.channels.failed"), "bad"), reportLine());
 	}
+}
+
+// A build with DMR needs the radio's AMBE codec; P25/FM builds run the IMBE codec in the firmware and need none.
+// An empty feature list is an older or unknown image: keep the old codec check for it.
+export function buildNeedsCodec(features) {
+	const list = String(features || "").split(/[ ,]+/).filter(Boolean);
+	return !list.length || list.includes("DMR");
 }
 
 // Whether the installed build hands over to the loader by itself (CONFIG_STUB_ENTRY), from its manifest or selection

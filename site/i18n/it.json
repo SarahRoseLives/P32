@@ -1170,6 +1170,8 @@
  "flash.c7.done.restarting": "La radio si sta riavviando…",
  "flash.c7.done.lead": "L'utility di programmazione interroga il firmware installato tramite lo stesso cavo.",
  "flash.c7.done.ready": "RadioFoundry è in esecuzione. Voce FM e DMR disponibili.",
+ "flash.c7.done.ready_p25": "RadioFoundry è in esecuzione. P25 e FM sono disponibili.",
+ "flash.c7.done.ready_fm": "RadioFoundry è in esecuzione. FM è disponibile.",
  "flash.c7.done.no_codec": "RadioFoundry è in esecuzione senza codec, quindi la voce DMR non è disponibile. Reinstalla con un codec.",
  "flash.c7.done.no_answer": "La radio si è riavviata ma non risponde ancora via cavo. Spegni la radio, poi riaccendila, attendi la schermata home e scegli Ricontrolla. Se l'interruttore di accensione non risponde, togli la batteria per qualche secondo.",
  "flash.c7.done.check": "Ricontrolla",

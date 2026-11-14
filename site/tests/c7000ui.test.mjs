@@ -59,6 +59,12 @@ const fb = json("flash-boards.json");
 const radio = json("radios.json").radios.find((r) => fb.c7000.boards[r.id]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+test("a P25/FM image needs no AMBE codec; a DMR or unknown image still does", () => {
+	assert.equal(c7ui.buildNeedsCodec("FM,P25,P25_VOICE,P25_TX"), false);
+	assert.equal(c7ui.buildNeedsCodec("FM,DMR,DMR_PRIVACY"), true);
+	assert.equal(c7ui.buildNeedsCodec(""), true, "an older image without a feature list keeps the codec check");
+});
+
 test("install done: a check still running when the user starts over draws nothing and calls no nav bar", async () => {
 	assert.ok(radio, "an HR_C7000 radio in radios.json");
 	const forwards = [];
