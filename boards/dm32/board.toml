@@ -33,8 +33,8 @@ unconfirmed = { VIBRATE = "reported online to have a vibration motor; the part a
 [status]
 level = "supported"
 summary = """\
-FM and DMR voice both ways, CTCSS/DCS, APRS both ways, GPS data, the hotspot and each split duplex half work on air. \
-Open: FM deviation at 12.5 kHz and an outdoor GPS fix."""
+P25 Phase 1 conventional and trunked voice, control-channel receive, analog FM with CTCSS/DCS, and the instrument UI. \
+The P32 image leaves out DMR, APRS and GPS; FM deviation at 12.5 kHz is still open."""
 release = "stable"
 
 # The Baofeng serial updater erases the whole application area before it writes (hardware-dm32.md 13.2 step 7), so

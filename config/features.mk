@@ -221,13 +221,13 @@ CONFIG_BCAST_FM ?= y
 # PCM stream it borrows). A diagnostic, never for a release
 CONFIG_AUDIO_PROBE ?= n
 # P25 physical-layer receive probe: the debug link starts the demodulator's PHY receive test mode with the P25 frame
-# sync and logs the raw receive RAM, for the P25 bring-up on the bench (docs/spec/p25.md 5.1; needs DEBUGLINK and DMR,
-# whose modem and system interrupt it borrows). A diagnostic, never for a release
+# sync and logs the raw receive RAM, for the P25 bring-up on the bench (docs/spec/p25.md 5.1; needs DEBUGLINK and
+# HRC_MODEM, whose modem and system interrupt it borrows). A diagnostic, never for a release
 CONFIG_P25_PROBE ?= n
 # P25 control-channel monitor: a screen that shows a P25 Phase 1 control channel's decoded NAC, WACN, SYS, RFSS, SITE,
-# TG, VCH and the IdenUp frequency, receive only (docs/spec/p25.md 8; needs DMR for the modem and a board whose
-# p25_probe runs the demodulator's PHY receive mode). The bench probe above (P25_PROBE) is separate and needs the debug
-# link. A radio without the probe keeps the switch off and the screen does not appear.
+# TG, VCH and the IdenUp frequency, receive only (docs/spec/p25.md 8; needs HRC_MODEM for the modem and a board
+# whose p25_probe runs the demodulator's PHY receive mode). The bench probe above (P25_PROBE) is separate and needs
+# the debug link. A radio without the probe keeps the switch off and the screen does not appear.
 CONFIG_P25 ?= n
 # P25 Phase 1 IMBE voice: the fixed-point/float vocoder and the LDU voice decode (docs/spec/p25.md 6, 9). Off by
 # default: the decode cost is the open question on the CK803S (soft-float). This bench builds the decoder and a

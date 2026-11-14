@@ -32,7 +32,7 @@ static bool local_tone(void)
 #endif
 }
 
-#define P25_TXV_STACK	4096	// words (16 KB): the fixed-point IMBE encoder nests deeper than the decoder
+#define P25_TXV_STACK	3840	// words (15 KB): the fixed-point IMBE encoder nests deeper than the decoder
 #define P25_TXV_PRIORITY	3	// host/input priority: the encoder keeps the 20 ms stream, the watchdog kick covers the tight loop
 #define P25_TXV_PCMQ	8u	// 160 ms of microphone audio
 #define P25_TXV_DRAIN_MS	2000u

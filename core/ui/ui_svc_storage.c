@@ -517,7 +517,7 @@ bool ui_svc_setting_set(uint8_t id, int32_t value)
 		// per-system override for a CPS or the P25 system editor.
 		if (value <= 0 || (uint32_t)value > 0xFFFFFFu)
 			return false;
-		settings_t *st = settings_begin();
+		st = settings_begin();
 		uint8_t n = st->p25_count;
 		if (n == 0 || n > SETTINGS_P25_SYSTEMS) {
 			n = 1;

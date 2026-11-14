@@ -29,7 +29,7 @@
 
 #define P25_VOICE_PCM_FRAMES	48u	// 960 ms: three LDUs plus jitter
 #define P25_VOICE_PREFILL	18u	// start after ~360 ms so a late LDU never gaps the speaker
-#define P25_VOICE_STACK		1536	// words (6 KB): the demodulator, policies and codec nest; stack-check needs 3896 B
+#define P25_VOICE_STACK		1280	// words (5 KB): the demodulator, policies and codec nest; stack-check needs 3960 B
 
 static struct {
 	p25_demod demod;

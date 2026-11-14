@@ -33,7 +33,7 @@
 // Task layout (see core/app/app.c for the whole picture)
 #define RADIO_TASK_PRIORITY	4
 #if CONFIG_DMR || CONFIG_P25 || CONFIG_P25_PROBE || CONFIG_P25_VOICE
-#define RADIO_TASK_STACK	768	// words: the DMR call stack and the P25 control-channel decode run here
+#define RADIO_TASK_STACK	896	// words: the DMR call stack and the P25 control-channel decode run here
 #else
 #define RADIO_TASK_STACK	512	// words
 #endif

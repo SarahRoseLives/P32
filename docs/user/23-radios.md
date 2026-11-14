@@ -9,7 +9,7 @@ and what has been checked on it.
 <!-- generated: tools/boards.py docs radios; edit boards/*/board.toml [status] -->
 | Radio | Also sold as | What works |
 |---|---|---|
-| [Baofeng DM-32UV](#baofeng-dm-32uv) |  | FM and DMR voice both ways, CTCSS/DCS, APRS both ways, GPS data, the hotspot and each split duplex half work on air. Open: FM deviation at 12.5 kHz and an outdoor GPS fix. |
+| [Baofeng DM-32UV](#baofeng-dm-32uv) |  | P25 Phase 1 conventional and trunked voice, control-channel receive, analog FM with CTCSS/DCS, and the instrument UI. The P32 image leaves out DMR, APRS and GPS; FM deviation at 12.5 kHz is still open. |
 | [Baofeng DM-1701](#baofeng-dm-1701) | Retevis RT84 | FM, DMR voice and data, text messages, alerts, emergency, scan, the hotspot, single frequency repeating, each split duplex half and the USB network services work on air. Open: standalone SFR and a two-radio split duplex pair. |
 | [Baofeng DM-1801 Pro](#baofeng-dm-1801-pro) | Baofeng DM-1801 | FM with CTCSS/DCS, DMR voice with the radio's own codec, DMR data and text, the hotspot, single frequency repeating, the PPP network services and each split duplex half work on air. Open: VHF transmit and VOX. |
 | [Radioddity DB25-D PRO](#radioddity-db25-d-pro) | Kydera CDR-300UV | FM and DMR voice both ways, the hotspot, the DMR VFO, the PPP network services, cable programming and settings storage work on the radio. The older FD6818 batches run the same image, untested on a radio. Open: the Retevis RT73. |
@@ -370,8 +370,7 @@ A 160 x 128 color screen, every row visible.
 ## Baofeng DM-32UV
 
 A handheld for 136-174 and 400-480 MHz with a keypad, left and right arrow keys, a channel knob and a color screen.
-FM and DMR voice both ways, CTCSS and DCS, APRS, GPS data, the hotspot and the battery saver work on the radio.
-As a [standalone SFR](14-hotspot.md#standalone-sfr) repeater it repeats calls on air 90 ms later and sends its CW ID; its repeated voice carries more bit errors than the original, though it plays.
+P25 Phase 1 conventional and trunked voice both ways, control-channel receive, analog FM with CTCSS/DCS and the instrument UI work on the radio. The P32 image leaves out DMR, APRS and GPS.
 Installing: [Moving from stock DM-32UV firmware](19-moving-from-stock-dm32.md).
 
 ### Installing on the DM-32UV
@@ -425,23 +424,14 @@ A 240 x 320 color screen. RadioFoundry uses its full resolution, with smooth (an
 
 ### What the DM-32UV lacks
 
-- Split duplex repeater: each half passes on air with one radio (the transmit half's outbound with its CACH, a
-  host-fed voice call, 5 minutes keyed within 60 Hz; the receive half's slot labels). As the receive half of a pair
-  with a DM-1801 Pro transmitting, it labeled a subscriber's calls with the right slot in 29 of 31 sessions; the other
-  two aren't explained yet. Not tried as the transmit half of a pair.
-- Not checked on this radio yet: emergency, basic privacy, talker alias, text and data messages, roaming, scan,
-  MMDVM SFR, the network services over PPP and control station mode. They are built in and host tested.
-- No USB. The serial port is on the programming cable: hotspot mode, the debug link and the network (PPP,
-  [USB network](15-usb-network.md#network-over-the-programming-cable-ppp)) all run there. USB network mode isn't
+- The P32 image is P25/FM only. DMR, APRS, GPS and the services built on DMR (hotspot, PPP, text and data messages,
+  roaming) are not in it.
+- No USB. The serial port is on the programming cable: the debug link and the CPS run there. USB network mode isn't
   available.
-- The GPS module is checked at start-up (it must answer within 5 s) and is then powered only while **Settings >
-  Location > GPS** is on, which takes effect at once. A fix outdoors hasn't been checked yet.
-- While APRS listens, FM on the APRS frequency plays through a different audio path, which may sound different.
 - Air band and FM broadcast receive
   ([Air band and FM broadcast](07-channels-zones-vfo.md#air-band-and-fm-broadcast)) are built in but not checked on
   the radio yet. Broadcast covers 65 to 108 MHz.
 - No VOX yet: the board code that reads the microphone level isn't written.
-- Audio linking (USRP) carries DMR only: the FM transmit path from the processor isn't written.
 - No beeps while transmitting, the talk permit tone included: the radio's beep path would put them on the air. A beep
   still playing when the transmission ends is heard from then on.
 - The signal strength in dBm is uncalibrated: strong signals read high.

@@ -22,7 +22,7 @@
 static p25_demod cc_demod;
 #endif
 
-#define P25_CC_STACK	1024	// words (4 KB): no codec, the demodulator and TSBK trellis only
+#define P25_CC_STACK	1152	// words (4.5 KB): the demodulator, TSBK trellis and the IMBE decode it can reach
 #define P25_CC_PRIORITY	4
 #define P25_CC_PARTIAL	180u	// one control-channel frame: FSW, NID, TSBK and status symbols
 

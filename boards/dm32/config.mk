@@ -7,6 +7,23 @@
 # tasks.heap_min_free shows room (tests/hil/test_task_stacks.py)
 # The host link runs on the programming cable's UART0; USB, PPP and TCP_CONNS follow the platform
 # (platform/hrc7000/config.mk)
+# P32Firmware is P25/FM only: DMR and the services that follow it are left out. The HR_C7000 modem glue and PCM audio
+# stay on because the P25 receiver and transmitter use them (CONFIG_HRC_MODEM).
+CONFIG_DMR ?= n
+CONFIG_HRC_MODEM ?= y
+CONFIG_P25 ?= y
+CONFIG_P25_VOICE ?= y
+CONFIG_P25_TX ?= y
+CONFIG_P25_STAR ?= y
+# APRS and GPS are not part of the P25/FM product. Their RAM is needed by the P25 voice codec and transmitter; the
+# code exists, but P32 leaves it out. BOARD_NOT_WRITTEN keeps the board registry's hardware-switch check satisfied.
+CONFIG_APRS ?= n
+CONFIG_GPS ?= n
+BOARD_NOT_WRITTEN += APRS_RX	# not in the P25/FM image; the RAM goes to P25 voice
+BOARD_NOT_WRITTEN += GPS	# not in the P25/FM image; the P25 product has no location features
+BOARD_NOT_WRITTEN += GPS_SKY	# not in the P25/FM image; follows GPS
+# The large-panel instrument Home is the P32 face of the radio.
+CONFIG_UI_INSTRUMENT ?= y
 # The 240x320 panel at full resolution in 16 colors (display_dm32.c, board.mk). The 16x32 font is the large class's
 # channel name; text is anti-aliased, and lists and labels are one size up (9x18)
 CONFIG_FONT_XL ?= y
