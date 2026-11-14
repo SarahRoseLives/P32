@@ -3,15 +3,15 @@
 // HR_C7000 P25 physical-layer transmit test engine (docs/spec/p25.md 10; modem-hrc7000.md 2.10, 9.5). The modem's
 // PHY transmit mode sends the CPU's complete 288-bit blocks, one per 30 ms slot, with SEND_DATA0/1 alternating. This
 // engine feeds the fixed P25 test stream from core/p25/tx/p25_test_tx.c and keys the board's existing DMR RF/PA hooks
-// without starting the DMR engine. It is a bench diagnostic: explicit ARM, explicit START, a 30 s ARM lifetime and a
-// hard 12 s transmit limit.
+// without starting the DMR engine. The test stream is a bench diagnostic: explicit ARM, explicit START, a 30 s ARM
+// lifetime and a hard 12 s limit. Live voice uses the radio core's TX timeout instead.
 //
 // Interrupt and timer use (platform/hrc7000/platform.h):
 //   PIC 29 (system)      PHY_READY (bit 12): one physical block boundary
 //   PIC 30 / 31 (TS)     the other slot boundaries (duplicate PHY events are counted and ignored)
 //   PIC 32 (RF TX)       RF chip to TX for the first block; the PA one-shot follows
 //   Timer 3              PA one-shot (the DMR PA timer, documented as such; the DMR engine is off here)
-//   Timer 6              hard stop, armed once at START with P25_TX_MAX_US (free: TIMER_BOARD is a board's own)
+//   Timer 6              test-stream hard stop, armed at START (live voice is stopped by the radio core's TX timeout)
 #include "config.h"
 
 #if CONFIG_P25_TX
@@ -470,7 +470,9 @@ static bool start_engine(bool live, bool raw, uint32_t now_us)
 	hrc_irq_enable(IRQ_MODEM_TS_RX, true);
 	hrc_irq_enable(IRQ_MODEM_RF_TX, true);
 	hrc_irq_enable(IRQ_MODEM_RF_RX, true);
-	hrc_timer_oneshot(P25_TX_HARD_TIMER, P25_TX_MAX_US);
+	if (!live) {
+		hrc_timer_oneshot(P25_TX_HARD_TIMER, P25_TX_MAX_US);
+	}
 	wr(C7_LAYER2_CONTROL, 0x82u);	// Own slot clock; the CPU supplies complete PHY blocks.
 	hrc_irq_restore(saved);
 	// Key the RF path at START. The per-burst RF TX interrupt keys the first arm, but after the DMR IRQs are
@@ -535,7 +537,11 @@ static void poll(uint32_t now_us, bool ptt_down)
 	}
 	uint32_t saved = hrc_irq_save();
 	p25_test_tx *t = timing();
-	p25_test_tx_poll(t, now_us, ptt_down);
+	if (live_mode) {
+		p25_test_tx_poll_limit(t, now_us, ptt_down, LIVE_RF_MAX_US);
+	} else {
+		p25_test_tx_poll(t, now_us, ptt_down);
+	}
 	bool active = p25_test_tx_active(t);
 	if (!active && hardware_running) {
 		hardware_stop();

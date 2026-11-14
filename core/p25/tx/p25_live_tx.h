@@ -6,8 +6,9 @@
 #include "p25_test_tx.h"
 #define LIVE_BANKS 8u
 #define LIVE_CAPTURE_FRAMES 1500u
-#define LIVE_CALL_MAX_US 33000000u
-#define LIVE_RF_MAX_US 35000000u
+// Live voice follows the radio TX timeout (up to 10 min); this is only a last-resort software cap.
+#define LIVE_CALL_MAX_US 3600000000u
+#define LIVE_RF_MAX_US 3600000000u
 #define LIVE_STARTUP_BASE_BYTES 240u
 #define LIVE_STARTUP_EXTRA_MAX_BYTES (P25_TX_BLOCK_BYTES - 1u)
 // Caller holds the IRQ lock for publication, completion, polling and consumption.
