@@ -248,7 +248,7 @@ typedef struct {
 	uint32_t affiliate_source;	// the response's source unit
 	uint32_t affiliation_seq;	// affiliation responses seen
 	uint16_t system_tg;	// the configured system's talkgroup
-	uint16_t system_unit;	// our configured unit ID
+	uint32_t system_unit;	// our configured 24-bit unit ID
 	uint32_t system_cc_hz;	// the configured control-channel downlink
 	uint32_t system_uplink_hz;	// the configured control-channel uplink
 	uint32_t system_voice_hz;	// the voice channel to use when the grant is missed

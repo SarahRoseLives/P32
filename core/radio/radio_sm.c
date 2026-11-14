@@ -65,12 +65,19 @@
 #endif
 
 #if CONFIG_P25 || CONFIG_P25_VOICE
-// The system the trunking receiver follows: the selected settings slot, clamped to a record from before the list.
+// A system slot, clamped to what the record holds (0 when it holds none: the defaults).
+static const settings_p25_t *p25_system_at(const settings_t *st, uint8_t i)
+{
+	uint8_t n = st->p25_count;
+	if (n == 0 || n > SETTINGS_P25_SYSTEMS) n = 1;
+	if (i >= n) i = 0;
+	return settings_p25_get(st, i);
+}
+
+// The system the trunking receiver follows: the selected settings slot.
 static const settings_p25_t *p25_active_system(const settings_t *st)
 {
-	uint8_t i = st->p25_active;
-	if (i >= st->p25_count) i = 0;
-	return settings_p25_get(st, i);
+	return p25_system_at(st, st->p25_active);
 }
 #endif
 #if CONFIG_SFR_CWID
@@ -706,11 +713,14 @@ static void tune(radio_sm_t *sm, uint32_t now_ms)
 	}
 #endif
 #if CONFIG_P25_VOICE
-	// A stored conventional P25 memory is a mode of its own: selecting it starts its receiver, and leaving it stops
-	// that receiver without needing the star key. A quick P25 change on an analog channel is not a stored profile
-	// (p25_conv_auto stays false), so stopping it there does not start it again. The VFO's P25 mode is a user choice,
-	// not a stored channel profile: a new frequency keeps it, so the receiver stays where it is.
-	if (sm->p25_conv && (!sm->view.ch.p25_conv || (!sm->p25_conv_auto && !sm->view.vfo))) {
+	// A stored conventional P25 memory is a mode of its own: selecting it starts its receiver with that channel's
+	// NAC, talkgroup and unit ID, and leaving it stops that receiver without needing the star key. A channel change
+	// restarts it even when it was already running: otherwise the screen keeps the previous memory's values. A quick
+	// P25 change on an analog channel is not a stored profile (p25_conv_auto stays false), so stopping it there does
+	// not start it again. The VFO's P25 mode is a user choice, not a stored channel profile: a new frequency keeps
+	// it, so the receiver stays where it is.
+	if (sm->p25_conv && (!sm->view.ch.p25_conv || !sm->p25_conv_auto ||
+			     (!sm->view.vfo && sm->view.ch.p25_conv))) {
 		p25conv_teardown(sm);
 	}
 	if (!sm->view.vfo && sm->view.ch.p25_conv && sm->p25_conv_auto && !sm->p25_conv) {
@@ -4301,7 +4311,14 @@ static void p25call_release(radio_sm_t *sm, uint32_t now_ms)
 static void p25conv_values(const settings_t *st, const channel_t *ch, uint16_t *nac, uint16_t *tg, uint32_t *unit)
 {
 	const settings_p25_t *p = p25_active_system(st);
-	if (ch != NULL && ch->p25_conv) {
+	if (ch != NULL && ch->p25_conv && ch->p25_system_set) {
+		// A conventional memory with a system profile takes that system's NAC, talkgroup and unit ID, even when
+		// another system is the active trunking one.
+		p = p25_system_at(st, ch->p25_system);
+		*nac = p->nac;
+		*tg = p->tg;
+		*unit = p->unit_id;
+	} else if (ch != NULL && ch->p25_conv) {
 		*nac = ch->p25_nac != 0 ? ch->p25_nac : 0x293u;
 		*tg = ch->p25_tg != 0 ? ch->p25_tg : 1u;
 		*unit = p->unit_id;
@@ -4337,7 +4354,7 @@ static bool p25conv_rx_start(radio_sm_t *sm)
 	sm->view.p25.conv = true;
 	sm->view.p25.voice = true;
 	sm->view.p25.system_tg = tg;
-	sm->view.p25.system_unit = (uint16_t)unit;
+	sm->view.p25.system_unit = unit;
 	sm->view.p25.system_nac = nac;
 	sm->view.state = RS_IDLE;
 	outputs(sm);
@@ -4994,7 +5011,7 @@ static void p25_enter(radio_sm_t *sm, uint32_t now_ms)
 	}
 	memset(&sm->view.p25, 0, sizeof sm->view.p25);
 	sm->view.p25.system_tg = sys->tg;
-	sm->view.p25.system_unit = (uint16_t)sys->unit_id;
+	sm->view.p25.system_unit = sys->unit_id;
 	sm->view.p25.system_nac = sys->nac;
 	sm->view.p25.system_sys = sys->sys;
 	sm->view.p25.system_wacn = sys->wacn;
@@ -5108,7 +5125,7 @@ static void p25v_enter(radio_sm_t *sm, uint32_t now_ms)
 	sm->view.p25.conv = true;
 	sm->view.p25.voice = true;
 	sm->view.p25.system_tg = tg;
-	sm->view.p25.system_unit = (uint16_t)unit;
+	sm->view.p25.system_unit = unit;
 	sm->view.p25.system_nac = nac;
 	sm->view.state = RS_IDLE;
 	outputs(sm);
