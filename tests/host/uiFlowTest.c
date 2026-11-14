@@ -473,12 +473,18 @@ static const flow_t flows[] = {
 	{ "S DMR ID: past the last is refused", "ok 7 9 ok", "1 6 7 7 6 4 1 6", "toast=IDs_go_up", 8, false },
 	{ "S DMR ID: the refused digit isn't kept", "ok 7 9 ok", "1 6 7 7 6 4 1 6 ok", "set76=1677641", 9, false },
 	{ "S DMR ID 0 is refused", "ok 7 9 ok 3 1 ok", "0 ok", "set76=31 toast=IDs_start screen=dmr-id", 2, false },
+	// My radio's P25 ID: digits type it, OK saves it in the settings (set79 = UI_SET_P25_ID)
+	{ "S P25 ID opens", "", "ok 7 9 ok down", "screen=dmr-id shows=P25_ID", 5, false },
+	{ "S P25 ID typed and saved", "ok 7 9 ok down", "3 1 0 9 9 9 9 ok", "set79=3109999 toast=P25_ID_saved", 9, false },
+	{ "S P25 ID: the last", "ok 7 9 ok down", "1 6 7 7 7 2 1 5 ok", "set79=16777215 toast=P25_ID_saved", 9, false },
+	{ "S P25 ID: past the last is refused", "ok 7 9 ok down", "1 6 7 7 7 2 1 6", "toast=P25_ID_goes_up", 8, false },
+	{ "S P25 ID 0 is refused", "ok 7 9 ok down 3 1 ok", "0 ok", "set79=31 toast=P25_IDs_start screen=dmr-id", 2, false },
 	// My radio's names (the codeplug's radio name and boot lines): OK types the row's text, OK saves it
-	{ "S radio name opens text entry", "ok 7 9 ok", "down ok", "screen=text", 2, false },
-	{ "S radio name typed and saved", "ok 7 9 ok down ok", "2 ok", "screen=dmr-id toast=Saved writes=1 shows=N0CALLA", 2, true },
-	{ "S boot line 2 typed and saved", "ok 7 9 ok down down down ok", "2 ok", "screen=dmr-id toast=Saved writes=1 shows=Jamie_ThompsonA", 2,
+	{ "S radio name opens text entry", "ok 7 9 ok", "down down ok", "screen=text", 3, false },
+	{ "S radio name typed and saved", "ok 7 9 ok down down ok", "2 ok", "screen=dmr-id toast=Saved writes=1 shows=N0CALLA", 2, true },
+	{ "S boot line 2 typed and saved", "ok 7 9 ok down down down down ok", "2 ok", "screen=dmr-id toast=Saved writes=1 shows=Jamie_ThompsonA", 2,
 	  true },
-	{ "S digits on a name row type no ID", "ok 7 9 ok down", "3 1",
+	{ "S digits on a name row type no ID", "ok 7 9 ok down down", "3 1",
 	  "screen=dmr-id focus=Radio_name toast=No_item_with_that_number", 2, false },
 	// Vibrate (Settings > Sound, radio-features.md 4.1): ui_vibe_t 0 message, 1 call, 2 emergency
 	{ "S vibrate on a message", "", "msg:3101234,Hi", "vibes=1 vibe=0", 0, false },

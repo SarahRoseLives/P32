@@ -133,7 +133,7 @@ the codeplug.
 
 | Setting | What it does |
 |---|---|
-| DMR ID and name | The radio model, then your DMR ID, the radio name and the two boot screen lines, as stored in the codeplug. On **DMR ID**, type a new ID with the digit keys (up to 16776415; the IDs above it are reserved for the network) and press **OK**: the radio writes it into the codeplug and uses it at once, and the Codeplug Editor or qdmr shows it on the next read. **Back** takes back the last digit, and with none left leaves the ID unchanged. On **Radio name**, **Boot 1** or **Boot 2**, **OK** opens text entry ([Text entry](07-channels-zones-vfo.md#text-entry)); **OK** there saves it, up to 16 characters |
+| DMR ID or P25 ID and name | The radio model, then its radio ID, the radio name and the two boot screen lines. On a DMR build the row is **DMR ID**, stored in the codeplug; a P25 build shows **P25 ID** instead and writes the subscriber unit ID into every P25 system. Type a new ID with the digit keys and press **OK**. The P25 ID runs from 1 to 16777215; the DMR ID runs from 1 to 16776415, the IDs above it being reserved for the network. **Back** takes back the last digit, and with none left leaves the ID unchanged. On **Radio name**, **Boot 1** or **Boot 2**, **OK** opens text entry ([Text entry](07-channels-zones-vfo.md#text-entry)); **OK** there saves it, up to 16 characters |
 | About | The firmware version, its date and the radio model: the same page as **Settings > Advanced > About** (below) |
 
 ### Advanced (key 0)

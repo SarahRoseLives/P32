@@ -1212,6 +1212,14 @@ msgstr "SIS "
 msgid "CC "
 msgstr "CC "
 
+#: core/ui/ui_instrument.c core/ui/ui_screens.c
+msgid "OUT OF RANGE"
+msgstr "FUORI PORTATA"
+
+#: core/ui/ui_instrument.c
+msgid "NO CONTROL CHANNEL"
+msgstr "NESSUN CANALE CC"
+
 #: core/ui/ui_instrument.c
 msgid "ON AIR"
 msgstr "IN ARIA"
@@ -2349,6 +2357,10 @@ msgid "DMR ID"
 msgstr "ID DMR"
 
 #: core/ui/ui_menus.c
+msgid "P25 ID"
+msgstr "ID P25"
+
+#: core/ui/ui_menus.c
 msgid "Radio name"
 msgstr "Nome radio"
 
@@ -2361,8 +2373,8 @@ msgid "Boot 2"
 msgstr "Avvio 2"
 
 #: core/ui/ui_menus.c
-msgid "Saved in the codeplug"
-msgstr "Salvato nel codeplug"
+msgid "Saved on the radio"
+msgstr "Salvato nella radio"
 
 #: core/ui/ui_menus.c
 msgid "Radio: "
@@ -2379,6 +2391,18 @@ msgstr "Gli ID partono da 1"
 #: core/ui/ui_menus.c
 msgid "DMR ID saved"
 msgstr "ID DMR salvato"
+
+#: core/ui/ui_menus.c
+msgid "P25 IDs start at 1"
+msgstr "Gli ID P25 iniziano da 1"
+
+#: core/ui/ui_menus.c
+msgid "P25 ID saved"
+msgstr "ID P25 salvato"
+
+#: core/ui/ui_menus.c
+msgid "P25 ID goes up to 16777215"
+msgstr "L'ID P25 arriva a 16777215"
 
 #: core/ui/ui_menus.c
 msgid "My Radio"
@@ -3065,6 +3089,10 @@ msgid "Up/Down on Home"
 msgstr "Su/Giù in Home"
 
 #: core/ui/ui_menus.c
+msgid "P25 ID and Name"
+msgstr "ID P25 e nome"
+
+#: core/ui/ui_menus.c
 msgid "DMR ID and name"
 msgstr "ID DMR e nome"
 
@@ -3555,6 +3583,10 @@ msgstr "Scegli un canale utente per parlare"
 #: core/ui/ui_screens.c
 msgid "Wait for affiliation"
 msgstr "Attendi l'affiliazione"
+
+#: core/ui/ui_screens.c
+msgid "No control channel: check system/range"
+msgstr "Nessun canale CC: controlla sistema/portata"
 
 #: core/ui/ui_screens.c
 msgid "Private to you"

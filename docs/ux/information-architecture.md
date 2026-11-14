@@ -169,7 +169,7 @@ Settings has a search field on top (T9). Groups, in this order:
 | **Connections** | Hotspot defaults, USB network (at power-on, control station: PC answers data, link address; TFTP codeplug write), single frequency repeater role, ARS registration, radio check auto-reply, call alert answer, message format |
 | **Power** | Battery saver, auto power off, low-battery warning level, power level defaults |
 | **Keys** | Programmable key functions (short and long), long-press time, key repeat, Up/Down on Home (channel / zone / talk target), speed dial slots |
-| **My radio** | DMR ID, callsign, name, talker alias text, radio name, region/band limits, time and date |
+| **My radio** | DMR or P25 ID, callsign, name, talker alias text, radio name, region/band limits, time and date |
 | **Advanced** | Calibration view, codeplug info, firmware info, frequency trim, factory reset (confirmed, P7), diagnostics, crash log (send the report, its target, Off/Ask/Auto after a crash) |
 
 Rule: each setting lives in exactly one group, and Find also reaches it by name and synonyms ("promiscuous" finds Hear all; "RX group" finds Listen lists).

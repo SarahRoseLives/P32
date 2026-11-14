@@ -3766,15 +3766,18 @@ static const ui_scr_def_t info_screen = {
 	.select = info_select, .title = info_title, .body = info_body,
 };
 
-// ======================= My radio: DMR ID and names (Settings > My radio) =======================
-// The radio's own DMR ID (CONFIG_DMR) and the codeplug's name fields: the radio name and the two boot screen lines,
-// all saved in the codeplug (a CPS read shows them). On the ID row digits type a new one, OK writes it. Typed as the
-// channel editor's Own ID (ui.md 2.1): a digit past CODEPLUG_DMR_ID_MAX is refused, BACK takes the last digit back and
-// with none typed leaves the ID unchanged. OK on a name row opens the text entry; keeping it writes the name
+// ======================= My radio: IDs and names (Settings > My radio) =======================
+// The radio's own DMR ID (CONFIG_DMR), its P25 subscriber ID (CONFIG_P25), and the codeplug's name fields: the radio
+// name and the two boot screen lines. On an ID row digits type a new one, OK writes it. Typed as the channel editor's
+// Own ID (ui.md 2.1): a digit past the limit is refused, BACK takes the last digit back and with none typed leaves the
+// ID unchanged. OK on a name row opens the text entry; keeping it writes the name.
 
 enum {
 #if CONFIG_DMR
 	MY_ID,
+#endif
+#if CONFIG_P25
+	MY_P25_ID,
 #endif
 	MY_NAME, MY_BOOT1, MY_BOOT2, MY_COUNT };
 static const uint8_t my_names[] = { [MY_NAME] = UI_NAME_RADIO, [MY_BOOT1] = UI_NAME_BOOT1, [MY_BOOT2] = UI_NAME_BOOT2 };
@@ -3787,6 +3790,11 @@ static uint32_t dmr_id_value;
 static uint8_t dmr_id_len;		// digits typed
 static bool dmr_id_editing;
 static uint32_t dmr_id_saved, dmr_id_serial;	// the ID just saved, shown until the codeplug's serial moves on
+#endif
+#if CONFIG_P25
+static uint32_t p25_id_value;
+static uint8_t p25_id_len;		// digits typed
+static bool p25_id_editing;
 #endif
 
 static uint16_t dmr_id_count(void) { return MY_COUNT; }
@@ -3824,6 +3832,23 @@ static void dmr_id_item(uint16_t i, ui_item_t *it)
 		return;
 	}
 #endif
+#if CONFIG_P25
+	if (i == MY_P25_ID) {
+		str_copy(it->label, sizeof it->label, TR("P25 ID"));
+		uint32_t v = p25_id_editing ? p25_id_value : (uint32_t)ui_svc_setting_get(UI_SET_P25_ID);
+		if (p25_id_editing) {
+			if (p25_id_len > 0)
+				sb_u32(&b, v, 1);
+			sb_chr(&b, '_');
+			it->flags |= UI_ITEM_EDIT;
+		} else if (v != 0) {
+			sb_u32(&b, v, 1);
+		} else {
+			sb_str(&b, TR("Not set"));
+		}
+		return;
+	}
+#endif
 	static const char *const labels[] = { [MY_NAME] = TRN("Radio name"), [MY_BOOT1] = TRN("Boot 1"),
 		[MY_BOOT2] = TRN("Boot 2") };
 	str_copy(it->label, sizeof it->label, tr(labels[i]));
@@ -3840,7 +3865,7 @@ static const char *dmr_id_body(void)
 	static char t[48];
 	sbuf_t b;
 	sb_init(&b, t, sizeof t);
-	sb_str(&b, TR("Saved in the codeplug"));
+	sb_str(&b, TR("Saved on the radio"));
 	sb_chr(&b, '\n');
 	sb_str(&b, TR("Radio: "));
 	sb_str(&b, board.name);		// as the info page it replaces
@@ -3890,6 +3915,33 @@ static void dmr_id_save(void)
 }
 #endif
 
+#if CONFIG_P25
+static void p25_id_begin(void)
+{
+	p25_id_editing = true;
+	p25_id_len = 0;
+	p25_id_value = 0;
+}
+
+static void p25_id_save(void)
+{
+	if (p25_id_len == 0) {
+		p25_id_editing = false;	// nothing typed: as it was
+		return;
+	}
+	if (p25_id_value == 0) {
+		ui_toast(TR("P25 IDs start at 1"));
+		return;
+	}
+	p25_id_editing = false;
+	if (!ui_svc_setting_set(UI_SET_P25_ID, (int32_t)p25_id_value)) {
+		ui_toast(TR("Couldn't save: try again"));
+		return;
+	}
+	ui_toast(TR("P25 ID saved"));
+}
+#endif
+
 static void dmr_id_select(uint16_t i, bool hold)
 {
 	(void)hold;
@@ -3899,6 +3951,15 @@ static void dmr_id_select(uint16_t i, bool hold)
 			dmr_id_save();
 		else
 			dmr_id_begin();
+		return;
+	}
+#endif
+#if CONFIG_P25
+	if (i == MY_P25_ID) {
+		if (p25_id_editing)
+			p25_id_save();
+		else
+			p25_id_begin();
 		return;
 	}
 #endif
@@ -3932,23 +3993,53 @@ static bool dmr_id_key(const input_event_t *ev)
 		ui_dirty();
 		return true;
 	}
-	if (!dmr_id_editing)
-		return false;
-	if (ev->action == ACT_BACK && ev->gesture == GESTURE_PRESS) {
-		if (dmr_id_len > 0) {
-			dmr_id_len--;
-			dmr_id_value /= 10u;	// takes the last digit back
-		} else {
-			dmr_id_editing = false;
+	if (dmr_id_editing) {
+		if (ev->action == ACT_BACK && ev->gesture == GESTURE_PRESS) {
+			if (dmr_id_len > 0) {
+				dmr_id_len--;
+				dmr_id_value /= 10u;	// takes the last digit back
+			} else {
+				dmr_id_editing = false;
+			}
+			ui_dirty();
+			return true;
 		}
+		// Another row while typing: the ID typed so far is dropped, as BACK with none typed
+		if (ev->action == ACT_NAV_UP || ev->action == ACT_NAV_DOWN || ev->action == ACT_ENC_STEP)
+			dmr_id_editing = false;
+	}
+#else
+	(void)ev;
+#endif
+#if CONFIG_P25
+	bool p25_press = ev->gesture == GESTURE_PRESS || ev->gesture == GESTURE_LONG;
+	if (ev->action >= ACT_DIGIT_0 && ev->action <= ACT_DIGIT_9 && p25_press && ui_frame()->focus == MY_P25_ID) {
+		if (!p25_id_editing)
+			p25_id_begin();
+		uint32_t v = p25_id_value * 10u + (uint32_t)(ev->action - ACT_DIGIT_0);
+		if (v > 0xFFFFFFu) {
+			ui_toast(TR("P25 ID goes up to 16777215"));	// the 24-bit unit ID
+			return true;
+		}
+		p25_id_value = v;
+		p25_id_len++;
 		ui_dirty();
 		return true;
 	}
-	// Another row while typing: the ID typed so far is dropped, as BACK with none typed
-	if (ev->action == ACT_NAV_UP || ev->action == ACT_NAV_DOWN || ev->action == ACT_ENC_STEP)
-		dmr_id_editing = false;
-#else
-	(void)ev;
+	if (p25_id_editing) {
+		if (ev->action == ACT_BACK && ev->gesture == GESTURE_PRESS) {
+			if (p25_id_len > 0) {
+				p25_id_len--;
+				p25_id_value /= 10u;
+			} else {
+				p25_id_editing = false;
+			}
+			ui_dirty();
+			return true;
+		}
+		if (ev->action == ACT_NAV_UP || ev->action == ACT_NAV_DOWN || ev->action == ACT_ENC_STEP)
+			p25_id_editing = false;
+	}
 #endif
 	return false;
 }
@@ -3959,11 +4050,14 @@ static void dmr_id_enter(void)
 	dmr_id_editing = false;
 	dmr_id_saved = 0;
 #endif
+#if CONFIG_P25
+	p25_id_editing = false;
+#endif
 }
 
 static const ui_scr_def_t dmr_id_screen = {
 	.name = "dmr-id", .flags = SF_LIST | SF_FIELD, .prefix = TRN("My Radio"),
-#if CONFIG_DMR
+#if CONFIG_DMR || CONFIG_P25
 	.hint = TRN("0-9 type  OK edit/save  Back"),
 #else
 	.hint = TRN("OK edit  Back"),
@@ -5233,7 +5327,11 @@ static const set_item_t s_keys[] = {
 #endif
 };
 static const set_item_t s_my_radio[] = {
+#if CONFIG_P25
+	ACTION(TRN("P25 ID and Name"), "callsign", SA_MY_RADIO),
+#else
 	ACTION(TRN("DMR ID and name"), "callsign", SA_MY_RADIO),
+#endif
 	// Also in Advanced, where users didn't look for it
 	ACTION(TRN("About"), "firmware version release build date", SA_FIRMWARE),
 };

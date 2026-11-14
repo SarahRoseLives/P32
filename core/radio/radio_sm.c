@@ -708,8 +708,9 @@ static void tune(radio_sm_t *sm, uint32_t now_ms)
 #if CONFIG_P25_VOICE
 	// A stored conventional P25 memory is a mode of its own: selecting it starts its receiver, and leaving it stops
 	// that receiver without needing the star key. A quick P25 change on an analog channel is not a stored profile
-	// (p25_conv_auto stays false), so stopping it there does not start it again.
-	if (sm->p25_conv && (!sm->view.ch.p25_conv || !sm->p25_conv_auto)) {
+	// (p25_conv_auto stays false), so stopping it there does not start it again. The VFO's P25 mode is a user choice,
+	// not a stored channel profile: a new frequency keeps it, so the receiver stays where it is.
+	if (sm->p25_conv && (!sm->view.ch.p25_conv || (!sm->p25_conv_auto && !sm->view.vfo))) {
 		p25conv_teardown(sm);
 	}
 	if (!sm->view.vfo && sm->view.ch.p25_conv && sm->p25_conv_auto && !sm->p25_conv) {

@@ -258,6 +258,16 @@ int32_t ui_svc_setting_get(uint8_t id)
 	case UI_SET_DMR_ID:
 		return (int32_t)codeplug_dmr_id();
 #endif
+#if CONFIG_P25
+	case UI_SET_P25_ID: {
+		settings_read(&st);
+		uint8_t n = st.p25_count;
+		if (n == 0 || n > SETTINGS_P25_SYSTEMS)
+			n = 1;
+		uint8_t a = st.p25_active < n ? st.p25_active : 0;
+		return (int32_t)settings_p25_get(&st, a)->unit_id;
+	}
+#endif
 	case UI_SET_NOISE_REDUCTION:
 		settings_read(&st);
 		return (st.accent & SETTINGS_AUDIO_NO_NOISE_REDUCTION) == 0;
@@ -500,6 +510,24 @@ bool ui_svc_setting_set(uint8_t id, int32_t value)
 #if CONFIG_DMR
 	case UI_SET_DMR_ID:
 		return dmr_id_post((uint32_t)value);
+#endif
+#if CONFIG_P25
+	case UI_SET_P25_ID: {
+		// One P25 identity for the radio: every system slot uses it, while a system's own Unit ID stays a
+		// per-system override for a CPS or the P25 system editor.
+		if (value <= 0 || (uint32_t)value > 0xFFFFFFu)
+			return false;
+		settings_t *st = settings_begin();
+		uint8_t n = st->p25_count;
+		if (n == 0 || n > SETTINGS_P25_SYSTEMS) {
+			n = 1;
+			st->p25_count = 1;
+		}
+		for (uint8_t i = 0; i < n; i++)
+			settings_p25_mut(st, i)->unit_id = (uint32_t)value;
+		settings_end(hal_millis());
+		return true;
+	}
 #endif
 	case UI_SET_NOISE_REDUCTION:	// ui_svc_apply hands them to the vocoder
 	case UI_SET_MIC_AGC: {
