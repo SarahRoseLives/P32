@@ -60,7 +60,7 @@ msgstr "Ora predef.: "
 msgid "Talking to "
 msgstr "Parli con "
 
-#: core/ui/ui_app.c core/ui/ui_menus.c core/ui/ui_screens.c
+#: core/ui/ui_app.c core/ui/ui_instrument.c core/ui/ui_menus.c core/ui/ui_screens.c
 msgid "No calls heard yet"
 msgstr "Nessuna chiamata ancora"
 
@@ -1255,6 +1255,10 @@ msgstr "PTT Rispondi  INDIETRO"
 #: core/ui/ui_instrument.c
 msgid "TYPE FREQ  HOLD OK PROG"
 msgstr "DIGITA FREQ  TIENI OK PROG"
+
+#: core/ui/ui_instrument.c core/ui/ui_screens.c
+msgid "# options  Back stop"
+msgstr "# opzioni  Indietro ferma"
 
 #: core/ui/ui_menus.c
 msgid "Last caller"
@@ -3799,10 +3803,6 @@ msgstr "{# 1 parla su B  Indietro ferma|# 1 parla su B}"
 #: core/ui/ui_screens.c
 msgid "{# 1 talk on A  Back stop|# 1 talk on A}"
 msgstr "{# 1 parla su A  Indietro ferma|# 1 parla su A}"
-
-#: core/ui/ui_screens.c
-msgid "# options  Back stop"
-msgstr "# opzioni  Indietro ferma"
 
 #: core/ui/ui_screens.c
 msgid "# Open"

@@ -2261,6 +2261,10 @@ static void __attribute__((noinline)) dual_choose(int avail, int gap, dual_fit_t
 
 void ui_draw_home_dual(const radio_view_t *v, const ui_state_t *s)
 {
+#if CONFIG_UI_INSTRUMENT
+	if (ui_instrument_dual(v, s))
+		return;
+#endif
 	const ui_layout_t *L = &ui_layout;
 	int w = gfx_width();
 	gfx_clear(ui_col.bg);

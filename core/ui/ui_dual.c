@@ -15,6 +15,9 @@
 #include "gfx.h"
 #include "i18n.h"
 #include "codeplug/codeplug.h"
+#if CONFIG_P25
+#include "settings/settings.h"
+#endif
 
 #define START_GRACE_MS	500	// the radio view may still show no watch this soon after asking for one
 #define BACK_AGAIN_MS	2000	// Back on Home, then Back again within this: the watch stops
@@ -169,6 +172,37 @@ static uint8_t tuned_pane(const radio_view_t *v)
 	return UI_DUAL_NONE;
 }
 
+#if CONFIG_P25
+// A P25 pane's values, as the radio will use them: its own conventional NAC/TG, a selected system's values, or the
+// active system for a trunked channel. The unit comes from that system too (Settings > My radio writes all of them).
+static void p25_pane_values(const channel_t *ch, ui_dual_pane_t *p)
+{
+	settings_t st;
+	settings_read(&st);
+	uint8_t n = st.p25_count;
+	if (n == 0 || n > SETTINGS_P25_SYSTEMS)
+		n = 1;
+	uint8_t active = st.p25_active < n ? st.p25_active : 0;
+	const settings_p25_t *sys = settings_p25_get(&st, active);
+	if (ch->p25_conv && ch->p25_system_set) {
+		uint8_t i = ch->p25_system < n ? ch->p25_system : 0;
+		sys = settings_p25_get(&st, i);
+		p->p25_conv = true;
+		p->p25_nac = sys->nac;
+		p->p25_tg = sys->tg;
+	} else if (ch->p25_conv) {
+		p->p25_conv = true;
+		p->p25_nac = ch->p25_nac != 0 ? ch->p25_nac : 0x293u;
+		p->p25_tg = ch->p25_tg != 0 ? ch->p25_tg : 1u;
+	} else if (ch->p25) {
+		p->p25_trunk = true;
+		p->p25_nac = sys->nac;
+		p->p25_tg = ch->p25_tg;
+	}
+	p->p25_unit = sys->unit_id;
+}
+#endif
+
 static void pane_fill(uint8_t i)
 {
 	static channel_t ch;	// static: not on the UI task's stack
@@ -202,6 +236,10 @@ static void pane_fill(uint8_t i)
 		ch = s->ch;	// as the radio has it: changes for now included
 	p->mode = ch.mode;
 	p->rx_hz = ch.rx_hz;
+#if CONFIG_P25
+	if (ch.p25_conv || ch.p25)
+		p25_pane_values(&ch, p);
+#endif
 	sbuf_t b;
 	sb_init(&b, p->detail, sizeof p->detail);
 #if CONFIG_DMR

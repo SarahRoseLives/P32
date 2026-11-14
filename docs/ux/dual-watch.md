@@ -57,7 +57,13 @@ or name, as in the zone's channel list.
 <img src="screens/240x320/home_dual_tx.png" width="200" alt="Talking on A">
 <img src="screens/240x320/home_dual_other_zone.png" width="200" alt="B in another zone">
 
-Two panes of the same size, A over B: neither channel is second class. Each pane:
+Two panes of the same size, A over B: neither channel is second class.
+
+On a 240x320 color build with the instrument Home (`CONFIG_UI_INSTRUMENT`), dual watch uses the same frame as the
+one-channel instrument: the top rail carries the state, the selected channel's mode and **DUAL**; each pane has the
+zone and channel, the mode, the frequency (or TG on a trunked P25 channel), and a NAC / TG / UID deck (FM: tone and
+zone; DMR: timeslot, color code and zone). The selected pane gets the accent bar and **PTT**; a receiving pane turns
+green and names the caller. The rows below describe the standard layout on the other display classes.
 
 | Row | Shows |
 |---|---|

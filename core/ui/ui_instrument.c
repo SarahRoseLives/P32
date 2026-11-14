@@ -450,4 +450,244 @@ bool ui_instrument_home(const radio_view_t *v, const ui_state_t *s)
 	return true;
 }
 
+
+// --- Dual watch, in the instrument's frame ---------------------------------------------------------------
+// The two channels are peers: each gets the same eyebrow, main value and three-column deck as the one-channel
+// instrument. The selected pane gets the accent bar and PTT; a call in on either turns its pane green.
+
+static const char *dual_mode_word(const ui_dual_pane_t *p)
+{
+	if (p->p25_trunk) return "P25 TRK";
+	if (p->p25_conv) return "P25 CNV";
+	if (p->mode == RADIO_MODE_DMR) return "DMR";
+	return "FM";
+}
+
+static color_t dual_mode_color(const ui_dual_pane_t *p)
+{
+	if (p->p25_trunk) return ui_col.priv;
+	if (p->p25_conv) return ui_col.focus;
+	if (p->mode == RADIO_MODE_DMR) return ui_col.focus;
+	return ui_col.rx;
+}
+
+static void dual_rail(const radio_view_t *v, const ui_state_t *s)
+{
+	const ui_layout_t *L = &ui_layout;
+	const ui_dual_t *d = &s->dual;
+	const ui_dual_pane_t *p = &d->pane[d->sel];
+	int w = gfx_width(), th = L->tiny->h;
+	radio_state_t st = v->state;
+	if (st != RS_TX && st != RS_TX_DENIED && d->rx != UI_DUAL_NONE)
+		st = RS_RX;
+	int sw = gfx_text_width(L->tiny, state_word(st)) + 7;
+	int x = CONTENT_X;
+	ui_strip_draws++;
+	gfx_fill(CONTENT_X, RAIL_Y, sw, th + 2, state_color(st));
+	gfx_text(L->tiny, x + 3, RAIL_Y + 1, state_word(st), ui_col.pill_fg);
+	x += sw + STATE_GAP;
+	const char *mode = dual_mode_word(p);
+	gfx_text(L->tiny, x, RAIL_Y + 1, mode, dual_mode_color(p));
+	x += gfx_text_width(L->tiny, mode) + L->tiny->w;
+	if (x + gfx_text_width(L->tiny, "DUAL") + L->tiny->w < w - CONTENT_R - 34)
+		gfx_text(L->tiny, x, RAIL_Y + 1, "DUAL", ui_col.focus);
+	int right = w - CONTENT_R;
+	int bat_w = 18, bat_h = th - 4;
+	uint8_t pct = s->battery_pct > 100u ? 100u : s->battery_pct;
+	gfx_icon_battery(right - bat_w, RAIL_Y + 2, bat_w, bat_h, pct, ui_col.dim, ui_col.fg);
+	right -= bat_w + 5;
+	gfx_icon_bars(right - 12, RAIL_Y + 3, 12, th - 5, 4, rssi_bars(p->rssi_dbm), ui_col.fg, ui_col.line);
+}
+
+static void dual_values(const ui_dual_pane_t *p, char labels[3][6], char values[3][14])
+{
+	static const char hexd[] = "0123456789ABCDEF";
+	sbuf_t b;
+	if (p->p25_conv || p->p25_trunk) {
+		strcpy(labels[0], "NAC");
+		strcpy(labels[1], "TG");
+		strcpy(labels[2], "UID");
+		values[0][0] = hexd[(p->p25_nac >> 8) & 15];
+		values[0][1] = hexd[(p->p25_nac >> 4) & 15];
+		values[0][2] = hexd[p->p25_nac & 15];
+		values[0][3] = 0;
+		sb_init(&b, values[1], 14);
+		sb_u32(&b, p->p25_tg, 1);
+		sb_init(&b, values[2], 14);
+		sb_u32(&b, p->p25_unit, 1);
+	} else if (p->mode == RADIO_MODE_DMR) {
+		strcpy(labels[0], "TS");
+		strcpy(labels[1], "CC");
+		strcpy(labels[2], "ZONE");
+		sb_init(&b, values[0], 14);
+		sb_u32(&b, p->detail[2] >= '1' && p->detail[2] <= '2' ? (uint32_t)(p->detail[2] - '0') : 1, 1);
+		sb_init(&b, values[1], 14);
+		sb_u32(&b, p->detail[6] >= '0' && p->detail[6] <= '9' ? (uint32_t)(p->detail[6] - '0') : 0, 1);
+		sb_init(&b, values[2], 14);
+		sb_str(&b, p->zone);
+	} else {
+		strcpy(labels[0], "TONE");
+		strcpy(labels[1], "ZONE");
+		values[0][0] = 0;
+		values[1][0] = 0;
+		strcpy(labels[2], "");
+		values[2][0] = 0;
+		sb_init(&b, values[0], 14);
+		sb_str(&b, p->detail);
+		sb_init(&b, values[1], 14);
+		sb_str(&b, p->zone);
+	}
+}
+
+static void dual_pane_inst(const radio_view_t *v, const ui_state_t *s, int i, int y, int h)
+{
+	const ui_layout_t *L = &ui_layout;
+	const ui_dual_t *d = &s->dual;
+	const ui_dual_pane_t *p = &d->pane[i];
+	bool sel = d->sel == i, tx = v->state == RS_TX && sel, rx = !tx && p->rx;
+	color_t ac = tx ? ui_col.tx : rx ? ui_col.rx : sel ? ui_col.focus : ui_col.dim;
+	color_t mc = tx ? ui_col.tx : rx ? ui_col.rx : ui_col.fg;
+	int w = gfx_width(), right = w - CONTENT_R;
+	int text_x = CONTENT_X + gfx_text_width(L->medium, "A") + 5;
+	char buf[48], fit[48];
+	sbuf_t b;
+
+	if (sel)
+		gfx_fill(CONTENT_X - 6, y, 3, h, ac);
+	gfx_text(L->medium, CONTENT_X, y, i ? "B" : "A", ac);
+
+	// Eyebrow: the zone and channel, the channel number at the right
+	sb_init(&b, buf, sizeof buf);
+	if (p->vfo) {
+		sb_str(&b, "VFO");
+	} else {
+		sb_str(&b, p->zone);
+		sb_str(&b, "  /  ");
+		sb_str(&b, p->name);
+	}
+	sb_init(&b, fit, sizeof fit);
+	if (p->vfo) {
+		sb_str(&b, "VFO");
+	} else {
+		sb_str(&b, "CH ");
+		sb_u32(&b, p->number, 1);
+	}
+	int rw = gfx_text_width(L->tiny, fit);
+	int avail = right - rw - L->tiny->w - text_x;
+	gfx_text(L->tiny, right - rw, y + 1, fit, ui_col.dim);
+	if (gfx_text_width(L->tiny, buf) > avail && !p->vfo) {
+		// The zone and channel together don't fit: keep the channel's name whole and let the number identify
+		// the zone's place.
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, p->name);
+	}
+	gfx_text_fit(L->tiny, buf, avail, fit, sizeof fit);
+	gfx_text(L->tiny, text_x, y + 1, fit, ui_col.fg);
+	gfx_hline(text_x, y + L->tiny->h + 4, w - CONTENT_R - text_x, ui_col.line);
+
+	// Kind, and the selected / receiving word at the right
+	int my = y + L->tiny->h + 7;
+	gfx_text(L->small, text_x, my, dual_mode_word(p), dual_mode_color(p));
+	if (sel || rx) {
+		const char *word = tx ? "TX" : rx ? "RX" : "PTT";
+		gfx_text(L->small, right - gfx_text_width(L->small, word), my, word, ac);
+	} else if (p->busy) {
+		gfx_text(L->small, right - gfx_text_width(L->small, "BUSY"), my, "BUSY", ui_col.rx);
+	}
+
+	// The main value: the frequency, or a P25 / DMR target
+	int ym = my + L->small->h + 4;
+	sb_init(&b, buf, sizeof buf);
+	if (p->p25_trunk) {
+		sb_str(&b, "TG ");
+		sb_u32(&b, p->p25_tg, 1);
+	} else if (p->mode == RADIO_MODE_DMR) {
+		sb_str(&b, p->target[0] ? p->target : "DMR");
+	} else {
+		sb_freq(&b, p->rx_hz);
+	}
+	const font_t *mf = gfx_text_width(L->large, buf) <= right - text_x ? L->large : L->medium;
+	if (gfx_text_width(mf, buf) > right - text_x) mf = L->small;
+	gfx_text_fit(mf, buf, right - text_x, fit, sizeof fit);
+	gfx_text(mf, text_x, ym, fit, mc);
+	if ((p->p25_conv || (!p->p25_trunk && p->mode != RADIO_MODE_DMR)) &&
+	    gfx_text_width(mf, buf) + L->tiny->w * 4 < right - text_x)
+		gfx_text(L->tiny, text_x + gfx_text_width(mf, buf) + 4, ym + mf->h - L->tiny->h, "MHz", ui_col.dim);
+
+	// A receiving pane names the caller; otherwise the deck gives the values the instrument shows below its main one
+	int deck_y = y + h - (L->tiny->h + L->small->h + 7);
+	if (rx && p->caller[0]) {
+		gfx_text_fit(L->small, p->caller, right - text_x, fit, sizeof fit);
+		gfx_text(L->small, text_x, deck_y - L->small->h - 3, fit, ui_col.rx);
+	}
+	char labels[3][6], values[3][14];
+	dual_values(p, labels, values);
+	int xs[3], cw[3];
+	if (p->p25_conv || p->p25_trunk) {
+		// A 24-bit UID gets the room the short NAC and TG columns leave.
+		xs[0] = text_x;
+		cw[0] = 46;
+		xs[1] = text_x + 46;
+		cw[1] = 46;
+		xs[2] = text_x + 92;
+		cw[2] = w - CONTENT_R - xs[2];
+	} else {
+		int col = (w - text_x - CONTENT_R) / 3;
+		for (int k = 0; k < 3; k++) {
+			xs[k] = text_x + k * col;
+			cw[k] = col - 4;
+		}
+	}
+	for (int k = 0; k < 3; k++) {
+		if (labels[k][0] == 0)
+			continue;
+		gfx_text(L->tiny, xs[k], deck_y, labels[k], ui_col.dim);
+		gfx_text_fit(L->small, values[k], cw[k], fit, sizeof fit);
+		gfx_text(L->small, xs[k], deck_y + L->tiny->h + 2, fit, ui_col.fg);
+	}
+}
+
+static void dual_history_line(const ui_state_t *s, int y)
+{
+	const ui_dual_t *d = &s->dual;
+	const ui_layout_t *L = &ui_layout;
+	char buf[64];
+	sbuf_t b;
+	sb_init(&b, buf, sizeof buf);
+	if (d->calls) {
+		sb_str(&b, d->hist[0].pane ? "B  " : "A  ");
+		sb_str(&b, d->hist[0].caller);
+		char fit[64];
+		gfx_text_fit(L->small, buf, gfx_width() - CONTENT_X - CONTENT_R, fit, sizeof fit);
+		gfx_text(L->small, CONTENT_X, y, fit, ui_col.fg);
+	} else {
+		gfx_text(L->small, CONTENT_X, y, TR("No calls heard yet"), ui_col.dim);
+	}
+}
+
+bool ui_instrument_dual(const radio_view_t *v, const ui_state_t *s)
+{
+	int w = gfx_width(), h = gfx_height();
+	if (!s->dual.on || w < 220 || h < 300 || gfx_bpp() == 1 || s->large_text)
+		return false;
+	const ui_layout_t *L = &ui_layout;
+	gfx_clear(ui_col.bg);
+	gfx_fill(0, 0, ACCENT_W, h, dual_mode_color(&s->dual.pane[s->dual.sel]));
+	dual_rail(v, s);
+	int top = RAIL_Y + L->tiny->h + 10;
+	int history_y = L->hint_y - L->small->h - 2;
+	int bottom = history_y - 4;
+	int gap = 6;
+	int ph = (bottom - top - gap) / 2;
+	dual_pane_inst(v, s, 0, top, ph);
+	gfx_hline(CONTENT_X, top + ph + gap / 2, w - CONTENT_X - CONTENT_R, ui_col.line);
+	dual_pane_inst(v, s, 1, top + ph + gap, ph);
+	dual_history_line(s, history_y);
+	ui_draw_banner(s);
+	const char *hint = TR("# options  Back stop");
+	if (v->state == RS_TX)
+		hint = TR("Release PTT");
+	ui_draw_bottom(s, hint);
+	return true;
+}
 #endif
