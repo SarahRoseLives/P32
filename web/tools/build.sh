@@ -18,7 +18,7 @@ if ! "$PYTHON" -c 'import markdown_it, resvg_py' >/dev/null 2>&1; then
 	exit 2
 fi
 RFOUNDRY_SITE_URL="$SITE_URL" RFOUNDRY_SITE_NAME="$SITE_NAME" RFOUNDRY_SITE_BRAND_HTML="$SITE_BRAND_HTML" \
-	RFOUNDRY_NO_CODEPLUG=${RFOUNDRY_NO_CODEPLUG:-1} RFOUNDRY_ONLY_BOARD=${RFOUNDRY_ONLY_BOARD:-dm32} \
+	RFOUNDRY_NO_CODEPLUG=${RFOUNDRY_NO_CODEPLUG:-0} RFOUNDRY_ONLY_BOARD=${RFOUNDRY_ONLY_BOARD:-dm32} \
 	RFOUNDRY_COMMUNITY_URL=${RFOUNDRY_COMMUNITY_URL:-https://github.com/SarahRoseLives/P32} \
 	"$PYTHON" site/build.py --out web/site --firmware build/dist \
 	--repo-url https://github.com/SarahRoseLives/P32 --ref main

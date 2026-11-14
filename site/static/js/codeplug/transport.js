@@ -13,10 +13,11 @@
 import { CodeplugImage, REGIONS, IDDB_HEADER, CODEPLUG_SPAN } from "./image.js";
 import { readHeader, extent, AREA1, AREA1_SIZE, AREA2 } from "./iddb.js";
 import { GENERAL, BOOT_TEXT } from "./records.js";
-import { Link, probe, whyNoAnswer } from "../flasher/link.js";
+import { Link, LinkError, probe, whyNoAnswer, CMD } from "../flasher/link.js";
 import { crc32, sleep } from "../flasher/bytes.js";
 import { encodeBlock } from "../flasher/lz4.js";
 import { FastLink, FastError, BLOCK, REASON } from "./fastlink.js";
+import { decodeP25Systems, encodeP25Systems } from "./p25systems.js";
 import { note } from "../diag.js";
 
 export class TransportError extends Error {
@@ -270,6 +271,29 @@ export class CpsSerial {
 		plan.sort((x, y) => x[0] - y[0]);
 		const bytes = plan.reduce((n, [, runs]) => n + runs.reduce((m, [, d]) => m + d.length, 0), 0);
 		return { plan, bytes };
+	}
+
+	// The P25 trunking systems in the radio's settings store (debuglink.md 3.24): {systems, active}. A firmware
+	// without the command answers status 1 (unknown command), which the page reports as P25 systems unsupported.
+	async readP25Systems() {
+		try {
+			const r = await this.link.request(CMD.P25_SYS, new Uint8Array([0]));
+			return decodeP25Systems(r);
+		} catch (e) {
+			if (e instanceof LinkError && e.status === 1) throw new TransportError("p25_systems_unsupported");
+			throw e;
+		}
+	}
+
+	async writeP25Systems(systems, active = 0) {
+		try {
+			await this.link.request(CMD.P25_SYS, encodeP25Systems(systems, active));
+		} catch (e) {
+			if (e instanceof LinkError && e.status === 1) throw new TransportError("p25_systems_unsupported");
+			throw e;
+		}
+		await this.link.cpsSaveSettings();
+		return true;
 	}
 
 	// The radio's settings region (debuglink.md 3.13): {region: "ours" | "foreign" | "none", ...}, or null when the

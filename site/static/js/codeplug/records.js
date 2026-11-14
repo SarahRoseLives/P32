@@ -63,6 +63,12 @@ export function decodeChannel(r) {
 	if (rxHz === null || txHz === null) return null;
 	const l1 = r[0x26], f1 = r[0x30], f4 = r[0x33];
 	const hasLoc = (l1 & 0x08) !== 0;
+	const p25 = (f4 & 0x08) !== 0;
+	const p25Conv = (r[0x31] & 0x80) !== 0;
+	const p25SystemSet = p25Conv && (r[0x31] & 0x10) !== 0;
+	const p25Tg = (p25 || p25Conv) ? u16(r, 0x2E) : 0;
+	const p25Nac = p25Conv ? (((r[0x31] & 0x0F) << 8) | r[0x2C]) : 0;
+	const p25System = (p25 || p25SystemSet) ? r[0x2B] : 0;
 	return {
 		name: getName(r, 0, 16),
 		rxHz, txHz,
@@ -79,9 +85,10 @@ export function decodeChannel(r) {
 		squelch: r[0x37] <= 21 ? r[0x37] : 10,
 		colorCode: r[0x2C] & 0x0F,
 		timeslot: r[0x31] & 0x40 ? 2 : 1,
-		contact: u16(r, 0x2E),
-		rxList: r[0x2B],
+		contact: (p25 || p25Conv) ? 0 : u16(r, 0x2E),
+		rxList: (p25 || p25SystemSet) ? 0 : r[0x2B],
 		aprs: r[0x2D],
+		p25, p25Conv, p25SystemSet, p25System, p25Tg, p25Nac,
 		dmrId: l1 & 0x80 ? (r[0x27] << 16) | (r[0x28] << 8) | r[0x29] : 0,
 		noBeep: (l1 & 0x40) !== 0,
 		noEco: (l1 & 0x20) !== 0,
@@ -109,13 +116,17 @@ export function encodeChannel(c, r) {
 	r[0x1B] = clamp(Math.ceil((c.tot || 0) / 15), 0, 255);
 	putTone(r, 0x20, c.rxTone);
 	putTone(r, 0x22, c.txTone);
-	r[0x33] = (r[0x33] & ~0x76) | (c.bw === 25 ? 0x02 : 0) | (c.rxOnly ? 0x04 : 0) | (c.allSkip ? 0x10 : 0) |
-		(c.zoneSkip ? 0x20 : 0) | (c.vox ? 0x40 : 0);
+	const p25 = !!c.p25;
+	const p25Conv = !!c.p25Conv && !p25;
+	const p25SystemSet = p25Conv && !!c.p25SystemSet;
+	r[0x33] = (r[0x33] & ~0x7E) | (c.bw === 25 ? 0x02 : 0) | (c.rxOnly ? 0x04 : 0) | (c.allSkip ? 0x10 : 0) |
+		(c.zoneSkip ? 0x20 : 0) | (c.vox ? 0x40 : 0) | (p25 ? 0x08 : 0);
 	r[0x37] = clamp(c.squelch, 0, 21);
-	r[0x2C] = (r[0x2C] & 0xF0) | (c.colorCode & 0x0F);
-	r[0x31] = (r[0x31] & ~0x40) | (c.timeslot === 2 ? 0x40 : 0);
-	put16(r, 0x2E, c.contact || 0);
-	r[0x2B] = clamp(c.rxList || 0, 0, 255);
+	r[0x2C] = p25Conv ? ((c.p25Nac || 0) & 0xFF) : ((r[0x2C] & 0xF0) | (c.colorCode & 0x0F));
+	r[0x31] = (r[0x31] & ~0xDF) | (c.timeslot === 2 ? 0x40 : 0) | (p25Conv ? 0x80 : 0) |
+		(p25SystemSet ? 0x10 : 0) | (p25Conv ? (((c.p25Nac || 0) >> 8) & 0x0F) : 0);
+	put16(r, 0x2E, (p25 || p25Conv) ? (c.p25Tg || 0) : (c.contact || 0));
+	r[0x2B] = (p25 || p25SystemSet) ? clamp(c.p25System || 0, 0, 255) : clamp(c.rxList || 0, 0, 255);
 	r[0x2D] = clamp(c.aprs || 0, 0, 255);
 	r[0x26] = (r[0x26] & ~0xEF) | (c.dmrId ? 0x80 : 0) | (c.noBeep ? 0x40 : 0) | (c.noEco ? 0x20 : 0) |
 		(c.useLocation ? 0x08 : 0) | (c.dmo ? 0x04 : 0) | (c.sfr ? 0x02 : 0) | (c.roam ? 0x01 : 0);

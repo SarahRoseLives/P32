@@ -5,7 +5,7 @@
 // bug report (report.js). The working codeplug is kept in this browser (IndexedDB) so a reload doesn't lose edits.
 
 import { h, t, ROOT, HOME, button, notice, download, progressBar, num as fmtNum, date as fmtDate } from "../flasher/dom.js";
-import { equal } from "../flasher/bytes.js";
+import { equal, startsWith } from "../flasher/bytes.js";
 import { SerialStream, serialSupported, serialApi, RFOUNDRY_USB, browserErrorKey, knownRadioPort } from "../flasher/link.js";
 import { CodeplugImage, IDDB_HEADER, REGIONS } from "../codeplug/image.js";
 import { decode, encode, empty, remove, validate, newChannel, newContact, numberAll, assignNumbers } from "../codeplug/model.js";
@@ -17,17 +17,19 @@ import { convertIddb, iddbEnd } from "../codeplug/sources/output.js";
 import { FakeCpsRadio } from "../codeplug/fakecps.js";
 import { Grid } from "./grid.js";
 import { History } from "./undo.js";
-import { bulkColumns, columns, channelForm, formDialog, membersDialog, refLabel } from "./views.js";
+import { bulkColumns, columns, channelForm, systemForm, formDialog, membersDialog, refLabel, validateP25 } from "./p25views.js";
 import { openFile, saveBytes, tftpBytes, FileError, imageFrom, saveDraft, loadDraft, clearDraft } from "./files.js";
 import { extensions } from "./extensions.js";
 import "./parts.js";
 import * as diag from "../diag.js";
 import { initReporting, reportedLine } from "../report.js";
 import { updateFor } from "../flasher/version.js";
+import { zip, unzip } from "../flasher/zip.js";
+import { newP25System, P25_SYSTEMS } from "../codeplug/p25systems.js";
 
 const CABLES = [0x0403, 0x1A86, 0x10C4, 0x067B].map((usbVendorId) => ({ usbVendorId }));
-const TABS = ["radio", "channels", "zones", "contacts", "rxLists", "dtmfContacts", "aprs", "iddb", "problems"];
-const TABLE_MAX = { channels: LIMITS.channels, zones: LIMITS.zones, contacts: LIMITS.contacts, rxLists: LIMITS.rxLists, dtmfContacts: LIMITS.dtmfContacts, aprs: LIMITS.aprs };
+const TABS = ["channels", "zones", "systems", "problems"];
+const TABLE_MAX = { channels: LIMITS.channels, zones: LIMITS.zones, systems: P25_SYSTEMS };
 
 const S = {
 	model: null,
@@ -53,7 +55,9 @@ const messages = h("div", { class: "ed-messages", "aria-live": "polite" });
 
 // --- Model changes ---
 
-function load(model, name, { fromRadio = false } = {}) {
+function load(model, name, { fromRadio = false, systems = null, active = 0 } = {}) {
+	model.systems = systems ?? (fromRadio ? [] : [newP25System()]);
+	model.p25Active = active < model.systems.length ? active : 0;
 	S.model = model;
 	S.fileName = name;
 	S.history.reset();
@@ -84,7 +88,8 @@ function draftSoon() {
 	clearTimeout(draftTimer);
 	draftTimer = setTimeout(() => {
 		try {
-			saveDraft({ bytes: saveBytes(encode(S.model)), name: S.fileName, dirty: S.dirty, at: new Date().toISOString() });
+			saveDraft({ bytes: saveBytes(encode(S.model)), systems: S.model.systems, active: S.model.p25Active || 0,
+				name: S.fileName, dirty: S.dirty, at: new Date().toISOString() });
 		} catch {
 			// an invalid model can't be encoded yet; the next change saves it
 		}
@@ -109,7 +114,7 @@ function say(text, kind = "info", { report = null } = {}) {
 // --- Rendering ---
 
 function problems() {
-	return validate(S.model, { bands: S.conn?.radio?.bands_hz || null });
+	return validateP25(S.model, { bands: S.conn?.radio?.bands_hz || null });
 }
 
 function refresh() {
@@ -117,9 +122,8 @@ function refresh() {
 	const errors = p.filter((x) => x.level === "error").length;
 	renderToolbar(errors);
 	const counts = {
-		channels: S.model.channels.length, zones: S.model.zones.length, contacts: S.model.contacts.length,
-		rxLists: S.model.rxLists.length, dtmfContacts: S.model.dtmfContacts.length, aprs: S.model.aprs.length,
-		iddb: S.model.iddb?.count || 0, problems: p.length,
+		channels: S.model.channels.length, zones: S.model.zones.length, systems: S.model.systems.length,
+		problems: p.length,
 	};
 	tabs.replaceChildren(...TABS.map((k) => {
 		const b = h("button", { type: "button", role: "tab", "aria-selected": String(S.tab === k), class: k === "problems" && errors ? "has-errors" : "",
@@ -140,13 +144,12 @@ function show(tab) {
 function renderToolbar(errors) {
 	const save = h("details", { class: "ed-menu" }, h("summary", { class: "btn" }, t("editor.save")),
 		h("div", { class: "ed-menu-list" },
-			button(t("editor.save.bin"), () => saveFile("bin")),
-			button(t("editor.save.tftp"), () => saveFile("tftp")),
-			...extensions.saveItems(api()).map(([label, fn]) => button(label, fn))));
+			button(t("editor.save.project"), () => saveFile("project")),
+			button(t("editor.save.bin"), () => saveFile("bin"))));
 	save.addEventListener("click", (e) => {
 		if (e.target.closest(".ed-menu-list button")) save.open = false;
 	});
-	const input = h("input", { type: "file", accept: ".bin,.zip,.yaml,.yml,.csv,.txt", hidden: true, onchange: async () => {
+	const input = h("input", { type: "file", accept: ".bin,.zip", hidden: true, onchange: async () => {
 		const f = input.files?.[0];
 		input.value = "";
 		if (f) await openPicked(f.name, new Uint8Array(await f.arrayBuffer()));
@@ -167,8 +170,6 @@ function renderToolbar(errors) {
 
 function renderView(p) {
 	const tab = S.tab;
-	if (tab === "radio") return view.replaceChildren(radioTab());
-	if (tab === "iddb") return view.replaceChildren(extensions.iddbTab(api()));
 	if (tab === "problems") return view.replaceChildren(problemsTab(p));
 	// a table: keep the grid (focus, sort, selection) when only its rows changed
 	if (S.grid && S.grid.table === tab) {
@@ -187,7 +188,7 @@ function renderView(p) {
 			return err;
 		},
 		onSelect: () => S.grid?.update(),
-		onOpen: tab === "channels" || tab === "zones" || tab === "rxLists" ? (r) => openRecord(tab, r) : null,
+		onOpen: tab === "channels" || tab === "zones" || tab === "systems" ? (r) => openRecord(tab, r) : null,
 	});
 	g.filter = S.filter[tab] || "";
 	g.render();
@@ -206,15 +207,15 @@ function renderView(p) {
 function tableActions(tab, g) {
 	const sel = g.selection();
 	const full = S.model[tab].length >= TABLE_MAX[tab];
-	const numbered = tab !== "zones";
+	const numbered = tab === "channels";
 	const out = [
-		// first, so it sits above the row checkboxes it acts on; not on a table with nothing it can set (zones, RX lists)
+		// first, so it sits above the row checkboxes it acts on; not on a table with nothing it can set (zones)
 		bulkColumns(tab, S.model, t).length ? button(sel.length ? t("editor.bulk_edit_n", { n: sel.length }) : t("editor.bulk_edit"), () => bulkSet(tab, g), { disabled: sel.length < 2 }) : null,
 		button(t("editor.add"), () => addRecord(tab, g), { disabled: full }),
-		button(t("editor.duplicate"), () => duplicate(tab, g), { disabled: full || !g.targets().length }),
-		button(t("editor.delete"), () => del(tab, g), { disabled: !g.targets().length, danger: true }),
-		button(t("editor.move_up"), () => move(tab, g, -1), { disabled: !g.targets().length, quiet: true }),
-		button(t("editor.move_down"), () => move(tab, g, 1), { disabled: !g.targets().length, quiet: true }),
+		tab !== "systems" ? button(t("editor.duplicate"), () => duplicate(tab, g), { disabled: full || !g.targets().length }) : null,
+		button(t("editor.delete"), () => del(tab, g), { disabled: !g.targets().length || (tab === "systems" && S.model.systems.length <= 1), danger: true }),
+		tab !== "systems" ? button(t("editor.move_up"), () => move(tab, g, -1), { disabled: !g.targets().length, quiet: true }) : null,
+		tab !== "systems" ? button(t("editor.move_down"), () => move(tab, g, 1), { disabled: !g.targets().length, quiet: true }) : null,
 	].filter(Boolean);
 	if (numbered) out.push(button(t("editor.renumber"), () => renumber(tab), { quiet: true }));
 	out.push(...extensions.tableActions(tab, api()));
@@ -237,6 +238,12 @@ function blank(tab) {
 	case "rxLists": return { number: null, name: n(t("editor.new.rx_list")), contacts: [] };
 	case "dtmfContacts": return { number: null, name: n(t("editor.new.dtmf")), code: "0" };
 	case "aprs": return { number: null, name: "APRS", ssid: 7, lat: 0, lon: 0, path1: "WIDE1-1", path2: "", symTable: "/", symCode: ">", comment: "", txHz: 0, baud300: false, useFixed: false, qsy: false, silent: false, ambiguity: 0 };
+	case "systems": {
+		const names = new Set(S.model.systems.map((x) => x.name));
+		let i = S.model.systems.length + 1;
+		while (names.has(`${t("editor.new.system")} ${i}`)) i++;
+		return newP25System(`${t("editor.new.system")} ${i}`);
+	}
 	}
 }
 
@@ -244,10 +251,10 @@ function addRecord(tab, g) {
 	const r = blank(tab);
 	change(t("editor.undo.add"), () => {
 		S.model[tab].push(r);
-		if (tab !== "zones") assignNumbers(S.model[tab], TABLE_MAX[tab]);
+		if (tab === "channels") assignNumbers(S.model[tab], TABLE_MAX[tab]);
 	});
 	g.focusRow(r);
-	if (tab === "zones" || tab === "rxLists") openRecord(tab, r);
+	if (tab === "zones" || tab === "systems" || tab === "rxLists") openRecord(tab, r);
 }
 
 function duplicate(tab, g) {
@@ -266,6 +273,12 @@ function duplicate(tab, g) {
 function del(tab, g) {
 	const items = g.targets();
 	if (!items.length) return;
+	if (tab === "systems") {
+		if (S.model.systems.length <= 1) return say(t("editor.system.keep_one"), "warn");
+		const go = () => change(t("editor.undo.delete"), () => removeSystems(items));
+		if (items.length === 1) return go();
+		return confirmDialog(t("editor.delete_confirm", { n: items.length }), t("editor.delete"), go);
+	}
 	const go = () => change(t("editor.undo.delete"), () => remove(S.model, tab, items));
 	if (items.length === 1) return go();
 	confirmDialog(t("editor.delete_confirm", { n: items.length }), t("editor.delete"), go);
@@ -353,6 +366,11 @@ function openRecord(tab, r) {
 	} else if (tab === "zones") {
 		membersDialog(t("editor.zone_title", { name: r.name }), r.channels, [...S.model.channels].sort((a, b) => a.number - b.number), LIMITS.zoneChannels, t,
 			(c) => `${c.number} · ${c.name}`, (list) => change(t("editor.undo.edit"), () => (r.channels = list)));
+	} else if (tab === "systems") {
+		formDialog(t("editor.system_title", { name: r.name }), systemForm(t), r, t, (work) => change(t("editor.undo.edit"), () => {
+			work.valid = true;
+			Object.assign(r, work);
+		}));
 	} else if (tab === "rxLists") {
 		membersDialog(t("editor.rx_list_title", { name: r.name }), r.contacts, S.model.contacts.filter((c) => c.type === "group"), LIMITS.rxListContacts, t,
 			(c) => `${c.name} (${c.id})`, (list) => change(t("editor.undo.edit"), () => (r.contacts = list)));
@@ -420,6 +438,18 @@ function problemsTab(p) {
 
 async function openPicked(name, bytes) {
 	try {
+		if (startsWith(bytes, "PK\u0003\u0004")) {
+			const entries = await unzip(bytes);
+			const sys = entries.get("p25-systems.json");
+			const bin = entries.get("codeplug.bin");
+			if (sys && bin) {
+				const doc = JSON.parse(new TextDecoder().decode(sys));
+				if (doc.format !== "p32-p25-systems" || !Array.isArray(doc.systems)) throw new FileError("unknown_file", { ext: "zip" });
+				load(decode(imageFrom(bin)), name.replace(/\.[^.]+$/, ""), { systems: doc.systems, active: Number(doc.active) || 0 });
+				say(t("editor.opened", { name }), "ok");
+				return;
+			}
+		}
 		const f = await openFile(name, bytes);
 		if (f.kind === "image") {
 			load(decode(f.image), name.replace(/\.[^.]+$/, ""));
@@ -448,16 +478,20 @@ async function openPicked(name, bytes) {
 	}
 }
 
-function saveFile(kind) {
+async function saveFile(kind) {
 	const errors = problems().filter((p) => p.level === "error");
 	if (errors.length) return say(t("editor.err.fix_first", { n: errors.length }), "bad");
 	const img = encode(S.model);
-	if (kind === "tftp") {
-		download("codeplug.bin", tftpBytes(img, iddbEnd(S.conn?.radio)));
-		say(t("editor.saved_tftp"), "info");
-		return;
+	if (kind === "project") {
+		const data = await zip([
+			{ name: "codeplug.bin", data: saveBytes(img) },
+			{ name: "p25-systems.json", data: JSON.stringify({ format: "p32-p25-systems", version: 1,
+				active: S.model.p25Active || 0, systems: S.model.systems }, null, 1) },
+		]);
+		download(`${S.fileName || "codeplug"}.p32.zip`, data);
+	} else {
+		download(`${S.fileName || "codeplug"}.bin`, saveBytes(img));
 	}
-	download(`${S.fileName || "codeplug"}.bin`, saveBytes(img));
 	S.dirty = false;
 	refresh();
 	draftSoon();
@@ -487,8 +521,8 @@ async function connect() {
 		// #sim-compact: firmware that reads a format C ID database; &release=vYY.M: a radio that runs that release;
 		// &git_time=N: a build of a commit from that time (Unix seconds)
 		const hash = location.hash;
-		S.fake = S.fake || new FakeCpsRadio({ board: "DM-1701", image: CodeplugImage.blank().bytes, foreign: hash === "#sim-foreign",
-			features: hash.startsWith("#sim-compact") ? "FM,DMR,IDDB_COMPACT" : "FM,DMR", release: hash.match(/[#&]release=([\w.]+)/)?.[1],
+		S.fake = S.fake || new FakeCpsRadio({ board: "DM-32UV", base: 0x700000, image: CodeplugImage.blank().bytes, foreign: hash === "#sim-foreign",
+			features: "FM,P25,CPS_FAST", release: hash.match(/[#&]release=([\w.]+)/)?.[1],
 			gitTime: Number(hash.match(/[#&]git_time=(\d+)/)?.[1]) || 0 });
 		stream = S.fake.stream();
 	} else {
@@ -700,50 +734,29 @@ function readSkippedIddb() {
 }
 
 async function readRadio() {
+	// P25 systems are settings, so a radio whose firmware has no P25 systems command still gives its channels; the
+	// systems then stay empty and the Problems tab says what to do.
 	const go = () => exclusive(async () => {
 		try {
 			const c = await connect();
 			if (!c) return;
 			await onLine(c);
-			// the ID database can be megabytes: its header first, and a long read of it offered, not made. Then one read
-			// (one progress bar) of the codeplug and, when wanted, the database
-			const cached = !!c.image && c.dbKnown;
-			const head = await c.transport.readIddbHeader();
-			const db = dbHeader(head.bytes);
-			const dbBytes = c.transport.iddbBytes(head);
-			const rate = c.rate || (c.cable ? 9000 : 30000);
-			const seconds = cached ? 0 : Math.ceil(dbBytes / rate);
-			const readDb = dbBytes > 0 && (seconds < IDDB_ASK || await askIddb(c, db, dbBytes, seconds));
-			const t0 = performance.now(), moved = c.transport.moved;
-			// the header just read serves as the cache for its own block on a first read
 			const img = await withProgress(t("editor.reading", { radio: c.radio.name }), (bar, signal) =>
-				c.transport.read({ iddb: readDb, signal, cache: c.image || head, progress: (n, total) => bar.set(n, total) }));
-			// how fast this radio and cable read, for the next estimate (a read from the cache says nothing): by the bytes
-			// that crossed the link, not the progress, which also counts blank blocks the fast protocol skips. A read of a
-			// few blocks is mostly round trips: too few to tell
-			const took = c.transport.moved - moved;
-			if (!c.image && took >= 65536) c.rate = took / Math.max(0.25, (performance.now() - t0) / 1000);
-			diag.note("read done", { bytes: img.bytes.length, iddb: readDb, dbBytes, seconds });
+				c.transport.read({ iddb: false, signal, progress: (n, total) => bar.set(n, total) }));
 			c.image = img.clone();
-			if (db && !readDb) {
-				// the model without the database (its header erased): a write leaves the radio's as it is
-				img.bytes.fill(0xFF, IDDB_HEADER[0], IDDB_HEADER[1]);
+			let p25 = null;
+			try {
+				p25 = await c.transport.readP25Systems();
+			} catch (e) {
+				diag.error("read P25 systems", e);
 			}
-			load(decode(img), `${c.radio.id}-codeplug`, { fromRadio: true });
-			c.dbKnown = !db || readDb;
-			S.iddbSkipped = db && !readDb ? { count: db.count, bytes: dbBytes, seconds } : null;
-			if (S.iddbSkipped) refresh();
-			say(t("editor.read_done", { radio: c.radio.name, channels: S.model.channels.length, contacts: S.model.contacts.length }), "ok");
-			// the database's format against what this radio's firmware reads (iddb-compact.md 6)
-			const fmt = S.model.iddb?.format;
-			if (fmt === "C" && !c.transport.compact) {
-				S.iddbChanged = true;
-				say(t("editor.iddb.old_radio_reads_none"), "warn");
-			} else if (fmt === "N" && c.transport.compact && convertDue(c.radio.id)) {
-				confirmDialog(t("editor.iddb.upgrade", { radio: c.radio.name }), t("editor.iddb.convert"), upgradeIddb,
-					{ onClose: () => offerUpdate(c) });
-				return;
-			}
+			c.systems = p25?.systems ? p25.systems.map((x) => ({ ...x })) : null;	// a copy: edits must differ from the radio's
+			c.systemActive = p25?.active || 0;
+			load(decode(img), `${c.radio.id}-codeplug`, { fromRadio: true, systems: p25?.systems, active: c.systemActive });
+			refresh();
+			if (p25) say(t("editor.read_done_p25", { radio: c.radio.name, channels: S.model.channels.length, zones: S.model.zones.length,
+				systems: S.model.systems.length }), "ok");
+			else say(t("editor.systems.unsupported"), "warn");
 			offerUpdate(c);
 		} catch (e) {
 			await fail("read codeplug", e);
@@ -817,52 +830,22 @@ async function planWrite() {
 			c.image = await withProgress(t("editor.comparing", { radio: c.radio.name }), (bar, signal) =>
 				c.transport.read({ iddb: false, signal, progress: (n, total) => bar.set(n, total) }));
 		}
-		// the ID database goes when it was edited, or when this radio's may differ: a file or draft opened since, or
-		// another radio on the cable. The fast protocol then sends only its blocks that differ
-		const iddb = S.iddbChanged || (!!dbHeader(file.bytes) && !c.dbKnown);
-		// a compact database to a radio that reads only format N goes as format N (iddb-compact.md 6)
-		let older = null;
-		if (iddb && dbHeader(file.bytes)?.format === "C" && !c.transport.compact) older = convertDb(file, "N", { end: c.transport.end });
 		stage = "plan write";
-		// the same codeplug with this radio's own name, ID and boot text kept, and what each would send
-		// (compared byte for byte: two plans can send the same number of bytes. The second is planned only when there
-		// is something to keep: each plan is a pass over every block's CRC)
-		const kept = keepIdentity(file, c.image);
-		const differs = IDENTITY.some(([a, b]) => kept.bytes.subarray(a, b).some((x, i) => x !== file.bytes[a + i]));
-		const plans = { file: await c.transport.plan(file, c.image, { iddb }) };
-		plans.kept = differs ? await c.transport.plan(kept, c.image, { iddb }) : plans.file;
-		let keep = keepPref() && differs;
-		const choice = () => (keep ? { want: kept, ...plans.kept } : { want: file, ...plans.file });
-		diag.note("write plan", { bytes: choice().bytes, sectors: choice().plan.length, iddb, keep });
+		const plan = await c.transport.plan(file, c.image, { iddb: false });
+		const systems = c.systems && JSON.stringify(c.systems) === JSON.stringify(S.model.systems) &&
+			c.systemActive === (S.model.p25Active || 0) ? 0 : S.model.systems.length;
+		diag.note("write plan", { bytes: plan.bytes, sectors: plan.plan.length, systems });
 		const prepared = c.prepared ? `${t("editor.storage.done", { radio: c.radio.name })} ` : "";
 		c.prepared = false;
-		// by the plan, not its bytes: a block written blank counts no bytes
-		if (!choice().plan.length) return say(prepared + t("editor.write_nothing", { radio: c.radio.name }), "ok");
+		if (!plan.plan.length && !systems) return say(prepared + t("editor.write_nothing", { radio: c.radio.name }), "ok");
 		const summary = h("p", {});
-		const summarize = () => {
-			const { bytes } = choice();
-			const text = [t("editor.write_summary", { radio: c.radio.name, bytes: fmtNum(bytes), seconds: estimate(bytes, c.cable, choice().blocks) })];
-			if (iddb) text.push(t(c.transport.fast ? "editor.write_iddb_fast" : "editor.write_iddb", { n: dbHeader(file.bytes)?.count ?? 0 }));
-			if (older) text.push(t("editor.write_iddb_older"));
-			if (older?.dropped) text.push(t("editor.write_iddb_cut", { dropped: fmtNum(older.dropped) }));
-			summary.textContent = text.join(" ");
-		};
-		summarize();
-		const body = [summary];
-		// offered only when the radio's identity differs from the file's: otherwise there's nothing to keep
-		if (differs) {
-			const g = decodeGeneral(c.image.bytes), none = t("editor.keep_identity_none");
-			const box = h("input", { type: "checkbox", checked: keep, onchange: () => {
-				keep = box.checked;
-				keepPref(keep);
-				summarize();
-			} });
-			body.push(h("label", {}, box, " ", t("editor.keep_identity")),
-				h("p", { class: "small muted" }, t("editor.keep_identity_help", { name: g.radioName || none, id: g.dmrId || none })));
-		}
-		dialog(t("editor.write"), body, t("editor.write"), (close) => {
+		const text = [plan.plan.length
+			? t("editor.write_summary", { radio: c.radio.name, bytes: fmtNum(plan.bytes), seconds: estimate(plan.bytes, c.cable, plan.blocks) })
+			: t("editor.write_systems_summary", { radio: c.radio.name, n: systems })];
+		summary.textContent = text.join(" ");
+		dialog(t("editor.write"), [summary], t("editor.write"), (close) => {
 			close();
-			writeChosen(c, choice(), iddb, prepared);
+			writeChosen(c, file, plan, systems, prepared);
 		});
 	} catch (e) {
 		await fail(stage, e);
@@ -893,32 +876,59 @@ function keepPref(v) {
 	return !!v;
 }
 
-function writeChosen(c, { want }, iddb, prepared) {
+function writeChosen(c, want, plan, systems, prepared) {
 	return exclusive(async () => {
 		let step = "write codeplug";
 		try {
-			const res = await withProgress(t("editor.writing", { radio: c.radio.name }), async (bar, signal) => {
-				// the CPS rewrites the whole codeplug with a database; the fast protocol checks every block's CRC itself
-				const r = await c.transport.write(want, iddb && !c.transport.fast ? null : c.image, { iddb, signal, progress: (n, total) => bar.set(n, total, t("editor.progress.write")) });
-				step = "verify codeplug";
-				await c.transport.verify(want, r.plan, { progress: (n, total) => bar.set(n, total, t("editor.progress.verify")) });
-				step = "finish write";
-				await c.transport.finish();
-				return r;
-			});
-			diag.note("write done", { bytes: res.bytes, sectors: res.sectors });
+			let res = { bytes: 0 };
+			if (plan.plan.length) {
+				res = await withProgress(t("editor.writing", { radio: c.radio.name }), async (bar, signal) => {
+					const r = await c.transport.write(want, c.image, { iddb: false, signal, progress: (n, total) => bar.set(n, total, t("editor.progress.write")) });
+					step = "verify codeplug";
+					await c.transport.verify(want, r.plan, { progress: (n, total) => bar.set(n, total, t("editor.progress.verify")) });
+					step = "finish write";
+					await c.transport.finish();
+					return r;
+				});
+			}
+			if (systems) {
+				step = "write P25 systems";
+				await c.transport.writeP25Systems(S.model.systems, S.model.p25Active || 0);
+				c.systems = S.model.systems.map((x) => ({ ...x }));
+				c.systemActive = S.model.p25Active || 0;
+			}
+			diag.note("write done", { bytes: res.bytes, sectors: plan.plan.length, systems: !!systems });
 			c.image = want.clone();
-			if (iddb) c.dbKnown = true;
-			S.iddbChanged = false;
 			S.model.base = want;
-			S.model.iddb = dbHeader(want.bytes);	// format N when it went to a radio that reads only that
 			S.dirty = false;
 			refresh();
-			say(prepared + t("editor.write_done", { radio: c.radio.name, bytes: fmtNum(res.bytes) }), "ok");
+			const msg = !plan.plan.length && systems
+				? t("editor.write_systems_done", { radio: c.radio.name })
+				: t("editor.write_done_p25", { radio: c.radio.name, bytes: fmtNum(res.bytes), systems: systems ? S.model.systems.length : 0 });
+			say(prepared + msg, "ok");
 		} catch (e) {
 			await fail(step, e);
 		}
 	});
+}
+
+// Remove systems and keep every channel's index pointing at the same system it did. The last one is kept: the
+// firmware needs one, and a channel with none has nowhere to go.
+function removeSystems(items) {
+	const gone = new Set(items);
+	const old = S.model.systems.slice();
+	const kept = old.filter((x) => !gone.has(x));
+	const to = new Map();
+	old.forEach((x, i) => {
+		const j = kept.indexOf(x);
+		if (j >= 0) to.set(i, j);
+	});
+	S.model.systems = kept;
+	for (const c of S.model.channels) {
+		if (!(c.p25 || (c.p25Conv && c.p25SystemSet))) continue;
+		c.p25System = to.has(c.p25System) ? to.get(c.p25System) : 0;
+	}
+	S.model.p25Active = to.has(S.model.p25Active) ? to.get(S.model.p25Active) : 0;
 }
 
 async function dropConnection() {
@@ -1018,8 +1028,8 @@ function reportContext() {
 	return {
 		sim: S.sim,
 		radio: c ? { id: c.radio?.id, board: c.probe?.board, git: c.probe?.git, features: c.probe?.features, codec: c.probe?.codec, cable: c.cable, storage: c.storage?.region } : null,
-		codeplug: m ? { channels: m.channels.length, zones: m.zones.length, contacts: m.contacts.length, iddb: m.iddb?.count || 0,
-			dirty: S.dirty, iddbChanged: S.iddbChanged, errors: problems().filter((p) => p.level === "error").length } : null,
+		codeplug: m ? { channels: m.channels.length, zones: m.zones.length, systems: m.systems.length,
+			dirty: S.dirty, errors: problems().filter((p) => p.level === "error").length } : null,
 		tab: S.tab,
 	};
 }
@@ -1028,6 +1038,7 @@ function reportContext() {
 function reportFiles() {
 	const out = [];
 	if (S.model) out.push({ name: "codeplug-edited.bin", label: t("report.attach_codeplug"), data: () => saveBytes(encode(S.model)) });
+	if (S.model?.systems) out.push({ name: "p25-systems.json", label: t("report.attach_systems"), data: () => new TextEncoder().encode(JSON.stringify(S.model.systems, null, 1)) });
 	const radio = S.conn?.image || S.lastRadioImage;
 	if (radio) out.push({ name: "codeplug-radio.bin", label: t("report.attach_radio"), data: () => saveBytes(radio) });
 	return out;
@@ -1044,7 +1055,7 @@ async function start() {
 	}
 	const draft = await loadDraft();
 	if (draft?.bytes) {
-		load(decode(imageFrom(draft.bytes)), draft.name || "codeplug");
+		load(decode(imageFrom(draft.bytes)), draft.name || "codeplug", { systems: draft.systems || null, active: Number(draft.active) || 0 });
 		S.dirty = !!draft.dirty;
 		refresh();
 		say(t("editor.draft_restored", { time: fmtDate(new Date(draft.at), { dateStyle: "medium", timeStyle: "short" }) }), "info");

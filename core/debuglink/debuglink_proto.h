@@ -35,6 +35,7 @@ enum {
 	DL_CMD_IDDB		= 0x1F,	// the DMR ID database: its format, records and an ID looked up (debuglink_iddb.c, 3.23)
 	DL_CMD_P25		= 0x20,	// the P25 bench probe's 8 kHz FM discriminator: start, stop, read samples (p25.md 5.1)
 	DL_CMD_P25_TX		= 0x21,	// the P25 PHY transmit test engine: arm, start, stop, status (p25.md 10)
+	DL_CMD_P25_SYS		= 0x22,	// the P25 trunking systems in the settings store: get, set (docs/spec/debuglink.md 3.24)
 };
 
 // DL_CMD_P25_TX operations (first payload byte; docs/spec/p25.md 10). ARM and START carry the token ALLOW_RF at the
@@ -49,6 +50,15 @@ enum {
 };
 #define DL_P25_TX_TOKEN		"ALLOW_RF"
 #define DL_P25_TX_TOKEN_LEN	8u
+
+// DL_CMD_P25_SYS operations (first payload byte; docs/spec/debuglink.md 3.24). A GET replies count u8, active u8 and
+// count records of 57 bytes; SET carries the same after the operation byte.
+enum {
+	DL_P25_SYS_OP_GET = 0,
+	DL_P25_SYS_OP_SET = 1,
+};
+#define DL_P25_SYS_RECORD	57u
+#define DL_P25_SYS_NAME		17u
 
 // DL_CMD_RX2 operations (first payload byte; docs/spec/debuglink.md 3.22). The token is u32 little endian
 enum {

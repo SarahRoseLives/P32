@@ -48,8 +48,9 @@ P32Firmware targets the DM-32UV only. There is one board under `boards/dm32/`.
 | **Themes and accessibility** | Light/dark themes, large text and high-contrast modes |
 | **Crash log** | On-radio crash records for troubleshooting |
 
-P25 Phase 1 is the current focus. The codeplug editor is still in development: do not use the older editor on a radio
-running P32Firmware. Firmware installation and backups remain available in the web flasher.
+P25 Phase 1 is the current focus. The P25 codeplug editor is available at
+[p32firmware.com/codeplug](https://p32firmware.com/codeplug/): it edits channels, zones and P25 systems in the browser.
+Firmware installation and backups remain available in the web flasher.
 
 ## Hardware
 

@@ -356,7 +356,7 @@ export function formDialog(title, fields, record, t, onSave) {
 			}
 			if (f.type === "note") {
 				row.textContent = f.text(value);
-				row.hidden = !row.textContent;
+				row.hidden = (f.show && !f.show(work)) || !row.textContent;
 				continue;
 			}
 			if (f.type === "select") {
@@ -385,6 +385,7 @@ export function formDialog(title, fields, record, t, onSave) {
 		const bad = [];
 		for (const { f, input } of rows) {
 			if (f.type === "bool" || f.type === "pair" || f.type === "group" || f.type === "note") continue;
+			if (f.show && !f.show(work)) continue;	// a hidden row's value is kept, not parsed
 			if (f.type === "select") {
 				const v = input._opts[input.selectedIndex]?.[0];
 				f.set ? f.set(work, v) : (work[f.key] = v);

@@ -5,7 +5,8 @@
 // room are refused as the radio refuses them (cps-protocol.md 2.3). For the tests and the page's #sim mode.
 
 import { concat } from "../flasher/bytes.js";
-import { frame, parseFrames } from "../flasher/link.js";
+import { frame, parseFrames, CMD } from "../flasher/link.js";
+import { newP25System, decodeP25Systems, encodeP25SystemsReply } from "./p25systems.js";
 
 export class FakeCpsRadio {
 	// foreign: the settings region still holds another firmware's data until a STORAGE CLAIM (settings-store.md 5).
@@ -16,7 +17,8 @@ export class FakeCpsRadio {
 	// INFO region byte instead of ours or foreign (0: a map whose flash didn't start). radioInfo: area 9
 	// answered, with the chip's size (core/cps/cps_openfw.c)
 	constructor({ board = "DM-1701", base = 0, end = 0xE00000, size = 0x1000000, image = null, cable = false, foreign = false, uid = 0x11,
-		features = "FM,DMR", release = null, gitTime = 0, noMap = false, radioInfo = false, region = null } = {}) {
+		features = "FM,DMR", release = null, gitTime = 0, noMap = false, radioInfo = false, region = null,
+		systems = null, activeSystem = 0 } = {}) {
 		Object.assign(this, { board, base, end, cable, foreign, uid, features, release, gitTime, noMap, radioInfo, region });
 		this.spi = new Uint8Array(size).fill(0xFF);
 		if (image) this.spi.set(image.subarray(0, Math.min(image.length, end - base)), base);
@@ -24,6 +26,8 @@ export class FakeCpsRadio {
 		this.commits = 0;
 		this.reloads = 0;
 		this.readBytes = 0;
+		this.systems = systems || [newP25System("SITE 1")];
+		this.activeSystem = activeSystem ?? 0;
 	}
 
 	writable(a, n) {
@@ -41,6 +45,17 @@ export class FakeCpsRadio {
 			}
 			const ok = (...b) => frame(f.cmd | 0x80, f.seq, new Uint8Array([0, ...b]));
 			if (f?.cmd === 0x0B) return ok(...new Uint8Array(28).fill(this.uid));	// INFO_CHIP: the UID's low word 0x11111111 by default
+			if (f?.cmd === CMD.P25_SYS) {
+				if (f.payload[0] === 0) return ok(...encodeP25SystemsReply(this.systems, this.activeSystem));
+				if (f.payload[0] === 1) {
+					const p = decodeP25Systems(f.payload.subarray(1));
+					this.systems = p.systems;
+					this.activeSystem = p.active;
+					this.systemWrites = (this.systemWrites || 0) + 1;
+					return ok();
+				}
+				return frame(0x82 | 0x80, f.seq, new Uint8Array([1]));
+			}
 			if (f?.cmd === 0x0F && this.noMap) return frame(0x8F, f.seq, new Uint8Array([4]));
 			if (f?.cmd === 0x0F && f.payload[0] === 0) return ok(this.region ?? (this.foreign ? 2 : 1), 0, ...new Uint8Array(24));
 			if (f?.cmd === 0x0F && f.payload[0] === 2) {

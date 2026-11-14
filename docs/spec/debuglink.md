@@ -112,6 +112,7 @@ All multi-byte numbers are little endian. Text is ASCII, lines end with `\n`.
 | `0x1E` | RX2 | operation u8 + arguments (3.22) | flags, or none (3.22) |
 | `0x1F` | IDDB | DMR ID u32 (3.23); `CONFIG_DMR` builds, else status 4 | format u8, records u32, found u8, text (3.23) |
 | `0x21` | P25_TX | operation u8 + arguments (p25.md 10); `CONFIG_P25_TX` builds, else status 4 | status, or the engine's counters as text |
+| `0x22` | P25_SYS | operation u8 + arguments (3.24); `CONFIG_P25` builds, else status 4 | count u8, active u8, the system records (3.24) |
 
 ### 3.1 VERSION
 
@@ -767,6 +768,40 @@ lookup as a received call's name, without the cut to the screen's name length. `
 
 `rfoundry_debug.py iddb [ID ...]`, `tools/cps_fast.py`'s `FastLink.iddb()`. `tests/hil/test_iddb.py` compares the
 radio's answers with records read from the database by `tools/iddb_read.py`.
+
+### 3.24 P25_SYS
+
+The P25 trunking systems in the settings store ([p25.md](p25.md) 8.1), as the [Codeplug Editor](../dev/codeplug-editor.md)
+reads and writes them beside the channels that name them. `CONFIG_P25` builds, else `DL_ST_UNAVAILABLE`.
+
+| Request | Reply after the status |
+|---|---|
+| GET (`0`), no arguments | count u8 (1..4), active u8, then count records of 57 bytes |
+| SET (`1`), count u8, active u8, the records | none |
+
+One record, little endian:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 4 | control-channel frequency, Hz |
+| 4 | 4 | subscriber uplink frequency, Hz |
+| 8 | 4 | WACN, 20 bits |
+| 12 | 4 | unit ID |
+| 16 | 4 | manual band plan base, Hz |
+| 20 | 4 | manual band plan spacing, Hz |
+| 24 | 4 | manual band plan offset, Hz, signed |
+| 28 | 2 | system ID, 12 bits |
+| 30 | 2 | NAC, 12 bits |
+| 32 | 2 | talkgroup |
+| 34 | 2 | RFSS |
+| 36 | 2 | site |
+| 38 | 1 | 1: automatic band plan, 0: the manual one |
+| 39 | 1 | 1: configured |
+| 40 | 17 | name, NUL padded |
+
+SET takes 1 to 4 records and replaces the count and the selected slot. A field outside its width, a count outside
+1..4, or a selected slot past the count is answered `DL_ST_BAD_ARG` and nothing is written. The command uses the
+settings store, so the systems are saved like the radio's own menu changes; it does not touch the codeplug.
 
 ## 4. Safety
 

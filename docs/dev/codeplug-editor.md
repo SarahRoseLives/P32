@@ -5,6 +5,26 @@
 The browser tool for editing a codeplug, hosted on the site ([website.md](website.md)). For users it is the recommended
 way to edit a codeplug ([Programming the radio](../user/04-programming.md)); this page is for people who change it.
 
+## P25 editor
+
+The P32Firmware site builds a P25 editor from the same page and `site/static/js/editor/`: **Channels**, **Zones**,
+**P25 Systems** and **Problems**. Channels are FM, P25 conventional or P25 trunked; DMR contacts, RX group lists and
+the DMR ID database are not shown. A channel that uses a system stores its 0-based slot in the open-firmware record
+(`core/codeplug/codeplug.c`), and the editor's Systems tab edits the settings-store systems beside it.
+
+P25 systems are settings, not codeplug records. The editor reads and writes them with `DL_CMD_P25_SYS`
+([debuglink.md](../spec/debuglink.md) 3.24); `static/js/codeplug/p25systems.js` is the wire format. A write sends the
+systems after the codeplug and ends with the CPS `C 6 2`, so the settings save before the user unplugs the radio.
+
+The page is public and linked from the site's navigation. `web/tools/build.sh` includes it by default; set
+`RFOUNDRY_NO_CODEPLUG=1` to build the coming-soon page instead, as a test build:
+
+```
+RFOUNDRY_NO_CODEPLUG=1 RFOUNDRY_PYTHON=/path/to/venv/bin/python web/tools/build.sh
+```
+
+The sections below describe the DMR modules the page still uses for files, the codeplug image, drafts and reporting.
+
 `site/templates/codeplug.html` and `site/static/js/editor/` make the page (`codeplug/index.html`).
 `site/static/js/codeplug/` holds what doesn't depend on the page, so the Tools page, the flasher and the tests can
 use it too. Both are plain ES modules that also run in Node. The user's view is in

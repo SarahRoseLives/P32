@@ -93,6 +93,10 @@ RX2_OP_INFO, RX2_OP_BRIDGE, RX2_OP_RESTART = range(3)
 RX2_TOKEN = 0x47445242              # 'BRDG'
 RX2_FLAGS = {1: "present", 2: "up", 4: "bridge", 8: "restart"}
 IDDB = 0x1F                         # the DMR ID database: format, records, an ID looked up (docs/spec/debuglink.md 3.23)
+P25_SYS = 0x22                      # the P25 trunking systems in the settings store (docs/spec/debuglink.md 3.24)
+P25_SYS_RECORD = 57
+P25_SYS_FIELDS = ("cc_hz", "uplink_hz", "wacn", "unit_id", "base_hz", "spacing_hz", "offset_hz", "sys", "nac", "tg",
+                  "rfss", "site", "band_auto", "valid", "name")
 SNMP = 0x19                         # the SNMP agent (CONFIG_SNMP; docs/spec/debuglink.md 3.17, docs/spec/snmp.md)
 SNMP_OP_SET, SNMP_OP_COMMUNITY, SNMP_OP_TEST_TRAP = range(3)
 SNMP_FIELDS = {"flags": 0, "rf_manager": 1, "rf_gap_s": 2, "trap_port": 3}
@@ -568,6 +572,10 @@ class DebugLink:
     def iddb(self, dmr_id=0):
         """The DMR ID database as the radio sees it, and the text it shows for dmr_id: {format, records, found, text}"""
         return decode_iddb(self.request(IDDB, struct.pack("<I", dmr_id))[1])
+
+    def p25_systems(self):
+        """The P25 trunking systems: {active, systems: [{field: value}]} (docs/spec/debuglink.md 3.24)"""
+        return decode_p25_systems(self.request(P25_SYS, b"\0")[1])
 
     def version(self):
         return parse_kv(self.request(VERSION)[1].decode("ascii", "replace"))
@@ -1481,6 +1489,22 @@ def decode_chip(r):
             "wrp_sectors": [i for i in range(12) if wrp & (1 << i)], "bor": bor, "user": user}
 
 
+def decode_p25_systems(r):
+    """P25_SYS GET's reply after the status (debuglink.md 3.24): count, active, the 57-byte records"""
+    count, active = r[0], r[1]
+    if not 1 <= count <= 4 or len(r) != 2 + count * P25_SYS_RECORD:
+        raise ValueError("P25_SYS: malformed answer")
+    out = []
+    for i in range(count):
+        f = struct.unpack_from("<6Ii5H2B17s", r, 2 + i * P25_SYS_RECORD)
+        d = dict(zip(P25_SYS_FIELDS, f))
+        d["name"] = d["name"].split(b"\0", 1)[0].decode("utf-8", "replace")
+        d["band_auto"] = bool(d["band_auto"])
+        d["valid"] = bool(d["valid"])
+        out.append(d)
+    return {"active": active if active < count else 0, "systems": out}
+
+
 def decode_iddb(r):
     """IDDB's reply after the status (debuglink.md 3.23): format is the header's letter ('N', 'n', 'C'), '' for none"""
     fmt, records, found = struct.unpack_from("<BIB", r)
@@ -2094,6 +2118,8 @@ def main(argv=None):
     p = sub.add_parser("iddb", help="the DMR ID database: its format and records, and the text for each ID given "
                        "(docs/spec/debuglink.md 3.23)")
     p.add_argument("ids", nargs="*", type=int)
+    p = sub.add_parser("p25sys", help="the P25 trunking systems in the settings store (docs/spec/debuglink.md 3.24)")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("split", help="split duplex: view, BS framing experiment variant (docs/spec/split-duplex.md 10.1)")
     p.add_argument("op", choices=["view", "variant"])
     p.add_argument("args", nargs="*", help="variant: N [REG=VAL ...] (hex or decimal)")
@@ -2172,6 +2198,11 @@ def main(argv=None):
                 for i in a.ids:
                     r = link.iddb(i)
                     print(f"{i} {r['text']!r}" if r["found"] else f"{i} -")
+            elif a.cmd == "p25sys":
+                p25 = link.p25_systems()
+                print(json.dumps(p25, indent=1) if a.json else "\n".join(
+                    f"{i}: {s['name']} {s['cc_hz']} Hz NAC {s['nac']:03X} TG {s['tg']}" +
+                    (" (active)" if i == p25["active"] else "") for i, s in enumerate(p25["systems"])))
             elif a.cmd == "p25audio":
                 return cmd_p25audio(link, a)
             elif a.cmd == "aprobe":

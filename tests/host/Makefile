@@ -1299,6 +1299,16 @@ p25TsbkParseTest: p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p2
 	$(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
 	$(CC) $(CFLAGS) -o $@ p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
 
+# DL_CMD_P25_SYS: the P25 trunking systems in the settings store (core/debuglink/debuglink_p25_sys.c)
+TESTS   += p25SysTest
+p25SysTest: p25SysTest.c $(CORE)/debuglink/debuglink_p25_sys.c $(CORE)/settings/settings.h $(CORE)/debuglink/debuglink_proto.h
+	$(CC) $(CFLAGS) -I$(ROOT)/hal -Wshadow -DCONFIG_P25=1 -o $@ p25SysTest.c $(CORE)/debuglink/debuglink_p25_sys.c
+
+run: run-p25sys
+run-p25sys: p25SysTest
+	./p25SysTest
+.PHONY: run-p25sys
+
 # P25 Phase 1 trunked control-channel TSBK encoding and CC frame construction (core/p25/p25_cc_tx)
 TESTS   += p25CcTxTest
 p25CcTxTest: p25CcTxTest.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_cc_tx.h $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_rx.c \
