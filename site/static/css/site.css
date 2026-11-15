@@ -480,6 +480,12 @@ details p { margin: var(--space-2) 0 0; font-weight: 400; }
 .notice.calm { border-left-color: var(--ok); background: var(--ok-soft); }
 .notice.calm p { margin: 0; }
 .notice.calm p + p { margin-top: var(--space-1); }
+/* the legal disclaimer before a task that writes to a radio */
+.legal-terms p { margin: 0 0 var(--space-2); }
+.legal-terms p:last-child { margin-bottom: 0; }
+.legal-accept { display: flex; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-3); font-weight: 600; cursor: pointer; }
+.legal-accept input { width: 1.1rem; height: 1.1rem; margin: 0.2rem 0 0; accent-color: var(--accent); }
+.legal-required { margin-top: var(--space-3); }
 .help-link { margin: var(--space-2) 0 0; font-weight: 600; }
 @media (min-width: 760px) { .choice-grid.three { grid-template-columns: repeat(3, 1fr); } }
 

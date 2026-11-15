@@ -27,6 +27,7 @@ import { findKey, readBootKey } from "../static/js/flasher/bootkey.js";
 import { codecSegments, readCodec } from "../static/js/flasher/codecsave.js";
 import { detect, convertersFor } from "../static/js/flasher/codeplug.js";
 import * as crumbs from "../static/js/flasher/trail.js";
+import { legalAccepted, setLegalAccepted, taskNeedsLegal } from "../static/js/flasher/legal.js";
 import * as diag from "../static/js/diag.js";
 
 const DIR = process.env.RFOUNDRY_SITE_FIXTURES || "build/site-tests";
@@ -381,6 +382,27 @@ test("the update mode picture comes from the radio's data", () => {
 	const lists = [...src.matchAll(/S\.radio\.flash\.bootloader\.map/g)].length;
 	assert.ok(lists >= 3);
 	assert.equal([...src.matchAll(/withPicture\(h\("ol", \{ class: "steps[^"]*" \}, S\.radio\.flash\.bootloader\.map/g)].length, lists);
+});
+
+// The legal disclaimer: every task that writes needs it accepted, backup and restart do not, and the start page uses
+// the same check for its task cards
+test("flashing tasks wait for the legal disclaimer", () => {
+	setLegalAccepted(false);
+	assert.equal(legalAccepted(), false);
+	for (const task of ["install", "update", "restore", "help"]) assert.ok(taskNeedsLegal(task), task);
+	for (const task of ["backup", "restart"]) assert.equal(taskNeedsLegal(task), false, task);
+	setLegalAccepted(true);
+	assert.equal(legalAccepted(), true);
+	setLegalAccepted(false);
+	const src = readFileSync(new URL("../static/js/flasher/app.js", import.meta.url), "utf8");
+	const start = src.slice(src.indexOf("function startView()"), src.indexOf("// The practice links"));
+	assert.match(start, /S\.sim \|\| legalAccepted\(\)/);
+	assert.match(start, /disabled: !accepted && taskNeedsLegal\(task\)/);
+	assert.match(start, /legalPanel\(\(\) => render\(\)\)/);
+	assert.match(src, /!S\.sim && taskNeedsLegal\(S\.task\) && !legalAccepted\(\)/);
+	const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8"));
+	for (const key of ["flash.legal.title", "flash.legal.intro", "flash.legal.amateur", "flash.legal.permission",
+		"flash.legal.life", "flash.legal.law", "flash.legal.accept", "flash.legal.required"]) assert.ok(en[key], key);
 });
 
 // app.js needs the DOM, so its source is checked: the bootloader route's Install asks once more (nocodec.js) when the

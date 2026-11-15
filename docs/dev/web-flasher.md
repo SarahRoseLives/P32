@@ -39,6 +39,7 @@ The flasher is plain ES modules. The logic ports rfoundry, and the tests check t
 | `usmart.js`, `iap.js`, `bfloader.js`, `iapui.js` | The stock side of an HR_C7000 radio, by protocol: the stub loaded through a stock debug console (USMART, `flash.stock_console`), the factory update mode write (IAP or the Baofeng updater, `flash.update_mode`) and their steps | `tools/serial_loader.py` (`bfloader.js`) |
 | `c7000ui.js`, `radiotop.js` | The HR_C7000 backend: its steps (connect, back up and check, write, check) and the radio picture with its LED | |
 | `dom.js` | DOM helpers and strings shared by `app.js` and `c7000ui.js` | |
+| `legal.js` | The legal disclaimer and the tasks that need it accepted | |
 | `app.js` | The page: the tasks, the shared steps and the `anyroad-dfu` backend | |
 
 Add `#sim=<radio>-stock` to the flasher's address to run every step against a simulated radio on its stock firmware,
@@ -59,6 +60,14 @@ have passed since it was closed, so a tab left open still sees it (`sessionStora
 holds the time of the last close, set on any close); where storage is blocked it shows on every visit. The installation count
 in `flash.beta.lead` is written by hand: total successful installations from the backend's `flashes` table plus about
 50 development installs, rounded down. Raise it now and then.
+
+## Legal disclaimer
+
+The start page shows the legal disclaimer and its checkbox (`legal.js`). Update, install, restore and help (which can
+install) stay disabled until the box is checked; backup and restart do not write and stay available. The acceptance is
+kept for the page's lifetime, so Start Over does not ask again, while a reload does. A `#update` or `#radio=` link,
+or a help answer that reaches a write task, gets the same panel before that task. The simulated radios (`#sim`) skip
+the gate: they write no hardware. The strings are `flash.legal.*` in `site/i18n/<code>.json`.
 
 ## Vendor files
 

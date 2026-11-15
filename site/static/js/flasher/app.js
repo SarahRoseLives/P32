@@ -56,6 +56,7 @@ import * as adapter from "./adapter.js";
 import * as crumbs from "./trail.js";
 import { missingApi, kitPanel, kitLine } from "./manual.js";
 import { showBetaNotice } from "./beta.js";
+import { legalAccepted, legalPanel, taskNeedsLegal } from "./legal.js";
 import { currentBuild, planUpdate } from "./update.js";
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -724,6 +725,10 @@ function render() {
 	app.replaceChildren();
 	document.querySelector(".page-head")?.classList.toggle("compact", !!S.task);
 	if (!S.task) return app.append(...[versionBanner() || betaNotice(), startView()].filter(Boolean));
+	// A link (#update, #radio=) or a help answer can put a write task here without the start page: ask there too
+	if (!S.sim && taskNeedsLegal(S.task) && !legalAccepted()) {
+		return app.append(legalPanel(() => render(), { onCancel: () => { S.task = null; S.step = 0; render(); } }));
+	}
 	const steps = stepsFor();
 	const label = (s) => (S.radio && backend().stepLabel?.(s, S.task)) || s;
 	const stepper = () => h("ol", { class: "stepper" }, stepsFor().map((s, i) =>
@@ -805,13 +810,17 @@ function startView() {
 	const support = !usb && !serial ? [notice(t("flash.support.none"), "bad")]
 		: [!usb && notice(t("flash.support.usb"), "bad"), !serial && notice(t("flash.support.serial"), "bad")].filter(Boolean);
 	if (support.length) support.push(notice(t("flash.kit.start"), "info"));
-	const choice = (task, icon) => h("button", { class: "choice", type: "button", onclick: () => { S.task = task; S.step = 0; render(); } },
+	const accepted = S.sim || legalAccepted();
+	const choice = (task, icon) => h("button", { class: "choice", type: "button", disabled: !accepted && taskNeedsLegal(task),
+		onclick: () => { S.task = task; S.step = 0; render(); } },
 		h("strong", {}, `${icon} ${t(`flash.task.${task}`)}`), h("span", { class: "small muted" }, t(`flash.task.${task}.text`)));
 	return h("div", { class: "flasher" },
 		...support,
+		S.sim ? null : legalPanel(() => render()),
 		panel(t("flash.start.title"),
 			h("div", { class: "choice-grid" }, choice("update", "⟳"), choice("install", "⤓"), choice("backup", "⎘"), choice("restore", "↺"), choice("restart", "⏻"),
-				choice("help", "?"))),
+				choice("help", "?")),
+			accepted ? null : h("p", { class: "small muted legal-required" }, t("flash.legal.required"))),
 		h("details", { class: "small" }, h("summary", {}, t("flash.start.privacy_title")), h("p", {}, t("flash.start.privacy"))),
 		h("p", { class: "small muted" }, S.sim ? h("a", { href: "#", onclick: (e) => { e.preventDefault(); location.hash = ""; location.reload(); } }, t("flash.sim.leave"))
 			: simLinks()));
