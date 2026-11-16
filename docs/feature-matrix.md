@@ -294,6 +294,19 @@ clock`; ? = not known yet). No driver reads the clock yet ([radio-features.md](s
 | Vibration alerts (Settings > Sound > Vibrate) | `VIBRATE` | 520* | — | Needs a vibration motor (`hal_power_t.vibrate`): none of these radios has one RadioFoundry drives. On for the DM-1801 Pro. Measured 2026-10-16 with `CONFIG_SNMP=n`; 236 B with LTO |
 | GPS receiver: the module driver and its NMEA input (Settings > Location > GPS) | `GPS` | — | 1,196 | Needs a GPS receiver. Off, DMR GPS, LRRP and APRS keep the fixed position and report no fix. MD-380 measured 2026-10-22 (LTO, 58f2cebe). The DM-1701 has none from the factory but listens for an owner-fitted one (1,308 B, LTO) |
 
+## P25 and the instrument
+
+| Feature | Switch | Bytes DM-1701 | Bytes MD-380 | Notes |
+|---|---|---:|---:|---|
+| P25 control-channel monitor | `P25` | — | — | DM-32UV only: the NAC, WACN, SYS, RFSS, SITE, TG and VCH from a Phase 1 control channel |
+| P25 Phase 1 voice receive | `P25_VOICE` | — | — | DM-32UV only: conventional voice through the software demodulator and the fixed-point IMBE decoder |
+| P25 Phase 1 voice transmit | `P25_TX` | — | — | DM-32UV only: conventional microphone voice and the PHY transmitter |
+| P25 Quick settings tile | `P25_STAR` | — | — | Retained for builds that set it; Home `*` opens Quick settings on every build |
+| P25 ADP encryption | `P25_ADP` | — | — | DM-32UV only: four 40-bit keys with key IDs, Settings > Privacy, a per-channel/VFO long-`#` flag, RC4 receive after FEC and an encrypted HDU/LDU2 transmit with a new MI each superframe |
+| P25 PHY receive probe | `P25_PROBE` | — | — | Bench diagnostic; never in a release |
+| HR_C7000 modem and PCM audio glue | `HRC_MODEM` | — | — | Shared by DMR and P25; needed by the P25 receive and transmit paths |
+| Large-panel instrument Home | `UI_INSTRUMENT` | — | — | A one-channel instrument for a 240 px color panel |
+
 ## DMR data
 
 | Feature | Switch | Bytes DM-1701 | Bytes MD-380 | Notes |
