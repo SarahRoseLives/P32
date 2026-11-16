@@ -20,7 +20,7 @@ __codec_slot_end = 0x03100000;
 __codec_run_lo = 0x00043A00;
 __codec_run_hi = 0x00058000;
 __codec_tab_lo = 0x18000E48;
-__codec_tab_hi = 0x18003E28;
+__codec_tab_hi = 0x18003E38;
 
 /* The application's RAM ends where the stub's load span starts (HRC_STUB_BASE in config.mk) */
 __ram_end = 0x00056000;

@@ -93,9 +93,28 @@ static color_t accent(const radio_view_t *v)
 
 static const char *mode_word(const radio_view_t *v)
 {
-	if (v->state == RS_TX) return conv(v) ? "P25 CNV" : trunk(v) ? "P25 TRK" : "FM";
+#if CONFIG_P25_ADP
+	const char *crypt = v->ch.p25_adp ? "P25 ADP" : "P25 CLR";
+#else
+	const char *crypt = "P25 CNV";
+#endif
+	if (v->state == RS_TX) return conv(v) ? crypt : trunk(v) ? "P25 TRK" : "FM";
 	if (trunk(v)) return "P25 TRK";
-	if (conv(v) || v->p25.voice) return "P25 CNV";
+	if (conv(v) || v->p25.voice) return crypt;
+	return "FM";
+}
+
+static const char *dual_mode_word(const ui_dual_pane_t *p)
+{
+	if (p->p25_trunk) return "P25 TRK";
+	if (p->p25_conv) {
+#if CONFIG_P25_ADP
+		return p->p25_adp ? "P25 ADP" : "P25 CLR";
+#else
+		return "P25 CNV";
+#endif
+	}
+	if (p->mode == RADIO_MODE_DMR) return "DMR";
 	return "FM";
 }
 
@@ -111,7 +130,8 @@ static void draw_rail(const radio_view_t *v, radio_state_t st)
 	gfx_fill(CONTENT_X, y, sw, th + 2, state_color(st));
 	gfx_text(L->tiny, x + 3, y + 1, state_word(st), ui_col.pill_fg);
 	x += sw + STATE_GAP;
-	gfx_text(L->tiny, x, y + 1, mode_word(v), accent(v));
+	const char *mw = mode_word(v);
+	x += gfx_text(L->tiny, x, y + 1, mw, accent(v)) + L->tiny->w;
 
 	int right = w - CONTENT_R;
 	int bat_w = 18, bat_h = th - 4;
@@ -455,13 +475,6 @@ bool ui_instrument_home(const radio_view_t *v, const ui_state_t *s)
 // The two channels are peers: each gets the same eyebrow, main value and three-column deck as the one-channel
 // instrument. The selected pane gets the accent bar and PTT; a call in on either turns its pane green.
 
-static const char *dual_mode_word(const ui_dual_pane_t *p)
-{
-	if (p->p25_trunk) return "P25 TRK";
-	if (p->p25_conv) return "P25 CNV";
-	if (p->mode == RADIO_MODE_DMR) return "DMR";
-	return "FM";
-}
 
 static color_t dual_mode_color(const ui_dual_pane_t *p)
 {

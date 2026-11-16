@@ -57,6 +57,7 @@ typedef struct {
 	uint8_t p25_system;	// index into settings_t.p25 / p25_alt (trunked, or conventional with set)
 	uint16_t p25_tg;
 	uint16_t p25_nac;
+	bool p25_adp;		// P25 ADP encryption on for this memory (CONFIG_P25_ADP)
 } channel_t;
 
 // channel_t.alias_tx: what the channel sends as talker alias on each timeslot (text = our radio name)

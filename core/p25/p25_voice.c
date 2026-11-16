@@ -23,6 +23,9 @@
 #include "p25/p25_receive_policy.h"
 #include "p25/p25_voice_policy.h"
 #include "p25/p25_imbe.h"
+#if CONFIG_P25_ADP
+#include "p25/p25_adp.h"
+#endif
 #if CONFIG_BEEP
 #include "radio/beep.h"
 #endif
@@ -54,6 +57,17 @@ static struct {
 	uint32_t logged;
 	uint32_t started_ms, last_voice_ms;
 	uint16_t peak;
+#if CONFIG_P25_ADP
+	bool adp_on;
+	uint8_t adp_key[P25_ADP_KEY_LEN];
+	uint16_t adp_kid;
+	uint8_t adp_mi[9];
+	bool adp_mi_valid;
+	uint8_t adp_ks[P25_ADP_STREAM_LEN];
+	uint8_t adp_ks_mi[P25_ADP_MI_LEN];
+	bool adp_ks_valid;
+	uint32_t adp_frames;
+#endif
 } v;
 
 // DC blocker and AGC/limiter: the fixed-point decoder's output is quiet (peak a few hundred for speech), so boost
@@ -147,6 +161,22 @@ static void audio_block(const int16_t *mic, int16_t *spk, void *ctx)
 #endif
 }
 
+#if CONFIG_P25_ADP
+// The keystream for the current superframe's MI. An LDU2's ESS is the next superframe's MI; LDU1 and LDU2 both use
+// the MI current at the start of their superframe.
+static bool adp_keystream(void)
+{
+	if (!v.adp_on || !v.adp_mi_valid)
+		return false;
+	if (!v.adp_ks_valid || memcmp(v.adp_ks_mi, v.adp_mi, P25_ADP_MI_LEN) != 0) {
+		p25_adp_keystream(v.adp_key, v.adp_mi, v.adp_ks);
+		memcpy(v.adp_ks_mi, v.adp_mi, P25_ADP_MI_LEN);
+		v.adp_ks_valid = true;
+	}
+	return true;
+}
+#endif
+
 static void on_frame(const p25_rx *f, void *ctx)
 {
 	p25_call_metadata meta;
@@ -157,6 +187,13 @@ static void on_frame(const p25_rx *f, void *ctx)
 		return;		// a control-channel frame from a nearby system, not voice
 	}
 	bool valid = p25_call_decode(f->frame, f->duid, &meta);
+#if CONFIG_P25_ADP
+	if (v.adp_on && f->duid == 0u && valid && meta.ess_valid) {
+		memcpy(v.adp_mi, meta.mi, sizeof v.adp_mi);
+		v.adp_mi_valid = true;
+		v.adp_ks_valid = false;
+	}
+#endif
 
 	if (v.filter) {
 		if (f->nac != v.f_nac) {
@@ -168,6 +205,15 @@ static void on_frame(const p25_rx *f, void *ctx)
 	}
 	v.units++;
 	event = p25_receive_update(&v.call, f->nac, f->duid, &meta, valid, hal_micros());
+#if CONFIG_P25_ADP
+	// The policy mutes every encrypted call. A matching ADP key/KID turns the voice back on; MI and the keystream
+	// are handled below, after the codec reset the policy asked for.
+	if (v.adp_on && v.call.ess_valid && v.call.algid == 0xAAu && v.call.keyid == v.adp_kid &&
+	    (f->duid == 5u || f->duid == 10u) && v.call.state == P25_RX_ENCRYPTED) {
+		event.voice = true;
+		event.discard = false;
+	}
+#endif
 	if (event.reset) {
 		v.resets++;
 		p25_imbe_reset();
@@ -198,6 +244,12 @@ static void on_frame(const p25_rx *f, void *ctx)
 		if (!p25_rx_voice_quality(f->frame, i, bits, &quality)) {
 			break;
 		}
+#if CONFIG_P25_ADP
+		if (v.adp_on && v.call.algid == 0xAAu && v.call.keyid == v.adp_kid && adp_keystream()) {
+			p25_adp_apply(bits, v.adp_ks, f->duid == 5u ? P25_ADP_LDU1_OFFSET : P25_ADP_LDU2_OFFSET, i);
+			v.adp_frames++;
+		}
+#endif
 		p25_voice_action action = p25_voice_policy_frame(&v.quality, bits, quality.e0, quality.et);
 		if (action == P25_VOICE_ACCEPT) {
 			uint32_t t0 = hal_micros();
@@ -239,6 +291,14 @@ static void on_frame(const p25_rx *f, void *ctx)
 		v.corrected += quality.et;
 		vTaskDelay(1);	// one yield per codec frame: bounds the burst without slowing the demod
 	}
+#if CONFIG_P25_ADP
+	// An LDU2's ESS MI seeds the next superframe. The LDU2 just decoded used the previous MI.
+	if (v.adp_on && f->duid == 10u && valid && meta.ess_valid) {
+		memcpy(v.adp_mi, meta.mi, sizeof v.adp_mi);
+		v.adp_mi_valid = true;
+		v.adp_ks_valid = false;
+	}
+#endif
 }
 
 static void decode_task(void *arg)
@@ -270,7 +330,7 @@ static void decode_task(void *arg)
 	vTaskDelete(NULL);
 }
 
-static bool start_common(uint16_t nac, uint16_t tg)
+static bool start_common(uint16_t nac, uint16_t tg, bool adp, const uint8_t key[5], uint16_t kid)
 {
 	if (v.running) {
 		return true;
@@ -290,6 +350,12 @@ static bool start_common(uint16_t nac, uint16_t tg)
 	v.f_nac = nac;
 	v.f_tg = tg;
 	v.filter = nac != 0 || tg != 0;
+#if CONFIG_P25_ADP
+	v.adp_on = adp && key != NULL;
+	v.adp_kid = kid;
+	if (v.adp_on)
+		memcpy(v.adp_key, key, P25_ADP_KEY_LEN);
+#endif
 	v.started_ms = hal_millis();
 	if (!board.p25_probe->audio_start()) {
 		dlog("p25v: discriminator start refused");
@@ -327,13 +393,29 @@ bool p25_voice_agc(void)
 
 bool p25_voice_start(void)
 {
-	return start_common(0, 0);
+	return start_common(0, 0, false, NULL, 0);
 }
 
 bool p25_voice_start_filtered(uint16_t nac, uint16_t tg)
 {
-	return start_common(nac, tg);
+	return start_common(nac, tg, false, NULL, 0);
 }
+
+#if CONFIG_P25_ADP
+bool p25_voice_start_adp(uint16_t nac, uint16_t tg, bool adp, const uint8_t key[5], uint16_t kid)
+{
+	return start_common(nac, tg, adp, key, kid);
+}
+
+void p25_voice_set_adp(bool adp, const uint8_t key[5], uint16_t kid)
+{
+	v.adp_on = adp && key != NULL;
+	v.adp_kid = kid;
+	if (v.adp_on)
+		memcpy(v.adp_key, key, P25_ADP_KEY_LEN);
+	v.adp_ks_valid = false;
+}
+#endif
 
 bool p25_voice_ended(void)
 {

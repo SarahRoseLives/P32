@@ -176,6 +176,9 @@ endif
 ifeq ($(CONFIG_P25_VOICE),y)
  APP_SRC += core/p25/p25_imbe.c core/p25/p25_voice.c core/p25/p25_call.c
 endif
+ifeq ($(CONFIG_P25_ADP),y)
+ APP_SRC += core/p25/p25_adp.c
+endif
 ifeq ($(CONFIG_P25),y)
  APP_SRC += core/p25/p25_cc_rx.c
 endif
@@ -184,6 +187,9 @@ endif
 ifeq ($(CONFIG_P25_TX),y)
  APP_SRC += core/p25/tx/p25_test_tx.c core/p25/tx/p25_live_tx.c core/p25/tx/p25_live_frame.c \
 	core/p25/p25_tx_voice.c core/p25/p25_cc_tx.c
+ifeq ($(CONFIG_P25_ADP),y)
+ APP_SRC += core/p25/tx/p25_ess.c
+endif
 else
  APP_SRC := $(filter-out platform/hrc7000/p25_tx.c core/debuglink/debuglink_p25_tx.c \
 	core/p25/tx/p25_test_tx.c core/p25/tx/p25_live_tx.c core/p25/tx/p25_live_frame.c \

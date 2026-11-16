@@ -65,6 +65,7 @@ typedef struct {
 	char caller[48];	// the call coming in: "Joe Smith TG 91" (with a shorter alternate, font.h)
 	bool p25_conv;		// a conventional P25 memory: the large instrument's NAC / TG / UID deck
 	bool p25_trunk;		// a trunked P25 memory: its talkgroup and the active system's unit
+	bool p25_adp;		// a conventional P25 memory with ADP on
 	uint16_t p25_nac;	// P25 conventional network access code
 	uint16_t p25_tg;	// P25 talkgroup
 	uint32_t p25_unit;	// the P25 subscriber unit ID

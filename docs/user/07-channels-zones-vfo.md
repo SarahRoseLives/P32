@@ -143,6 +143,7 @@ Focus a row and press **OK**:
 | Two choices (mode, timeslot, bandwidth, RX only, scan, VOX, direct mode, beeps, talker alias, battery saver, P25 trunked, P25 conventional) | switches to the other one |
 | P25 system | on a trunked P25 channel, pick which stored system it follows. On a conventional P25 channel, pick **CNV** to keep the channel’s own NAC/TG, or a system to switch it to that trunked system. The list is **Hub 8 P25 systems**; **New system** adds one |
 | P25 talkgroup, P25 NAC | type the talkgroup, or a 3-digit hexadecimal NAC (for example 293), then **OK**. P25 talkgroup appears for either P25 kind; P25 NAC appears for a conventional P25 channel |
+| ADP encryption | On, Off. The key is picked in **Settings > Privacy**. Long press **#** on Home toggles it for the channel or VFO without opening this page |
 | Power, RX CTCSS/DCS, TX CTCSS/DCS, color code, TX time-out | opens a picker: turn the knob (or Up / Down) to the value, **OK** keeps it, **Back** cancels. Color code and time-out also take digits |
 | RX CTCSS/DCS, TX CTCSS/DCS, typed | type a CTCSS tone with its tenths digit: **8 8 5** is 88.5, **1 3 1 8** is 131.8. Under 60 the digits are whole Hz: **6 7** is 67.0, **1 0 0** is 100.0. Start with **0** for a DCS code: **0 2 3** is D023N. **Back** takes the last digit back. For an inverted DCS code, turn the knob one step: each code's I follows its N (D023N, D023I, D025N) |
 | Zones | opens every zone, marked "In" where the channel is. **OK** puts the channel in a zone or takes it out, saved at once. A new channel shows the row once saved |
@@ -170,6 +171,9 @@ channel's tile **9** is P25/FM: press it to start or stop conventional P25. Whil
 and tile **6** the talkgroup; those quick changes are temporary until you hold **OK** on the channel to save them.
 In the P25 VFO, tile **9** is **CNV** or a stored system: CNV uses the channel's own NAC/TG; a system switches the
 VFO to that trunked system. **Tools > P25 voice** also starts the conventional path.
+On a conventional P25 channel or VFO, hold **#** to turn ADP encryption on or off for that memory. The selected key
+and key ID are under **Settings > Privacy**. The radio plays encrypted calls whose key ID matches; a call with
+another key ID stays muted. The flag is kept with the channel (or the VFO) and comes back after a restart.
 
 **Save as new channel** stores the edited copy at the lowest free number and leaves the original as it was.
 **Tune to this ch** tunes the channel and **Share channel to...** sends it to another radio ([Sharing a zone](#sharing-a-zone));

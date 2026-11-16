@@ -17,6 +17,11 @@ extern "C" {
 // Start one clear group call on hz. allow_rf must be true; the platform checks the band, calibration and battery.
 // The RF path starts only after two complete LDUs are ready, so the microphone never underruns the preamble.
 bool p25_tx_voice_start(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source, bool allow_rf);
+#if CONFIG_P25_ADP
+// Start an ADP-encrypted group call. key is the 5-byte key, kid its key ID, and the ESS MI changes every superframe.
+bool p25_tx_voice_start_adp(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source, bool allow_rf,
+			    const uint8_t key[5], uint16_t kid);
+#endif
 // Release: stop the microphone, pad the current LDU with silence, finish the stream and stop the RF path.
 void p25_tx_voice_stop(void);
 // True from start until the last TDU has drained and the RF path is restored.

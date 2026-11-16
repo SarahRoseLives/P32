@@ -81,6 +81,9 @@ Some settings are on the menu before the feature behind them exists, or don't ap
 |---|---|---|---|---|
 | Key type | Off, Motorola, Anytone | Off | The kind of basic privacy key ([DMR](09-dmr.md#privacy)). Off removes the key | Works |
 | Key | Motorola 1 to 255, Anytone 0 to 65535 | | The key value, typed with the number keys. Dimmed until a type is chosen | Works |
+| ADP key | Off, Key 1 to Key 4 | Off | P25 ADP: the key slot the radio uses. The key and its key ID are entered on the rows below | Works |
+| ADP key ID | 0 to 65535 | | The key ID (KID) of the selected ADP key. Dimmed until a key is selected | Works |
+| Enter ADP key | | | Type a 40-bit ADP key as 10 hexadecimal digits. It is kept in the selected slot (or the first free one) | Works |
 | Auto lock | Off, 30 s, 1 min, 5 min | Off | Locks the keys after this time without a key press | Works |
 | PTT when locked | On, Off | On | Whether **PTT** works while the keys are locked. Off: **PTT** does nothing until you unlock | Works |
 

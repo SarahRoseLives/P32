@@ -814,8 +814,8 @@ run-f4stub: f4stubTest f4stubSim
 HRC7    := $(ROOT)/drivers/modem/hrc7000
 TESTS   += fd6818Test st7567Test st7735Test st7789Test keymatrixTest sharedPttTest plugPttTest hrc7000DmrTest baofengCalTest
 
-fd6818Test: fd6818Test.c $(ROOT)/drivers/rf/fd6818/fd6818.c $(RFBUS) $(ROOT)/boards/dm1801pro/rf_tables_dm1801pro.c $(ROOT)/drivers/rf/fd6818/fd6818.h $(SUBAUDIO)
-	$(CC) $(CFLAGS) -Wshadow -o $@ fd6818Test.c $(ROOT)/drivers/rf/fd6818/fd6818.c $(RFBUS) $(ROOT)/boards/dm1801pro/rf_tables_dm1801pro.c $(SUBAUDIO)
+fd6818Test: fd6818Test.c $(ROOT)/drivers/rf/fd6818/fd6818.c $(RFBUS) $(ROOT)/drivers/rf/fd6818/fd6818_setup_b.c $(ROOT)/drivers/rf/fd6818/fd6818.h $(SUBAUDIO)
+	$(CC) $(CFLAGS) -Wshadow -o $@ fd6818Test.c $(ROOT)/drivers/rf/fd6818/fd6818.c $(RFBUS) $(ROOT)/drivers/rf/fd6818/fd6818_setup_b.c $(SUBAUDIO)
 
 st7567Test: st7567Test.c $(ROOT)/drivers/display/st7567/st7567.c $(ROOT)/drivers/display/st7567/st7567.h
 	$(CC) $(CFLAGS) -Wshadow -o $@ st7567Test.c $(ROOT)/drivers/display/st7567/st7567.c
@@ -1288,7 +1288,7 @@ run-boards::
 -include $(wildcard $(ROOT)/boards/*/tests/host.mk)
 
 # P25 Phase 1 physical layer: the NID BCH(63,16,11), frame sync, status symbols and NAC/DUID (docs/spec/p25.md)
-TESTS   += p25PhyTest p25TsbkTest p25TsbkParseTest
+TESTS   += p25PhyTest p25TsbkTest p25TsbkParseTest p25AdpTest p25EssTest
 p25PhyTest: p25PhyTest.c $(CORE)/p25/p25_phy.c $(CORE)/p25/p25_phy.h $(CORE)/p25/p25_bch.c $(CORE)/p25/p25_bch.h
 	$(CC) $(CFLAGS) -o $@ p25PhyTest.c $(CORE)/p25/p25_phy.c $(CORE)/p25/p25_bch.c
 
@@ -1298,6 +1298,12 @@ p25TsbkTest: p25TsbkTest.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_tsbk.h
 p25TsbkParseTest: p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_tsbk_parse.h \
 	$(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
 	$(CC) $(CFLAGS) -o $@ p25TsbkParseTest.c $(CORE)/p25/p25_tsbk_parse.c $(CORE)/p25/p25_cc_tx.c $(CORE)/p25/p25_tsbk.c $(CORE)/p25/p25_bch.c
+
+p25AdpTest: p25AdpTest.c $(CORE)/p25/p25_adp.c $(CORE)/p25/p25_adp.h
+	$(CC) $(CFLAGS) -Wshadow -o $@ p25AdpTest.c $(CORE)/p25/p25_adp.c
+
+p25EssTest: p25EssTest.c $(CORE)/p25/tx/p25_ess.c $(CORE)/p25/tx/p25_ess.h $(CORE)/p25/p25_call.c $(CORE)/p25/p25_call.h
+	$(CC) $(CFLAGS) -Wshadow -o $@ p25EssTest.c $(CORE)/p25/tx/p25_ess.c $(CORE)/p25/p25_call.c
 
 # DL_CMD_P25_SYS: the P25 trunking systems in the settings store (core/debuglink/debuglink_p25_sys.c)
 TESTS   += p25SysTest
@@ -1324,10 +1330,12 @@ p25TxTest: p25TxTest.c $(P25TX) $(CORE)/p25/tx/p25_test_tx.h $(CORE)/p25/tx/p25_
 	$(CC) $(CFLAGS) -Werror -o $@ p25TxTest.c $(P25TX)
 
 run: run-p25
-run-p25: p25PhyTest p25TsbkTest p25TsbkParseTest p25CcTxTest p25TxTest
+run-p25: p25PhyTest p25TsbkTest p25TsbkParseTest p25AdpTest p25EssTest p25CcTxTest p25TxTest
 	./p25PhyTest
 	./p25TsbkTest
 	./p25TsbkParseTest
+	./p25AdpTest
+	./p25EssTest
 	./p25CcTxTest
 	./p25TxTest
 

@@ -197,6 +197,14 @@ clock`; ? = not known yet). No driver reads the clock yet ([radio-features.md](s
 | `SFR_DUALPATH_RX` | ● | ● | ● | ● | ✕ | ● |
 | `SFR_CWID` | ● | ● | ● | ● | ✕ | ● |
 | `TASK_STACKS` | ● | ● | ● | ● | ● | ● |
+| `P25` | ● | ○ | ○ | ○ | ○ | ○ |
+| `P25_VOICE` | ● | ○ | ○ | ○ | ○ | ○ |
+| `P25_TX` | ● | ○ | ○ | ○ | ○ | ○ |
+| `P25_STAR` | ● | ○ | ○ | ○ | ○ | ○ |
+| `P25_ADP` | ● | ○ | ○ | ○ | ○ | ○ |
+| `P25_PROBE` | ○ | ○ | ○ | ○ | ○ | ○ |
+| `HRC_MODEM` | ● | ● | ● | ● | ● | ● |
+| `UI_INSTRUMENT` | ● | ○ | ○ | ○ | ○ | ○ |
 | `USB` | ✕ | ● | ✕ | ✕ | ● | ● |
 | `HOSTLINK` | ● | ● | ● | ● | ● | ● |
 | `USB_NETWORK` | ✕ | ● | ✕ | ✕ | ● | ● |

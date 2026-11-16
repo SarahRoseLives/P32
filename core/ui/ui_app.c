@@ -17,6 +17,7 @@
 #include "ui_app.h"
 #include "ui_nav.h"
 #include "ui_svc.h"
+#include "codeplug/codeplug.h"
 #include "fmt.h"
 #include "i18n.h"
 #include "input/input.h"
@@ -2081,6 +2082,40 @@ static void call_back_key(void)
 	ui_toast(TR("No calls heard yet"));
 }
 
+#if CONFIG_P25_ADP
+// Long # on a conventional P25 memory: encryption on/off for this channel or VFO. The key itself is selected in
+// Settings > Privacy; a channel's flag goes into its codeplug record, a VFO's into settings_t (vfo_adp).
+static void adp_toggle(void)
+{
+	if (!ui_svc_adp_ready()) {
+		ui_toast(TR("Set an ADP key in Settings > Privacy"));
+		return;
+	}
+	if (!view->ch.p25_conv) {
+		ui_toast(TR("ADP: conventional P25 only"));
+		return;
+	}
+	bool on = !view->ch.p25_adp;
+	if (view->vfo) {
+		radio_req_p25_adp(on);
+		ui_toast(on ? TR("ADP on") : TR("ADP off"));
+		return;
+	}
+	channel_t ch;
+	if (!codeplug_channel(view->channel_number, &ch)) {
+		ui_toast(TR("Couldn't save: try again"));
+		return;
+	}
+	ch.p25_adp = on;
+	if (!ui_svc_write_channel(view->channel_number, &ch)) {
+		ui_toast(TR("Couldn't save: try again"));
+		return;
+	}
+	radio_req_p25_adp(on);
+	ui_toast(on ? TR("ADP on") : TR("ADP off"));
+}
+#endif
+
 void ui_app_key(const input_event_t *ev)
 {
 	dirty = true;
@@ -2153,6 +2188,12 @@ void ui_app_key(const input_event_t *ev)
 		return;
 	}
 	if (ev->action == ACT_CONTEXT && ev->gesture == GESTURE_LONG) {
+#if CONFIG_P25_ADP
+		if (!typing && !ui_st.entry && view->ch.p25_conv) {
+			adp_toggle();
+			return;
+		}
+#endif
 		if (!CONFIG_DMR || view->ch.mode != RADIO_MODE_DMR)
 			ui_toast(TR("Talk target: DMR channels only"));
 		else if (stack[sp].scr != SCR_PICKER)

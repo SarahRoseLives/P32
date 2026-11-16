@@ -124,3 +124,7 @@ bool ui_svc_ram_set(uint8_t id, int32_t value)
 
 WEAK int32_t ui_svc_setting_get(uint8_t id) { return ui_svc_ram_get(id); }
 WEAK bool ui_svc_setting_set(uint8_t id, int32_t value) { return ui_svc_ram_set(id, value); }
+
+#if CONFIG_P25_ADP
+WEAK bool ui_svc_adp_ready(void) { return false; }
+#endif

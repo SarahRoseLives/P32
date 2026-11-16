@@ -15,6 +15,10 @@
 #include "p25/p25_tx_voice.h"
 #include "p25/p25_imbe.h"
 #include "p25/tx/p25_live_frame.h"
+#if CONFIG_P25_ADP
+#include "p25/p25_adp.h"
+#include "p25/tx/p25_ess.h"
+#endif
 #include "p25/p25_cc_tx.h"
 #if CONFIG_BEEP
 #include "radio/beep.h"
@@ -50,6 +54,17 @@ static struct {
 	uint32_t ldus;
 	uint32_t captured, encoded, drops;
 	volatile bool running, stopping, started, audio_on;
+#if CONFIG_P25_ADP
+	bool adp;			// this call carries ADP-encrypted voice
+	uint8_t adp_key[P25_ADP_KEY_LEN];
+	uint16_t adp_kid;
+	uint8_t mi[9];			// this superframe's MI
+	uint8_t next_mi[9];		// the MI its LDU2 carries for the next superframe
+	uint8_t adp_ks[P25_ADP_STREAM_LEN];
+	uint8_t adp_ks_mi[P25_ADP_MI_LEN];
+	bool adp_ks_valid;
+	uint32_t adp_seed;
+#endif
 } v;
 
 static void audio_block(const int16_t *mic, int16_t *spk, void *ctx)
@@ -75,12 +90,60 @@ static void audio_block(const int16_t *mic, int16_t *spk, void *ctx)
 	v.captured++;
 }
 
+#if CONFIG_P25_ADP
+// A fresh 9-byte MI per superframe; the last byte is zero as the ESS field carries it.
+static void fresh_mi(uint8_t mi[9])
+{
+	uint32_t s = v.adp_seed;
+	if (s == 0)
+		s = 0x6d2b79f5u;
+	for (unsigned i = 0; i < 9; i++) {
+		s ^= s << 13;
+		s ^= s >> 17;
+		s ^= s << 5;
+		mi[i] = (uint8_t)(s >> 24);
+	}
+	mi[8] = 0;
+	v.adp_seed = s ? s : 0x6d2b79f5u;
+}
+
+static bool adp_stream(void)
+{
+	if (!v.adp)
+		return false;
+	if (!v.adp_ks_valid || memcmp(v.adp_ks_mi, v.mi, P25_ADP_MI_LEN) != 0) {
+		p25_adp_keystream(v.adp_key, v.mi, v.adp_ks);
+		memcpy(v.adp_ks_mi, v.mi, P25_ADP_MI_LEN);
+		v.adp_ks_valid = true;
+	}
+	return true;
+}
+#endif
+
 static bool publish_ldu(void)
 {
 	uint8_t ldu[216];
 	const uint8_t *base = (v.ldus & 1u) ? v.frames.ldu2 : v.frames.ldu1;
-
-	p25_live_ldu_template(ldu, (const uint8_t (*)[11])v.payload, base);
+	const uint8_t (*payload)[11] = (const uint8_t (*)[11])v.payload;
+#if CONFIG_P25_ADP
+	uint8_t encrypted[9][11];
+	uint8_t ldu2_base[216];
+	if (v.adp) {
+		(void)adp_stream();
+		for (unsigned i = 0; i < 9u; i++) {
+			memcpy(encrypted[i], v.payload[i], sizeof encrypted[i]);
+			p25_adp_apply(encrypted[i], v.adp_ks,
+				      (v.ldus & 1u) ? P25_ADP_LDU2_OFFSET : P25_ADP_LDU1_OFFSET, i);
+		}
+		payload = (const uint8_t (*)[11])encrypted;
+		if (v.ldus & 1u) {
+			// The LDU2's ESS carries the next superframe's MI; its own voice uses the current one.
+			p25_ess_build_ldu2(ldu2_base, v.frames.ldu2, v.next_mi, v.adp_kid);
+			base = ldu2_base;
+		}
+	}
+#endif
+	p25_live_ldu_template(ldu, payload, base);
 	if (!board.p25_tx->push_ldu(ldu)) {
 		v.payload_count = 0;
 		// A full platform queue is a lost 180 ms LDU, not the end of the call: keep producing and let the next one fill
@@ -93,6 +156,14 @@ static bool publish_ldu(void)
 	}
 	v.ldus++;
 	v.payload_count = 0;
+#if CONFIG_P25_ADP
+	if (v.adp && (v.ldus & 1u) == 0u) {
+		// The LDU2 just went out with next_mi; it is the next superframe's MI.
+		memcpy(v.mi, v.next_mi, sizeof v.mi);
+		fresh_mi(v.next_mi);
+		v.adp_ks_valid = false;
+	}
+#endif
 	// The PHY needs two complete LDUs before it can key without underrunning. Do not add startup LDUs just for margin:
 	// every one adds 180 ms to the time between PTT and the first RF.
 	if (!v.started && v.ldus >= 2u) {
@@ -190,12 +261,28 @@ static void stop_audio(void)
 	}
 }
 
-bool p25_tx_voice_start(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source, bool allow_rf)
+static bool tx_start(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source, bool allow_rf,
+		     const uint8_t *adp_key, uint16_t adp_kid)
 {
 	if (v.running || board.p25_tx == NULL || board.audio == NULL ||
 	    !p25_channel_build(&v.frames, nac, tg, source)) {
 		return false;
 	}
+#if CONFIG_P25_ADP
+	v.adp = adp_key != NULL;
+	v.adp_kid = adp_kid;
+	if (v.adp) {
+		memcpy(v.adp_key, adp_key, P25_ADP_KEY_LEN);
+		v.adp_seed = hal_micros() ^ source ^ hz ^ ((uint32_t)adp_kid << 16);
+		fresh_mi(v.mi);
+		fresh_mi(v.next_mi);
+		v.adp_ks_valid = false;
+		p25_ess_build_hdu(v.frames.hdu, v.frames.hdu, v.mi, tg, adp_kid);
+	}
+#else
+	(void)adp_key;
+	(void)adp_kid;
+#endif
 	if (!board.p25_tx->arm_live(hz, 9, false, allow_rf) ||
 	    !board.p25_tx->set_frames(v.frames.hdu, v.frames.tdu)) {
 		board.p25_tx->disarm();
@@ -226,6 +313,19 @@ bool p25_tx_voice_start(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source,
 	}
 	return true;
 }
+
+bool p25_tx_voice_start(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source, bool allow_rf)
+{
+	return tx_start(hz, nac, tg, source, allow_rf, NULL, 0);
+}
+
+#if CONFIG_P25_ADP
+bool p25_tx_voice_start_adp(uint32_t hz, uint16_t nac, uint16_t tg, uint32_t source, bool allow_rf,
+			    const uint8_t key[5], uint16_t kid)
+{
+	return tx_start(hz, nac, tg, source, allow_rf, key, kid);
+}
+#endif
 
 void p25_tx_voice_stop(void)
 {

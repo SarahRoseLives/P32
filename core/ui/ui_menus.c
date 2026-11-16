@@ -1787,8 +1787,8 @@ static const ui_scr_def_t chlist_screen = {
 
 enum { CE_NAME, CE_NUMBER, CE_MODE, CE_RX, CE_TX, CE_POWER, CE_RX_ONLY, CE_BW, CE_RX_TONE, CE_TX_TONE, CE_VOX,
        CE_CC, CE_TS, CE_CONTACT, CE_LIST, CE_ID, CE_DMO, CE_BEEP, CE_ALIAS1, CE_ALIAS2, CE_TOT, CE_SCAN, CE_ECO,
-       CE_P25, CE_P25_SYS, CE_P25_CONV, CE_P25_TG, CE_P25_NAC, CE_ZONES, CE_GO, CE_SHARE, CE_SAVE, CE_SAVE_NEW,
-       CE_COUNT,
+       CE_P25, CE_P25_SYS, CE_P25_CONV, CE_P25_TG, CE_P25_NAC, CE_P25_ADP, CE_ZONES, CE_GO, CE_SHARE, CE_SAVE,
+       CE_SAVE_NEW, CE_COUNT,
        CE_NONE = 0xFF };
 
 static channel_t ced_ch;		// what the screen shows (the working copy when editing)
@@ -1830,7 +1830,7 @@ static const struct { uint8_t off, len, bit; } ced_fields[CE_ZONES] = {
 	[CE_ALIAS2] = { offsetof(channel_t, alias_tx), 1, CODEPLUG_ALIAS_TS2_TEXT }, [CE_TOT] = CE_FIELD(tot_s),
 	[CE_SCAN] = CE_FIELD(scan_skip), [CE_ECO] = CE_FIELD(no_eco),
 	[CE_P25] = CE_FIELD(p25), [CE_P25_SYS] = CE_FIELD(p25_system), [CE_P25_CONV] = CE_FIELD(p25_conv),
-	[CE_P25_TG] = CE_FIELD(p25_tg), [CE_P25_NAC] = CE_FIELD(p25_nac),
+	[CE_P25_TG] = CE_FIELD(p25_tg), [CE_P25_NAC] = CE_FIELD(p25_nac), [CE_P25_ADP] = CE_FIELD(p25_adp),
 };
 
 // Whether row r differs from what is stored (the dot), or for CE_COUNT, any row
@@ -1912,6 +1912,7 @@ static void ced_build(void)
 		if (r == CE_P25_CONV && !CONFIG_P25) continue;
 		if (r == CE_P25_TG && !(CONFIG_P25 && (ced_ch.p25 || (ced_ch.p25_conv && !ced_ch.p25_system_set)))) continue;
 		if (r == CE_P25_NAC && !(CONFIG_P25 && ced_ch.p25_conv && !ced_ch.p25_system_set)) continue;
+		if (r == CE_P25_ADP && !(CONFIG_P25_ADP && (ced_ch.p25 || ced_ch.p25_conv))) continue;
 		if ((r == CE_ZONES || r == CE_GO || r == CE_SHARE || r == CE_SAVE_NEW) && fresh)
 			continue;
 		if (r == CE_SHARE && !CONFIG_ZONE_SHARE)
@@ -2053,7 +2054,7 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 		TRN("Timeslot"), TRN("TX contact"), TRN("RX group list"), TRN("Own ID"), TRN("Direct mode"),
 		TRN("Talk permit beeps"), TRN("Talker alias TS1"), TRN("Talker alias TS2"), TRN("TX time-out"), TRN("Scan"),
 		TRN("Battery saver"), TRN("P25 trunked"), TRN("P25 system"), TRN("P25 conventional"),
-		TRN("P25 talkgroup"), TRN("P25 NAC"), TRN("Zones"), TRN("Tune to this ch"),
+		TRN("P25 talkgroup"), TRN("P25 NAC"), TRN("ADP encryption"), TRN("Zones"), TRN("Tune to this ch"),
 		TRN(GLYPH_SHARE " Share channel to..."), TRN("Save"), TRN("Save as new channel") };
 	const channel_t *ch = &ced_ch;
 	if (i >= ced_n)
@@ -2217,6 +2218,9 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 		break;
 	case CE_P25_TG:
 		sb_u32(&b, ch->p25_tg, 1);
+		break;
+	case CE_P25_ADP:
+		sb_onoff(&b, ch->p25_adp);
 		break;
 	case CE_P25_NAC: {
 		static const char hex[] = "0123456789ABCDEF";
@@ -2651,6 +2655,9 @@ static void chinfo_select(uint16_t i, bool hold)
 		ced_edit = r;
 		ced_val = c->p25_tg;
 		ced_typed = false;
+		break;
+	case CE_P25_ADP:
+		c->p25_adp = !c->p25_adp;
 		break;
 	case CE_NUMBER: ui_toast(TR("Save as new channel to use another number")); break;
 #if CONFIG_ZONE_EDIT
@@ -5044,14 +5051,14 @@ static const ui_scr_def_t tools_screen = {
 #if CONFIG_UI_SETTINGS
 
 typedef enum { ST_TOGGLE, ST_LIST, ST_NUMBER, ST_ACTION } set_type_t;
-enum { SA_DIAG, SA_FIRMWARE, SA_CODEPLUG, SA_RESET, SA_MY_RADIO, SA_CRASH, SA_LANGUAGE };
+enum { SA_DIAG, SA_FIRMWARE, SA_CODEPLUG, SA_RESET, SA_MY_RADIO, SA_CRASH, SA_LANGUAGE, SA_ADP_KEY };
 
 typedef struct {
 	const char *name;
 	const char *syn;		// another name Find knows it by
 	uint8_t type;			// set_type_t
 	uint8_t id;			// ui_setting_t, or SA_* for an action
-	int16_t min, max, step;		// ST_NUMBER
+	int32_t min, max, step;		// ST_NUMBER
 	const int16_t *values;		// ST_LIST: the values ...
 	const char *const *names;	// ... and their names (NULL: number + unit)
 	uint8_t n;
@@ -5190,6 +5197,10 @@ static const char *const n_sfrcwid[] = { TRN("Off"), TRN("5 min"), TRN("10 min")
 #endif
 static const int16_t v_ptype[] = { 0, 1, 2 };	// dmrPrivacyType_t
 static const char *const n_ptype[] = { TRN("Off"), "Motorola", "Anytone" };
+#if CONFIG_P25_ADP
+static const int16_t v_adp[] = { 0, 1, 2, 3, 4 };
+static const char *const n_adp[] = { TRN("Off"), "Key 1", "Key 2", "Key 3", "Key 4" };
+#endif
 
 #define TOGGLE(nm, syn_, sid) { nm, syn_, ST_TOGGLE, sid, 0, 1, 1, NULL, NULL, 0, NULL }
 #define NUMBER(nm, syn_, sid, lo, hi, st, u) { nm, syn_, ST_NUMBER, sid, lo, hi, st, NULL, NULL, 0, u }
@@ -5250,6 +5261,11 @@ static const set_item_t s_talk[] = {
 static const set_item_t s_privacy[] = {
 	LIST(TRN("Key type"), "privacy encryption", UI_SET_PRIVACY_TYPE, v_ptype, n_ptype),
 	NUMBER(TRN("Key"), "privacy BP", UI_SET_PRIVACY_KEY, 1, 255, 1, NULL),	// the range follows the type (set_range)
+#if CONFIG_P25_ADP
+	LIST(TRN("ADP key"), "P25 encryption key select", UI_SET_ADP_ACTIVE, v_adp, n_adp),
+	NUMBER(TRN("ADP key ID"), "P25 encryption KID", UI_SET_ADP_KID, 0, 65535, 1, NULL),
+	ACTION(TRN("Enter ADP key"), "P25 encryption 40-bit", SA_ADP_KEY),
+#endif
 	LIST(TRN("Auto lock"), "keylock", UI_SET_AUTO_LOCK_S, v_lock, n_lock),
 	TOGGLE(TRN("PTT when locked"), NULL, UI_SET_PTT_LOCKED),
 };
@@ -5541,6 +5557,13 @@ static const char *set_why_not(const set_item_t *s)
 			return TR("Privacy: not in this build");
 		return s->id == UI_SET_PRIVACY_KEY && ui_svc_setting_get(UI_SET_PRIVACY_TYPE) == 0 ?
 			TR("Pick a key type first") : NULL;
+#if CONFIG_P25_ADP
+	case UI_SET_ADP_KID: {
+		static settings_t ast;
+		settings_read(&ast);
+		return settings_adp_key(&ast) != NULL ? NULL : TR("Pick an ADP key first");
+	}
+#endif
 	case UI_SET_GPS:
 	case UI_SET_POS_FORMAT:
 	case UI_SET_POS_SEND_S:
@@ -5592,6 +5615,62 @@ static void set_store(const set_item_t *s, int32_t v)
 		ui_toast(TR("Couldn't save: try again"));
 	}
 }
+
+#if CONFIG_P25_ADP
+static char adp_key_buf[11];
+
+static void adp_key_kept(void)
+{
+	static const char hex[] = "0123456789ABCDEF";
+	uint64_t v = 0;
+	unsigned n = 0;
+	for (const char *p = adp_key_buf; *p != 0; p++, n++) {
+		const char *d = strchr(hex, *p >= 'a' && *p <= 'f' ? (char)(*p - 'a' + 'A') : *p);
+		if (d == NULL || n >= 10u) {
+			ui_toast(TR("ADP key is 10 hex digits"));
+			return;
+		}
+		v = (v << 4) | (uint64_t)(d - hex);
+	}
+	if (n != 10u) {
+		ui_toast(TR("ADP key is 10 hex digits"));
+		return;
+	}
+	settings_t *st = settings_begin();
+	uint8_t slot;
+	if (st->adp_active >= 1u && st->adp_active <= SETTINGS_ADP_KEYS) {
+		slot = (uint8_t)(st->adp_active - 1u);
+	} else {
+		uint8_t free_slot = settings_adp_first_free(st);
+		slot = free_slot != 0 ? (uint8_t)(free_slot - 1u) : 0;	// all four full: replace key 1
+	}
+	for (unsigned i = 0; i < SETTINGS_ADP_KEY_LEN; i++)
+		st->adp_key[slot][i] = (uint8_t)(v >> (8u * (SETTINGS_ADP_KEY_LEN - 1u - i)));
+	st->adp_used |= (uint8_t)(1u << slot);
+	st->adp_active = (uint8_t)(slot + 1u);
+	settings_end(hal_millis());
+	ui_toast(TR("Saved"));
+}
+
+static void adp_key_begin(void)
+{
+	static settings_t st;
+	settings_read(&st);
+	const uint8_t *key = settings_adp_key(&st);
+	static const char hex[] = "0123456789ABCDEF";
+	if (key == NULL) {
+		adp_key_buf[0] = 0;	// a new slot: the user types the whole key
+	} else {
+		for (unsigned i = 0; i < 10; i++) {
+			uint8_t b = key[i / 2u];
+			adp_key_buf[i] = hex[(i & 1u) ? (b & 0x0Fu) : (b >> 4)];
+		}
+		adp_key_buf[10] = 0;
+	}
+	ui_text_open_as(adp_key_buf, 10, TRN("ADP key"));
+	text_done = adp_key_kept;
+}
+#endif
 
 static void group_select(uint16_t i, bool hold)
 {
@@ -5645,6 +5724,9 @@ static void group_select(uint16_t i, bool hold)
 		case SA_MY_RADIO: ui_push(SCR_DMR_ID, 0); break;
 		case SA_RESET: ui_push(SCR_CONFIRM, 0); break;
 		case SA_LANGUAGE: ui_push(SCR_LANGUAGE, 0); break;
+#if CONFIG_P25_ADP
+		case SA_ADP_KEY: adp_key_begin(); break;
+#endif
 #if CONFIG_CRASH_SCREEN
 		case SA_CRASH: ui_push(SCR_CRASH, 0); break;
 #endif

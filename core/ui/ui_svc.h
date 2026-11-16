@@ -274,6 +274,11 @@ bool ui_svc_zone_offer_import(uint32_t serial, uint16_t zone);
 
 #define UI_KEY_ROLES	9	// KEYASSIGN_ROLES (core/input/keyassign.h)
 
+#if CONFIG_P25_ADP
+// A P25 ADP key is selected (Settings > Privacy): long # may turn encryption on for a memory.
+bool ui_svc_adp_ready(void);
+#endif
+
 // --- Settings persistence (storage-cps). The stub keeps them in RAM (lost at power off) ---
 typedef enum {
 	UI_SET_KEY_TONES, UI_SET_TONE_VOLUME, UI_SET_TALK_PERMIT, UI_SET_VOICE_PROMPTS, UI_SET_MESSAGE_TONE,
@@ -326,6 +331,10 @@ typedef enum {
 	UI_SET_REF_TRIM,	// reference oscillator trim, ppb -10000..+10000 (Settings > Advanced; settings_t.ref_trim_ppb)
 	UI_SET_LANGUAGE,	// the UI's language, i18n.h lang_value: "en" English, 0 never picked (Settings > Display; settings_t.lang)
 	UI_SET_P25_ID,		// the radio's P25 subscriber ID (Settings > My radio): 1..16777215, written into every P25 system
+	// P25 ADP keys (Settings > Privacy, CONFIG_P25_ADP): the selected key slot 0..SETTINGS_ADP_KEYS (0 = none), and
+	// its key ID 0..65535. The 40-bit key itself is entered with the Enter ADP key action. Appended after P25_ID so
+	// older setting numbers stay put.
+	UI_SET_ADP_ACTIVE, UI_SET_ADP_KID,
 	UI_SET_COUNT
 } ui_setting_t;
 

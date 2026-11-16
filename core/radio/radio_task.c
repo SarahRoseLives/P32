@@ -298,6 +298,9 @@ void radio_req_p25_conv(bool on) { post(RREQ_P25_CONV, on ? 1 : 0, 0); }
 void radio_req_p25_nac(uint16_t nac) { post(RREQ_P25_NAC, nac & 0xFFFu, 0); }
 void radio_req_p25_tg(uint16_t tg) { post(RREQ_P25_TG, tg, 0); }
 void radio_req_p25_profile(int8_t system) { post(RREQ_P25_PROFILE, system, 0); }
+#if CONFIG_P25_ADP
+void radio_req_p25_adp(bool on) { post(RREQ_P25_ADP, on ? 1 : 0, 0); }
+#endif
 #endif
 void radio_req_reload(void) { post(RREQ_RELOAD, 0, pdMS_TO_TICKS(50)); }
 void radio_req_bandwidth(radio_bw_t bw) { post(RREQ_BANDWIDTH, bw, 0); }

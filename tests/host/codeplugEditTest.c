@@ -49,7 +49,7 @@ static bool same_channel(const channel_t *a, const channel_t *b)
 	       a->dmr_id == b->dmr_id && a->dmo == b->dmo && a->vox == b->vox && a->scan_skip == b->scan_skip &&
 	       a->no_beep == b->no_beep && a->no_eco == b->no_eco && a->p25 == b->p25 &&
 	       a->p25_conv == b->p25_conv && a->p25_system_set == b->p25_system_set && a->p25_system == b->p25_system && a->p25_tg == b->p25_tg &&
-	       a->p25_nac == b->p25_nac;
+	       a->p25_nac == b->p25_nac && a->p25_adp == b->p25_adp;
 }
 
 static channel_t make(const char *name, uint32_t rx, uint32_t tx)
@@ -100,6 +100,7 @@ static void test_encode(void)
 	v[6].p25_conv = true;
 	v[6].p25_tg = 3113;
 	v[6].p25_nac = 0x293;
+	v[6].p25_adp = true;
 	for (unsigned i = 0; i < 7; i++) {
 		uint8_t r[CODEPLUG_OPENFW_CHANNEL_SIZE];
 		channel_t back;
@@ -125,8 +126,9 @@ static void test_encode(void)
 	pc.p25_conv = true;
 	pc.p25_nac = 0x293;
 	pc.p25_tg = 0xBEEF;
+	pc.p25_adp = true;
 	codeplug_openfw_encode(&pc, r);
-	CHECK(r[0x2C] == 0x93 && (r[0x31] & 0x80) && (r[0x31] & 0x0F) == 2);
+	CHECK(r[0x2C] == 0x93 && (r[0x31] & 0x80) && (r[0x31] & 0x20) && (r[0x31] & 0x0F) == 2);
 	CHECK(r[0x2E] == 0xEF && r[0x2F] == 0xBE);
 	// A trunked channel keeps its system index in the RX group list byte
 	memset(r, 0, sizeof(r));
@@ -134,10 +136,11 @@ static void test_encode(void)
 	pt.p25 = true;
 	pt.p25_system = 2;
 	pt.p25_tg = 42;
+	pt.p25_adp = true;
 	codeplug_openfw_encode(&pt, r);
-	CHECK(r[0x2B] == 2 && r[0x2E] == 42 && r[0x2F] == 0);
+	CHECK(r[0x2B] == 2 && r[0x2E] == 42 && r[0x2F] == 0 && (r[0x31] & 0x20));
 	channel_t ptr;
-	CHECK(codeplug_openfw_decode(r, &ptr) && ptr.p25 && ptr.p25_system == 2 && ptr.p25_tg == 42);
+	CHECK(codeplug_openfw_decode(r, &ptr) && ptr.p25 && ptr.p25_system == 2 && ptr.p25_tg == 42 && ptr.p25_adp);
 	// A conventional channel can point at a system profile; flag2 bit 4 keeps it distinct from CNV
 	memset(r, 0, sizeof(r));
 	channel_t pc2 = make("conv sys", 446000000, 446000000);

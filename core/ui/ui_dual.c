@@ -188,10 +188,12 @@ static void p25_pane_values(const channel_t *ch, ui_dual_pane_t *p)
 		uint8_t i = ch->p25_system < n ? ch->p25_system : 0;
 		sys = settings_p25_get(&st, i);
 		p->p25_conv = true;
+		p->p25_adp = ch->p25_adp;
 		p->p25_nac = sys->nac;
 		p->p25_tg = sys->tg;
 	} else if (ch->p25_conv) {
 		p->p25_conv = true;
+		p->p25_adp = ch->p25_adp;
 		p->p25_nac = ch->p25_nac != 0 ? ch->p25_nac : 0x293u;
 		p->p25_tg = ch->p25_tg != 0 ? ch->p25_tg : 1u;
 	} else if (ch->p25) {

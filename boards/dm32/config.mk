@@ -22,6 +22,7 @@ CONFIG_P25 ?= y
 CONFIG_P25_VOICE ?= y
 CONFIG_P25_TX ?= y
 CONFIG_P25_STAR ?= y
+CONFIG_P25_ADP ?= y
 # APRS and GPS are not part of the P25/FM product. Their RAM is needed by the P25 voice codec and transmitter; the
 # code exists, but P32 leaves it out. BOARD_NOT_WRITTEN keeps the board registry's hardware-switch check satisfied.
 CONFIG_APRS ?= n

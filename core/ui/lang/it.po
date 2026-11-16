@@ -473,6 +473,22 @@ msgid "Call back: DMR only"
 msgstr "Richiama: solo DMR"
 
 #: core/ui/ui_app.c
+msgid "Set an ADP key in Settings > Privacy"
+msgstr "Imposta una chiave ADP in Impostazioni > Privacy"
+
+#: core/ui/ui_app.c
+msgid "ADP: conventional P25 only"
+msgstr "ADP: solo P25 convenzionale"
+
+#: core/ui/ui_app.c
+msgid "ADP on"
+msgstr "ADP attiva"
+
+#: core/ui/ui_app.c
+msgid "ADP off"
+msgstr "ADP spenta"
+
+#: core/ui/ui_app.c
 msgid "PTT is off while locked: hold * to unlock"
 msgstr "PTT off da bloccata: tieni * per sbloccare"
 
@@ -1833,6 +1849,10 @@ msgid "P25 NAC"
 msgstr "NAC P25"
 
 #: core/ui/ui_menus.c
+msgid "ADP encryption"
+msgstr "Cifratura ADP"
+
+#: core/ui/ui_menus.c
 msgid "Tune to this ch"
 msgstr "Vai a questo canale"
 
@@ -3009,6 +3029,18 @@ msgid "Key"
 msgstr "Chiave"
 
 #: core/ui/ui_menus.c
+msgid "ADP key"
+msgstr "Chiave ADP"
+
+#: core/ui/ui_menus.c
+msgid "ADP key ID"
+msgstr "ID chiave ADP"
+
+#: core/ui/ui_menus.c
+msgid "Enter ADP key"
+msgstr "Inserisci chiave ADP"
+
+#: core/ui/ui_menus.c
 msgid "Auto lock"
 msgstr "Blocco auto"
 
@@ -3201,8 +3233,16 @@ msgid "Pick a key type first"
 msgstr "Scegli prima il tipo"
 
 #: core/ui/ui_menus.c
+msgid "Pick an ADP key first"
+msgstr "Scegli prima una chiave ADP"
+
+#: core/ui/ui_menus.c
 msgid "No GPS on this radio"
 msgstr "Niente GPS su questa radio"
+
+#: core/ui/ui_menus.c
+msgid "ADP key is 10 hex digits"
+msgstr "La chiave ADP sono 10 cifre esadecimali"
 
 #: core/ui/ui_menus.c
 msgid "Diagnostics: not in this build"
@@ -3537,6 +3577,10 @@ msgid "Not affiliated yet"
 msgstr "Non ancora affiliato"
 
 #: core/ui/ui_screens.c
+msgid "No ADP key: set one in Settings > Privacy"
+msgstr "Nessuna chiave ADP: impostala in Impostazioni > Privacy"
+
+#: core/ui/ui_screens.c
 msgid "Not allowed here"
 msgstr "Non permesso qui"
 
@@ -3591,6 +3635,10 @@ msgstr "Attendi l'affiliazione"
 #: core/ui/ui_screens.c
 msgid "No control channel: check system/range"
 msgstr "Nessun canale CC: controlla sistema/portata"
+
+#: core/ui/ui_screens.c
+msgid "Set the ADP key"
+msgstr "Imposta la chiave ADP"
 
 #: core/ui/ui_screens.c
 msgid "Private to you"

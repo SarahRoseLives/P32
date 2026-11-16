@@ -154,6 +154,7 @@ typedef enum {
 	RREQ_P25_NAC,		// P25 conventional NAC for now: arg 0..0xFFF
 	RREQ_P25_TG,		// P25 conventional talkgroup for now: arg 0..0xFFFF
 	RREQ_P25_PROFILE,	// P25 conventional system profile: arg -1 CNV, 0..3 system
+	RREQ_P25_ADP,		// P25 ADP encryption on the current memory (CONFIG_P25_ADP): arg 1 on, 0 off
 	RREQ_P25_FOLLOW,		// P25 monitor follow grants on/off (CONFIG_P25): arg 1 on, 0 off
 } radio_req_type_t;
 

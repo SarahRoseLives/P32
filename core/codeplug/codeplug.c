@@ -52,6 +52,7 @@ static uint32_t fl_base = DEFAULT_FLASH_BASE;
 #define FLAG4_P25	0x08u	// unused talkaround bit: a P25 trunked memory
 #define FLAG2_TS2	0x40u
 #define FLAG2_P25_CONV	0x80u	// a P25 conventional memory (flag2 bit 7, otherwise unused)
+#define FLAG2_ADP	0x20u	// P25 ADP encryption on (flag2 bit 5, otherwise unused) (CONFIG_P25_ADP)
 #define FLAG2_P25_SYS	0x10u	// its conventional system profile is set (flag2 bit 4, otherwise unused)
 #define FLAG2_NAC_HI	0x0Fu	// its NAC bits 8-11 (flag2 bits 0-3, otherwise unused)
 #define FLAG4_VOX	0x40u
@@ -635,6 +636,7 @@ bool codeplug_openfw_decode(const uint8_t *r, channel_t *out)
 	out->p25 = (r[CH_FLAG4] & FLAG4_P25) != 0;
 	out->p25_conv = (r[CH_FLAG2] & FLAG2_P25_CONV) != 0;
 	out->p25_system_set = out->p25_conv && (r[CH_FLAG2] & FLAG2_P25_SYS) != 0;
+	out->p25_adp = (r[CH_FLAG2] & FLAG2_ADP) != 0;
 	out->p25_tg = (out->p25 || out->p25_conv) ? le16(&r[CH_CONTACT]) : 0;
 	out->p25_nac = out->p25_conv ? (uint16_t)(((r[CH_FLAG2] & FLAG2_NAC_HI) << 8) | r[CH_CC]) : 0;
 	out->p25_system = (out->p25 || out->p25_system_set) ? r[CH_RX_GROUP] : 0;
@@ -689,8 +691,9 @@ void codeplug_openfw_encode(const channel_t *ch, uint8_t *r)
 				(ch->rx_only ? FLAG4_RX_ONLY : 0) | (ch->bw == RADIO_BW_25K ? FLAG4_25K : 0) |
 				(ch->p25 ? FLAG4_P25 : 0));
 	bool p25_conv = ch->p25_conv && !ch->p25;
-	uint8_t f2 = (uint8_t)((r[CH_FLAG2] & ~(FLAG2_TS2 | FLAG2_P25_CONV | FLAG2_P25_SYS)) |
-			       (ch->timeslot == 2 ? FLAG2_TS2 : 0) | (p25_conv ? FLAG2_P25_CONV : 0));
+	uint8_t f2 = (uint8_t)((r[CH_FLAG2] & ~(FLAG2_TS2 | FLAG2_ADP | FLAG2_P25_CONV | FLAG2_P25_SYS)) |
+			       (ch->timeslot == 2 ? FLAG2_TS2 : 0) | (p25_conv ? FLAG2_P25_CONV : 0) |
+			       (ch->p25_adp && (ch->p25 || p25_conv) ? FLAG2_ADP : 0));
 	bool sys = p25_conv && ch->p25_system_set;
 	if (p25_conv) {
 		f2 = (uint8_t)((f2 & ~FLAG2_NAC_HI) | ((ch->p25_nac >> 8) & FLAG2_NAC_HI));

@@ -4334,6 +4334,15 @@ static void p25conv_values(const settings_t *st, const channel_t *ch, uint16_t *
 	}
 }
 
+#if CONFIG_P25_ADP
+static bool p25_adp_key(const settings_t *st, const uint8_t **key, uint16_t *kid)
+{
+	*key = settings_adp_key(st);
+	*kid = settings_adp_kid(st);
+	return *key != NULL;
+}
+#endif
+
 // Conventional P25 on the current FM channel: no control channel, no grant. Enter starts the voice receiver on the
 // channel's RX frequency; PTT sends a clear group call on its TX frequency.
 static bool p25conv_rx_start(radio_sm_t *sm)
@@ -4341,7 +4350,18 @@ static bool p25conv_rx_start(radio_sm_t *sm)
 	settings_t st;
 
 	settings_read(&st);
-	if (sm->view.ch.rx_hz == 0 || board.p25_probe == NULL || !p25_voice_start()) {
+#if CONFIG_P25_ADP
+	const uint8_t *adp_key = NULL;
+	uint16_t adp_kid = 0;
+	bool adp = sm->view.ch.p25_adp && p25_adp_key(&st, &adp_key, &adp_kid);
+#endif
+	if (sm->view.ch.rx_hz == 0 || board.p25_probe == NULL ||
+#if CONFIG_P25_ADP
+	    !p25_voice_start_adp(0, 0, adp, adp_key, adp_kid)
+#else
+	    !p25_voice_start()
+#endif
+	    ) {
 		return false;
 	}
 	uint16_t nac, tg;
@@ -4449,6 +4469,15 @@ static void p25conv_down(radio_sm_t *sm, uint32_t now_ms)
 		deny(sm, TXDENY_BATTERY);
 		return;
 	}
+#if CONFIG_P25_ADP
+	const uint8_t *adp_key = NULL;
+	uint16_t adp_kid = 0;
+	bool adp = sm->view.ch.p25_adp;
+	if (adp && !p25_adp_key(&st, &adp_key, &adp_kid)) {
+		deny(sm, TXDENY_ADP_KEY);
+		return;
+	}
+#endif
 	uint16_t nac, tg;
 	uint32_t unit;
 	p25conv_values(&st, &sm->view.ch, &nac, &tg, &unit);
@@ -4470,7 +4499,11 @@ static void p25conv_down(radio_sm_t *sm, uint32_t now_ms)
 	end_reception(sm, now_ms);
 	sm->p25_conv_restart = true;
 	beep(sm, BEEP_TX_PERMIT);	// before the engine, never after: the beep uses the same PCM callback as the mic
+#if CONFIG_P25_ADP
+	if (!p25_tx_voice_start_adp(hz, nac, tg, unit, true, adp ? adp_key : NULL, adp_kid)) {
+#else
 	if (!p25_tx_voice_start(hz, nac, tg, unit, true)) {
+#endif
 		dlog("p25cv start refused nac=%x tg=%u unit=%u", nac, tg, (unsigned)unit);
 		deny(sm, TXDENY_MODE);
 		return;
@@ -5110,7 +5143,14 @@ static void p25v_enter(radio_sm_t *sm, uint32_t now_ms)
 	scan_stop(sm, false, now_ms);
 	end_reception(sm, now_ms);
 	settings_read(&st);
+#if CONFIG_P25_ADP
+	const uint8_t *adp_key = NULL;
+	uint16_t adp_kid = 0;
+	bool adp = sm->view.ch.p25_adp && p25_adp_key(&st, &adp_key, &adp_kid);
+	if (!p25_voice_start_adp(0, 0, adp, adp_key, adp_kid)) {
+#else
 	if (!p25_voice_start()) {
+#endif
 		tune(sm, now_ms);
 		return;
 	}
@@ -5230,7 +5270,7 @@ typedef struct {
 	uint32_t rx_hz, tx_hz;
 	uint32_t talk;		// ID in bits 0-23, bit 31 private call
 	uint16_t rx_tone, tx_tone;
-	uint8_t mode, bw, power, cc, ts, rx_tone_type, tx_tone_type;
+	uint8_t mode, bw, power, cc, ts, rx_tone_type, tx_tone_type, adp;
 } vfo_saved_t;
 
 static void vfo_saved_get(const settings_t *st, uint8_t idx, vfo_saved_t *o)
@@ -5239,7 +5279,7 @@ static void vfo_saved_get(const settings_t *st, uint8_t idx, vfo_saved_t *o)
 	if (idx != 0) {
 		*o = (vfo_saved_t){ st->vfo2_rx_hz, st->vfo2_tx_hz, st->vfo2_talk, st->vfo2_rx_tone, st->vfo2_tx_tone,
 				    st->vfo2_mode, st->vfo2_bw, st->vfo2_power, st->vfo2_cc, st->vfo2_ts,
-				    st->vfo2_rx_tone_type, st->vfo2_tx_tone_type };
+				    st->vfo2_rx_tone_type, st->vfo2_tx_tone_type, st->vfo2_adp };
 		return;
 	}
 #endif
@@ -5247,7 +5287,7 @@ static void vfo_saved_get(const settings_t *st, uint8_t idx, vfo_saved_t *o)
 	*o = (vfo_saved_t){ st->vfo_rx_hz, st->vfo_tx_hz,
 			    settings_vfo_talk_id(st) | (settings_vfo_talk_private(st) ? 0x80000000u : 0),
 			    st->vfo_rx_tone, st->vfo_tx_tone, settings_vfo_mode(st), settings_vfo_bw(st), st->vfo_power,
-			    settings_vfo_cc(st), settings_vfo_ts(st), st->vfo_rx_tone_type, st->vfo_tx_tone_type };
+			    settings_vfo_cc(st), settings_vfo_ts(st), st->vfo_rx_tone_type, st->vfo_tx_tone_type, st->vfo_adp };
 }
 
 static void restore_vfo(radio_sm_t *sm, const settings_t *st, uint8_t idx)
@@ -5271,6 +5311,7 @@ static void restore_vfo(radio_sm_t *sm, const settings_t *st, uint8_t idx)
 	sm->vfo_ch.power = v.power < board.power_count ? v.power : CODEPLUG_POWER_DEFAULT;
 	sm->vfo_ch.color_code = v.cc <= 15 ? v.cc : 1;
 	sm->vfo_ch.timeslot = v.ts == 2 ? 2 : 1;
+	sm->vfo_ch.p25_adp = v.adp != 0;
 	subtone_t rx = { v.rx_tone_type, v.rx_tone }, tx = { v.tx_tone_type, v.tx_tone };
 	sm->vfo_ch.rx_tone = tones_valid(&rx) ? rx : (subtone_t){ TONE_NONE, 0 };
 	sm->vfo_ch.tx_tone = tones_valid(&tx) ? tx : (subtone_t){ TONE_NONE, 0 };
@@ -5296,6 +5337,7 @@ static void persist_vfo(const radio_sm_t *sm, settings_t *st, uint8_t idx)
 			st->vfo2_rx_tone = v->rx_tone.value;
 			st->vfo2_tx_tone_type = v->tx_tone.type;
 			st->vfo2_tx_tone = v->tx_tone.value;
+			st->vfo2_adp = v->p25_adp != 0;
 		}
 #if CONFIG_VFO_DMR
 		st->vfo2_talk = sm->vfo_talk_id | (sm->vfo_talk_private ? 0x80000000u : 0);
@@ -5314,6 +5356,7 @@ static void persist_vfo(const radio_sm_t *sm, settings_t *st, uint8_t idx)
 		st->vfo_rx_tone = v->rx_tone.value;
 		st->vfo_tx_tone_type = v->tx_tone.type;
 		st->vfo_tx_tone = v->tx_tone.value;
+		st->vfo_adp = v->p25_adp != 0;
 	}
 #if CONFIG_VFO_DMR
 	settings_set_vfo_talk(st, sm->vfo_talk_id, sm->vfo_talk_private);
@@ -6445,6 +6488,28 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 		changed(sm);
 		break;
 	}
+#if CONFIG_P25_ADP
+	case RREQ_P25_ADP: {
+		bool on = req->arg != 0;
+		sm->view.ch.p25_adp = on;
+		if (sm->view.vfo)
+			sm->vfo_ch.p25_adp = on;
+		else {
+			sm->view.temp |= RADIO_TEMP_MODE;
+			sm->view.temporary = true;
+		}
+		if (sm->p25_voice) {
+			settings_t st;
+			const uint8_t *key = NULL;
+			uint16_t kid = 0;
+			settings_read(&st);
+			bool ready = on && p25_adp_key(&st, &key, &kid);
+			p25_voice_set_adp(ready, key, kid);
+		}
+		changed(sm);
+		break;
+	}
+#endif
 #endif
 #if CONFIG_DMR_ROAMING
 	case RREQ_ROAM:

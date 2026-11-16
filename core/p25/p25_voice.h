@@ -19,6 +19,13 @@ extern "C" {
 bool p25_voice_start(void);
 // Start locked to a grant's NAC and talkgroup (0 = any) so a following receiver ignores other calls
 bool p25_voice_start_filtered(uint16_t nac, uint16_t tg);
+#if CONFIG_P25_ADP
+// Start with ADP receive enabled. key is the selected 5-byte key (NULL: no key) and kid its key ID; only ALGID 0xAA
+// calls with that key ID decrypt. Other encrypted calls stay muted.
+bool p25_voice_start_adp(uint16_t nac, uint16_t tg, bool adp, const uint8_t key[5], uint16_t kid);
+// Change the ADP setting while the receiver runs (long #). A new call or the next LDU2 picks up the new key/MI.
+void p25_voice_set_adp(bool adp, const uint8_t key[5], uint16_t kid);
+#endif
 // True once the call ended (TDU/TDULC) or went quiet; the caller stops the receiver and returns to the control channel
 bool p25_voice_ended(void);
 // Level processing (DC blocker, AGC, noise gate): off plays the codec output as-is (reference behavior)

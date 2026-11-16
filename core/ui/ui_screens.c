@@ -427,6 +427,14 @@ static int draw_top_as(const radio_view_t *v, radio_state_t st, const ui_state_t
 		mw = (CONFIG_DMR && s->dual.pane[s->dual.sel].mode == RADIO_MODE_DMR) ? "DMR" : "FM";
 #endif
 	int lx = gfx_text(f, x, ty, mw, sfg);
+#if CONFIG_P25_ADP
+	// Encryption on the conventional P25 memory, next to the mode: ADP when on, CLR when off.
+	if (!s->dual.on && (v->p25.conv || v->ch.p25_conv)) {
+		const char *crypt = v->ch.p25_adp ? "ADP" : "CLR";
+		if (strip_fits(f, lx, rx, crypt))
+			lx = gfx_text(f, lx + f->w, ty, crypt, v->ch.p25_adp ? ui_col.priv : ui_col.dim);
+	}
+#endif
 #if CONFIG_DUAL_WATCH
 	if (s->dual.on && strip_fits(f, lx, rx, TR("DUAL")))
 		lx = gfx_text(f, lx + f->w, ty, TR("DUAL"), swarn);
@@ -1141,6 +1149,7 @@ static const char *deny_reason(const radio_view_t *v, char *buf, size_t len)
 	case TXDENY_SFR_RPT: sb_str(&b, TR("Repeater channel: PTT off")); break;
 	case TXDENY_NOT_AFFIL: sb_str(&b, TR("Not affiliated yet")); break;
 	case TXDENY_OUT_OF_RANGE: sb_str(&b, TR("OUT OF RANGE")); break;
+	case TXDENY_ADP_KEY: sb_str(&b, TR("No ADP key: set one in Settings > Privacy")); break;
 	default: sb_str(&b, TR("Not allowed here")); break;
 	}
 	return buf;
@@ -1163,6 +1172,7 @@ static const char *deny_action(const radio_view_t *v)
 	case TXDENY_SFR_RPT: return TR("Pick a user channel to talk");
 	case TXDENY_NOT_AFFIL: return TR("Wait for affiliation");
 	case TXDENY_OUT_OF_RANGE: return TR("No control channel: check system/range");
+	case TXDENY_ADP_KEY: return TR("Set the ADP key");
 	default: return TR("Pick another channel");
 	}
 }
@@ -3136,13 +3146,17 @@ int ui_instrument_top(const radio_view_t *v, radio_state_t st, const ui_state_t 
 		st == RS_RX || voice ? "RX" : "IDLE";
 	color_t sc = st == RS_TX ? ui_col.tx : st == RS_TX_DENIED ? ui_col.warn :
 		st == RS_RX || voice ? ui_col.rx : ui_col.idle;
+#if CONFIG_P25_ADP
+	const char *mode = conv ? (v->ch.p25_adp ? "P25 ADP" : "P25 CLR") : trunk ? "P25 TRK" : v->am ? "AM" : "FM";
+#else
 	const char *mode = conv ? "P25 CNV" : trunk ? "P25 TRK" : v->am ? "AM" : "FM";
+#endif
 	int sw = gfx_text_width(L->tiny, state) + 7;
 	ui_strip_draws++;
 	gfx_fill(14, y, sw, th, sc);
 	gfx_text(L->tiny, 17, y + 1, state, ui_col.pill_fg);
 	int x = 14 + sw + 5;
-	gfx_text(L->tiny, x, y + 1, mode, quick_accent(v));
+	x += gfx_text(L->tiny, x, y + 1, mode, quick_accent(v)) + L->tiny->w;
 	int right = w - 10;
 	int bat_w = 18, bat_h = th - 4;
 	uint8_t pct = v->battery_pct > 100u ? 100u : v->battery_pct;

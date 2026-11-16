@@ -424,6 +424,7 @@ A 240 x 320 color screen. RadioFoundry uses its full resolution, with smooth (an
 
 ### What the DM-32UV lacks
 
+- On the newer RF section (the diagnostics line ends in `rf B`), no air band AM receive yet: an AM channel plays as FM.
 - The P32 image is P25/FM only. DMR, APRS, GPS and the services built on DMR (hotspot, PPP, text and data messages,
   roaming) are not in it.
 - No USB. The serial port is on the programming cable: the debug link and the CPS run there. USB network mode isn't

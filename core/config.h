@@ -246,6 +246,9 @@
 #ifndef CONFIG_P25_STAR
 #define CONFIG_P25_STAR			0
 #endif
+#ifndef CONFIG_P25_ADP
+#define CONFIG_P25_ADP			0
+#endif
 #ifndef CONFIG_UI_INSTRUMENT
 #define CONFIG_UI_INSTRUMENT		0
 #endif

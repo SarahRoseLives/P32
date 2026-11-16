@@ -77,6 +77,15 @@ static uint8_t ui_flag(uint8_t id)
 
 static radio_view_t v;		// the radio's view (static: too big for the UI task's stack)
 
+#if CONFIG_P25_ADP
+bool ui_svc_adp_ready(void)
+{
+	settings_t st;
+	settings_read(&st);
+	return settings_adp_key(&st) != NULL;
+}
+#endif
+
 #if CONFIG_DMR_PRIVACY
 // Privacy key slot 1 (settings-store.md 3.1), typed in on the radio. While privacy is on, the radio core holds the
 // key in use and writes it back to slot 1 itself, so it gets the new one too (type off turns privacy off)
@@ -257,6 +266,17 @@ int32_t ui_svc_setting_get(uint8_t id)
 #if CONFIG_DMR
 	case UI_SET_DMR_ID:
 		return (int32_t)codeplug_dmr_id();
+#endif
+#if CONFIG_P25_ADP
+	case UI_SET_ADP_ACTIVE: {
+		settings_read(&st);
+		return st.adp_active;
+	}
+	case UI_SET_ADP_KID: {
+		settings_read(&st);
+		const uint8_t *k = settings_adp_key(&st);
+		return k != NULL ? (int32_t)settings_adp_kid(&st) : 0;
+	}
 #endif
 #if CONFIG_P25
 	case UI_SET_P25_ID: {
@@ -510,6 +530,27 @@ bool ui_svc_setting_set(uint8_t id, int32_t value)
 #if CONFIG_DMR
 	case UI_SET_DMR_ID:
 		return dmr_id_post((uint32_t)value);
+#endif
+#if CONFIG_P25_ADP
+	case UI_SET_ADP_ACTIVE:
+		if (value < 0 || value > SETTINGS_ADP_KEYS)
+			return false;
+		st = settings_begin();
+		st->adp_active = (uint8_t)value;
+		settings_end(hal_millis());
+		return true;
+	case UI_SET_ADP_KID: {
+		if (value < 0 || value > 0xFFFF)
+			return false;
+		st = settings_begin();
+		if (settings_adp_key(st) == NULL) {
+			settings_end(hal_millis());
+			return false;
+		}
+		st->adp_kid[st->adp_active - 1u] = (uint16_t)value;
+		settings_end(hal_millis());
+		return true;
+	}
 #endif
 #if CONFIG_P25
 	case UI_SET_P25_ID: {

@@ -27,6 +27,7 @@ typedef enum {
 	TXDENY_NONE, TXDENY_RX_ONLY, TXDENY_BAND, TXDENY_TIMEOUT, TXDENY_NO_FREQ, TXDENY_MODE,
 	TXDENY_NO_CODEC, TXDENY_NO_DMR, TXDENY_BUSY, TXDENY_NO_REPEATER, TXDENY_REJECTED, TXDENY_HOTSPOT, TXDENY_NO_ID,
 	TXDENY_INHIBIT, TXDENY_BATTERY, TXDENY_AM, TXDENY_BCAST, TXDENY_SFR_RPT, TXDENY_NOT_AFFIL, TXDENY_OUT_OF_RANGE,
+	TXDENY_ADP_KEY,		// ADP is on but no key is selected
 } tx_deny_t;
 
 // Busy channel lockout (FM): CARRIER refuses PTT while anything is heard on the channel; WRONG_TONE only while a
@@ -432,6 +433,9 @@ void radio_req_p25_conv(bool on);		// the current channel is a conventional P25 
 void radio_req_p25_nac(uint16_t nac);		// its NAC for now
 void radio_req_p25_tg(uint16_t tg);		// its talkgroup for now
 void radio_req_p25_profile(int8_t system);	// -1 CNV, else the stored P25 system slot
+#if CONFIG_P25_ADP
+void radio_req_p25_adp(bool on);		// ADP on this P25 memory; the key comes from the settings
+#endif
 #endif
 void radio_req_reload(void);			// the settings' preferences changed (squelch, master power, DMR ID)
 // FM bandwidth and sub-audio. On a channel these are temporary changes (P7); in the VFO they change the VFO itself.

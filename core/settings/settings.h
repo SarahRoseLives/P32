@@ -14,12 +14,15 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #define SETTINGS_LAYOUT		1	// bumped only when a field changes meaning or moves (old records then reset)
 #define SETTINGS_SAVE_DELAY_MS	2000
 #define SETTINGS_NAME_LEN	16
 #define SETTINGS_P25_SYSTEMS	4	// slots in settings_t.p25 / p25_alt
 #define SETTINGS_PRIVACY_KEYS	4
+#define SETTINGS_ADP_KEYS	4	// P25 ADP key slots
+#define SETTINGS_ADP_KEY_LEN	5	// 40-bit key, big endian
 #define SETTINGS_UNSET8		0xFFu	// "not set: the radio's default" in an 8-bit field
 #define SETTINGS_ROAM_ZONE_BYTES	10	// roaming zone bits for zones 0..79
 
@@ -250,7 +253,38 @@ typedef struct {
 	settings_p25_t p25_alt[SETTINGS_P25_SYSTEMS - 1];
 	uint8_t p25_count;		// 1..SETTINGS_P25_SYSTEMS
 	uint8_t p25_active;		// 0..p25_count-1
+	// P25 ADP keys (CONFIG_P25_ADP): 40-bit keys and their 16-bit key IDs. adp_active is 1..SETTINGS_ADP_KEYS,
+	// 0 = no key. adp_used has a bit per slot; a slot not set is not selectable. Appended at the end.
+	uint8_t adp_key[SETTINGS_ADP_KEYS][SETTINGS_ADP_KEY_LEN];
+	uint16_t adp_kid[SETTINGS_ADP_KEYS];
+	uint8_t adp_used;		// bit i = key slot i has a key
+	uint8_t adp_active;		// 1..SETTINGS_ADP_KEYS, 0 = none
+	uint8_t vfo_adp;		// VFO 0: ADP on for its P25 memory
+	uint8_t vfo2_adp;		// VFO 1: the same
 } settings_t;
+
+#if CONFIG_P25_ADP
+// The selected ADP key, or NULL when no key is selected. The 40-bit key is big endian.
+static inline const uint8_t *settings_adp_key(const settings_t *s)
+{
+	if (s->adp_active < 1u || s->adp_active > SETTINGS_ADP_KEYS)
+		return NULL;
+	uint8_t i = (uint8_t)(s->adp_active - 1u);
+	return (s->adp_used & (1u << i)) ? s->adp_key[i] : NULL;
+}
+static inline uint16_t settings_adp_kid(const settings_t *s)
+{
+	const uint8_t *k = settings_adp_key(s);
+	return k != NULL ? s->adp_kid[s->adp_active - 1u] : 0;
+}
+static inline uint8_t settings_adp_first_free(const settings_t *s)
+{
+	for (uint8_t i = 0; i < SETTINGS_ADP_KEYS; i++)
+		if (!(s->adp_used & (1u << i)))
+			return (uint8_t)(i + 1u);
+	return 0;
+}
+#endif
 
 // A system slot; idx is 0-based. The first slot is p25, the rest p25_alt.
 static inline settings_p25_t *settings_p25_mut(settings_t *s, uint8_t idx)
