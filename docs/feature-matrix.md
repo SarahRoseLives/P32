@@ -302,7 +302,7 @@ clock`; ? = not known yet). No driver reads the clock yet ([radio-features.md](s
 | P25 Phase 1 voice receive | `P25_VOICE` | — | — | DM-32UV only: conventional voice through the software demodulator and the fixed-point IMBE decoder |
 | P25 Phase 1 voice transmit | `P25_TX` | — | — | DM-32UV only: conventional microphone voice and the PHY transmitter |
 | P25 Quick settings tile | `P25_STAR` | — | — | Retained for builds that set it; Home `*` opens Quick settings on every build |
-| P25 ADP encryption | `P25_ADP` | — | — | DM-32UV only: four 40-bit keys with key IDs, Settings > Privacy, a per-channel/VFO long-`#` flag, RC4 receive after FEC and an encrypted HDU/LDU2 transmit with a new MI each superframe |
+| P25 ADP encryption | `P25_ADP` | — | — | DM-32UV only. Set the key in Settings > Privacy > ADP key and enter it with Enter ADP key; then hold `#` on a conventional P25 channel or VFO to turn it on (the top bar shows P25 ADP, or P25 CLR when off). Four 40-bit keys with key IDs, RC4 receive after FEC and an encrypted HDU/LDU2 transmit with a new MI each superframe |
 | P25 PHY receive probe | `P25_PROBE` | — | — | Bench diagnostic; never in a release |
 | HR_C7000 modem and PCM audio glue | `HRC_MODEM` | — | — | Shared by DMR and P25; needed by the P25 receive and transmit paths |
 | Large-panel instrument Home | `UI_INSTRUMENT` | — | — | A one-channel instrument for a 240 px color panel |

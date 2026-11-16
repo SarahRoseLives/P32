@@ -908,7 +908,7 @@
  "home.cta_manual": "Manuale utente",
  "home.codec": "Gratis per sempre. Si installa sulla tua radio direttamente dal browser, con qualsiasi sistema operativo; nessun software da scaricare.",
  "home.f_voice": "Voce",
- "home.f_voice_text": "DMR Tier II, FM analogico, AM banda aerea, FM broadcast, CTCSS/DCS, VOX, DTMF, scansione, VFO, doppio ascolto, privacy, roaming, ripetitore a frequenza singola",
+ "home.f_voice_text": "Voce P25 Phase 1 convenzionale e trunked con cifratura ADP, FM analogica, CTCSS/DCS, scansione, VFO e dual watch",
  "home.f_data": "Dati",
  "home.f_data_text": "Messaggi di testo, condivisione wireless di zone e canali, alias parlante, ARS, posizione (LRRP, DMR GPS, T/A, NMEA), emergenza, avviso di chiamata, controllo radio, ARP, ping ICMP, UDP",
  "home.f_network": "Rete",
@@ -1930,5 +1930,12 @@
  "editor.field.offsetHz": "offset",
  "editor.radio_err.p25_systems_unsupported": "Il firmware di questa radio non ha il comando dei sistemi P25. Aggiorna il firmware o imposta i sistemi sulla radio.",
  "editor.write_systems_done": "Il {radio} ora contiene i sistemi P25 aggiornati.",
- "editor.write_systems_summary": "Aggiornare i {n} sistemi P25 nelle impostazioni del {radio}?"
+ "editor.write_systems_summary": "Aggiornare i {n} sistemi P25 nelle impostazioni del {radio}?",
+ "features.adp_title": "Cifratura ADP P25",
+ "features.adp_lead": "P32Firmware può ricevere e trasmettere voce P25 convenzionale cifrata con ADP di Motorola. La chiave e il suo ID restano nella radio, separati dal codeplug.",
+ "features.adp_step1": "Imposta la chiave: Impostazioni > Privacy > Chiave ADP, scegli Chiave 1-4, poi Inserisci chiave ADP (10 cifre esadecimali) e ID chiave ADP.",
+ "features.adp_step2": "Su un canale P25 convenzionale o nel VFO, tieni # per attivare ADP su quella memoria. La barra superiore mostra P25 ADP.",
+ "features.adp_step3": "Programma l'altra radio con la stessa chiave e lo stesso ID. Le chiamate cifrate corrispondenti si ascoltano; PTT trasmette cifrato.",
+ "features.adp_step4": "Tieni # di nuovo per tornare alla voce in chiaro; la barra superiore mostra P25 CLR.",
+ "features.adp_note": "ADP è per memorie P25 convenzionali. La chiave è salvata in chiaro nelle impostazioni e nei backup. Usa la cifratura solo su sistemi per cui sei autorizzato."
 }

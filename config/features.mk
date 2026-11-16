@@ -238,8 +238,9 @@ CONFIG_P25_VOICE ?= n
 CONFIG_P25_TX ?= n
 # Kept for builds that set it for other reasons. Home * now opens Quick settings on every build; P25/FM is tile 9.
 CONFIG_P25_STAR ?= n
-# P25 ADP encryption (Motorola ALGID 0xAA): the key menu and receive decryption (docs/spec/p25.md 9.1). Needs the P25
-# voice receiver. Off by default: a product that wants it turns it on (boards/dm32/config.mk).
+# P25 ADP encryption (Motorola ALGID 0xAA): the key menu, receive decryption and the encrypted HDU/LDU2 transmit
+# (docs/spec/p25.md 9.1). Needs the P25 voice receiver. Off by default; a product that wants it turns it on
+# (boards/dm32/config.mk).
 CONFIG_P25_ADP ?= n
 # Large-panel instrument Home: on a 240 px-wide color panel, make Home a single channel instrument (mode rail,
 # large state/frequency or talkgroup, technical deck) instead of the standard stacked Home. Off by default; it needs
