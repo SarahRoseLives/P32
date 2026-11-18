@@ -9,6 +9,21 @@ const root = document.documentElement;
 
 initLanguageHint();
 
+// The end-of-development notice. Show it once per browser; "Continue" leaves the flasher usable.
+const eol = document.getElementById("eol-notice");
+if (eol) {
+	let seen = false;
+	try { seen = localStorage.getItem("p32-eol-seen") === "1"; } catch (e) { /* private mode */ }
+	if (!seen) {
+		if (typeof eol.showModal === "function") eol.showModal(); else eol.setAttribute("open", "");
+		const markSeen = () => {
+			try { localStorage.setItem("p32-eol-seen", "1"); } catch (e) { /* private mode */ }
+		};
+		eol.querySelector("[data-eol-continue]")?.addEventListener("click", () => { markSeen(); eol.close(); });
+		eol.addEventListener("close", markSeen, { once: true });
+	}
+}
+
 document.querySelector(".theme-toggle")?.addEventListener("click", () => {
 	const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
 	root.dataset.theme = dark ? "light" : "dark";

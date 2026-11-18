@@ -492,6 +492,7 @@ details p { margin: var(--space-2) 0 0; font-weight: 400; }
 /* version link: the banner on every step and the question before the build */
 .version-banner p { margin: 0; }
 .version-banner p + p { margin-top: var(--space-1); }
+dialog.eol-notice { max-width: 40rem; }
 dialog.confirm { max-width: 36rem; width: calc(100% - 2 * var(--space-4)); border: 1px solid var(--border); border-radius: var(--radius);
 	background: var(--surface); color: var(--text); padding: var(--space-5); }
 dialog.confirm::backdrop { background: rgb(0 0 0 / 0.45); }

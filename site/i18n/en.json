@@ -1951,5 +1951,10 @@
  "features.adp_step2": "On a conventional P25 channel or VFO, hold # to enable ADP for that memory. The top bar reads P25 ADP.",
  "features.adp_step3": "Program the other radio with the same key and key ID. Matching encrypted calls play; PTT transmits encrypted.",
  "features.adp_step4": "Hold # again to return the memory to clear voice; the top bar reads P25 CLR.",
- "features.adp_note": "ADP is for conventional P25 memories. The key is stored in plain text in settings and backups. Only use encryption on systems where you are authorized."
+ "features.adp_note": "ADP is for conventional P25 memories. The key is stored in plain text in settings and backups. Only use encryption on systems where you are authorized.",
+ "eol.title": "P32Firmware development is ending",
+ "eol.text": "RadioFoundry now includes P25 Phase 1 conventional and trunked voice. Its development is moving faster than we can keep up with, and it is the better long-term home for this radio. Our build supports Motorola ADP encryption, but we are ending P32Firmware development.",
+ "eol.note": "You can still use and install the current P32Firmware build for now.",
+ "eol.radiofoundry": "Go to RadioFoundry",
+ "eol.continue": "Continue to P32Firmware"
 }

@@ -1937,5 +1937,10 @@
  "features.adp_step2": "En un canal P25 convencional o en el VFO, mantén # para activar ADP en esa memoria. La barra superior muestra P25 ADP.",
  "features.adp_step3": "Configura la otra radio con la misma clave e ID. Las llamadas cifradas coincidentes se oyen; PTT transmite cifrado.",
  "features.adp_step4": "Mantén # otra vez para volver a voz clara; la barra superior muestra P25 CLR.",
- "features.adp_note": "ADP es para memorias P25 convencionales. La clave se guarda en texto plano en los ajustes y las copias. Usa cifrado solo en sistemas para los que tengas autorización."
+ "features.adp_note": "ADP es para memorias P25 convencionales. La clave se guarda en texto plano en los ajustes y las copias. Usa cifrado solo en sistemas para los que tengas autorización.",
+ "eol.title": "El desarrollo de P32Firmware termina",
+ "eol.text": "RadioFoundry ya incluye voz P25 Phase 1 convencional y troncal. Su desarrollo avanza más rápido de lo que podemos seguir, y es el mejor hogar a largo plazo para esta radio. Nuestra compilación admite cifrado ADP de Motorola, pero terminamos el desarrollo de P32Firmware.",
+ "eol.note": "Todavía puedes usar e instalar la compilación actual de P32Firmware por ahora.",
+ "eol.radiofoundry": "Ir a RadioFoundry",
+ "eol.continue": "Seguir con P32Firmware"
 }

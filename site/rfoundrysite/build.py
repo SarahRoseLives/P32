@@ -438,6 +438,7 @@ class Site:
 			(b"radiofoundry.org", domain.encode()),
 			(b"Radio<b>Foundry</b>", SITE_BRAND_HTML.encode()),
 		]
+		keep = re.compile(rb"<!-- rebrand-keep -->.*?<!-- /rebrand-keep -->", re.S)
 		for dirpath, _dirs, files in os.walk(self.out):
 			for name in files:
 				if not name.endswith((".html", ".json", ".js", ".svg")):
@@ -445,9 +446,14 @@ class Site:
 				p = os.path.join(dirpath, name)
 				with open(p, "rb") as f:
 					data = f.read()
-				new = data
+				saved = []
+				def hold(m):
+					saved.append(m.group(0))
+					return b"\0RFKEEP%d\0" % (len(saved) - 1)
+				new = keep.sub(hold, data)
 				for old, newv in repl:
 					new = new.replace(old, newv)
+				new = re.sub(rb"\0RFKEEP(\d+)\0", lambda m: saved[int(m.group(1))], new)
 				if new != data:
 					with open(p, "wb") as f:
 						f.write(new)

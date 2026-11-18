@@ -63,6 +63,17 @@
 		<p class="build-stamp">{{{ firmware_release }}} · <a href="{{ repo }}/commit/{{ git_full }}">{{ git_stamp }}</a> · <time datetime="{{ built_iso }}">{{ built_at }}</time></p>
 	</div>
 </footer>
+<!-- rebrand-keep -->
+<dialog id="eol-notice" class="confirm eol-notice" aria-labelledby="eol-title" aria-describedby="eol-text">
+	<h2 id="eol-title" tabindex="-1" autofocus>{{t eol.title}}</h2>
+	<p id="eol-text">{{t eol.text}}</p>
+	<p class="small muted">{{t eol.note}}</p>
+	<div class="confirm-actions">
+		<a class="btn btn-primary" href="https://radiofoundry.org/">{{t eol.radiofoundry}}</a>
+		<button class="btn" type="button" data-eol-continue>{{t eol.continue}}</button>
+	</div>
+</dialog>
+<!-- /rebrand-keep -->
 <script type="module" src="{{root}}static/js/site.js?v={{ assets }}"></script>
 {{{ scripts }}}
 </body>
